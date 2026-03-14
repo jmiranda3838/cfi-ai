@@ -91,7 +91,8 @@ def test_existing_clients_with_data(tmp_path):
     ws = Workspace(str(tmp_path))
     section = _build_existing_clients_section(ws)
     assert "jane-doe" in section
-    assert "Jane Doe profile" in section
+    # Should only list slugs, not load full profile content
+    assert "Jane Doe profile" not in section
 
 
 # --- handle_intake integration tests ---
@@ -142,3 +143,16 @@ def test_handle_intake_message_contains_existing_clients(tmp_path):
     ws = Workspace(str(tmp_path))
     result = handle_intake("session.txt", ui, ws)
     assert "existing-client" in result.message
+
+
+def test_handle_intake_workflow_mode(tmp_path):
+    """Both file and text intake flows set workflow_mode=True."""
+    ui = MagicMock()
+    ws = Workspace(str(tmp_path))
+    result = handle_intake("session.mp3", ui, ws)
+    assert result.workflow_mode is True
+
+    ui2 = MagicMock()
+    ui2.prompt_multiline.return_value = "Line one.\nLine two."
+    result2 = handle_intake(None, ui2, ws)
+    assert result2.workflow_mode is True

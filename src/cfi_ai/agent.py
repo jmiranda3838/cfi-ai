@@ -13,6 +13,8 @@ import cfi_ai.tools as tools
 
 MAX_TOOL_ITERATIONS = 25
 
+_NARRATION_THRESHOLD = 800
+
 
 def _summarize_input(tool_input: dict) -> str:
     """Create a short summary of tool input for display."""
@@ -52,6 +54,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
 
         # Check for slash commands
         user_parts = None
+        workflow_mode = False
         parsed = parse_command(user_input)
         if parsed is not None:
             cmd_name, cmd_args = parsed
@@ -61,6 +64,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                 continue
             if result.handled and result.message is None and result.parts is None:
                 continue
+            workflow_mode = result.workflow_mode
             if result.parts is not None:
                 user_parts = result.parts
             elif result.message is not None:
@@ -76,6 +80,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
         t0 = time.monotonic()
         approval_wait = 0.0
         repetition_retries = 0
+        narration_retries = 0
         for _iteration in range(MAX_TOOL_ITERATIONS):
             ui.status.set_mode("thinking")
 
@@ -126,6 +131,27 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
             # Check for function calls
             function_calls = stream_result.function_calls
             if not function_calls:
+                # Narration guard: in workflow mode, long text with no tool calls
+                # means the model is narrating instead of acting.
+                if (
+                    workflow_mode
+                    and len(full_text) > _NARRATION_THRESHOLD
+                    and narration_retries < 1
+                ):
+                    narration_retries += 1
+                    # Discard the narrating model turn
+                    messages.pop()
+                    messages.append(
+                        types.Content(
+                            role="user",
+                            parts=[types.Part.from_text(
+                                text="Do not narrate the workflow or reproduce document content. "
+                                "Briefly summarize in 1-2 sentences, then proceed directly "
+                                "to tool calls.",
+                            )],
+                        )
+                    )
+                    continue
                 break
 
             # Separate read and mutating tool calls

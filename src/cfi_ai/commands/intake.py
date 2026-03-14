@@ -6,7 +6,7 @@ import datetime
 from dataclasses import dataclass
 from typing import TYPE_CHECKING
 
-from cfi_ai.clients import list_clients, load_client_context
+from cfi_ai.clients import list_clients
 from cfi_ai.commands import CommandResult, register
 from cfi_ai.prompts.intake import INTAKE_FILE_WORKFLOW_PROMPT, INTAKE_WORKFLOW_PROMPT
 
@@ -62,16 +62,17 @@ def _build_existing_clients_section(workspace: Workspace) -> str:
     """Build a section describing existing clients for the prompt."""
     clients = list_clients(workspace)
     if not clients:
-        return "## Existing Clients\nNo existing clients found."
+        return "## Existing Clients\nNo existing clients found. This will be a new client."
 
-    lines = ["## Existing Clients\n", "The following clients already exist:\n"]
-    for client_id in clients:
-        context = load_client_context(workspace, client_id)
-        if context:
-            lines.append(f"### {client_id}\n{context}\n")
-        else:
-            lines.append(f"- **{client_id}** (no profile/treatment plan yet)\n")
-    return "\n".join(lines)
+    client_list = "\n".join(f"- `{cid}`" for cid in clients)
+    return (
+        "## Existing Clients\n\n"
+        "The following client IDs already exist:\n"
+        f"{client_list}\n\n"
+        "If the session subject matches an existing client, use `read_file` to load "
+        "`clients/<client-id>/profile/current.md` and "
+        "`clients/<client-id>/treatment-plan/current.md` for context before writing."
+    )
 
 
 @register("intake", description="Process a session transcript into intake documents")
@@ -90,7 +91,7 @@ def handle_intake(args: str | None, ui: UI, workspace: Workspace) -> CommandResu
             existing_clients=existing_clients,
         )
         ui.print_info(f"Starting intake workflow for: {resolved.raw} ({today}).")
-        return CommandResult(message=message)
+        return CommandResult(message=message, workflow_mode=True)
 
     # Text flow — transcript embedded directly
     message = INTAKE_WORKFLOW_PROMPT.format(
@@ -102,4 +103,4 @@ def handle_intake(args: str | None, ui: UI, workspace: Workspace) -> CommandResu
         f"Starting intake workflow ({len(resolved.text)} chars of transcript, "
         f"{today})."
     )
-    return CommandResult(message=message)
+    return CommandResult(message=message, workflow_mode=True)

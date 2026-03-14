@@ -72,6 +72,7 @@ def test_command_result_parts_default():
     assert result.message is None
     assert result.handled is False
     assert result.error is None
+    assert result.workflow_mode is False
 
 
 # --- File workflow prompt tests ---

@@ -4,6 +4,11 @@ INTAKE_WORKFLOW_PROMPT = """\
 You are conducting a clinical intake assessment based on a session transcript. \
 Today's date is {date}.
 
+## CRITICAL INSTRUCTIONS
+- Do NOT narrate the workflow or reproduce document content in your response text.
+- Keep free-text responses to 2-3 sentences maximum. Proceed directly to tool calls.
+- The user reviews all file content in the approval step — do not preview it in chat.
+
 <transcript>
 {transcript}
 </transcript>
@@ -12,19 +17,24 @@ Today's date is {date}.
 
 ## Workflow
 
+### Phase 1: Identify & Summarize
 1. **Identify the client** from the transcript. Generate a `client-id` slug \
 (lowercase, hyphenated — e.g. "jane-doe").
-2. **Check existing clients** by using `list_files` on `clients/`. If this client \
-already exists, use `read_file` to load their current profile and treatment plan \
-for context.
-3. **Briefly summarize** your clinical impressions and planned documents in 2-3 \
-sentences (do NOT reproduce full document content in your response — the user \
-will review content in the approval step).
+2. **Check existing clients** — if this client matches an existing ID, use \
+`read_file` to load `clients/<client-id>/profile/current.md` and \
+`clients/<client-id>/treatment-plan/current.md` for context.
+3. **State** the client name and a 1-2 sentence clinical summary. Stop text \
+output, then proceed to Phase 2.
+
+### Phase 2: Write Documents
 4. **Save all files** using `write_file` — create the intake assessment, client \
 profile, initial treatment plan, and session transcript. The user will review \
 and approve the writes before they are executed.
-5. **Create `current.md` copies** for profile and treatment plan so the latest \
-versions are always at a predictable path.
+
+### Phase 3: Create current.md Copies
+5. After Phase 2 writes are approved, **create `current.md` copies** for profile \
+and treatment plan so the latest versions are always at a predictable path. \
+If any writes were rejected, skip the corresponding copies.
 
 ## File Structure
 
@@ -86,6 +96,11 @@ INTAKE_FILE_WORKFLOW_PROMPT = """\
 You are conducting a clinical intake assessment based on a file provided by the \
 user. Today's date is {date}.
 
+## CRITICAL INSTRUCTIONS
+- Do NOT narrate the workflow or reproduce document content in your response text.
+- Keep free-text responses to 2-3 sentences maximum. Proceed directly to tool calls.
+- The user reviews all file content in the approval step — do not preview it in chat.
+
 The user wants to process an intake from a file. The file reference is: \
 `{file_reference}`
 
@@ -104,24 +119,29 @@ etc.), interpret them as a shell would — e.g. `Bristol\\ St\\ 4.m4a` means \
 
 ## Workflow
 
-1. **Load the file** using the appropriate tool (`read_audio` or `read_file`).
-   If audio, the data from `read_audio` is embedded directly in this conversation — you can hear it.
+### Phase 1: Load, Identify & Summarize
+1. **Load the file** using the appropriate tool (`read_audio` or `read_file`). \
+If audio, the data from `read_audio` is embedded directly in this conversation — you can hear it.
 2. **Identify the client** from the session. Generate a `client-id` slug \
 (lowercase, hyphenated — e.g. "jane-doe").
-3. **Check existing clients** by using `list_files` on `clients/`. If this client \
-already exists, use `read_file` to load their current profile and treatment plan \
-for context.
-4. **Briefly summarize** your clinical impressions and planned documents in 2-3 \
-sentences (do NOT reproduce full document content in your response — the user \
-will review content in the approval step).
+3. **Check existing clients** — if this client matches an existing ID, use \
+`read_file` to load `clients/<client-id>/profile/current.md` and \
+`clients/<client-id>/treatment-plan/current.md` for context.
+4. **State** the client name and a 1-2 sentence clinical summary. Stop text \
+output, then proceed to Phase 2.
+
+### Phase 2: Write Documents
 5. **Save all files** using `write_file` — create the intake assessment, client \
 profile, initial treatment plan, and session transcript. The user will review \
 and approve the writes before they are executed. For audio sources, also save a \
 written transcript of the session with speaker labels (e.g. "Therapist:", \
 "Client:") — capture dialogue faithfully including filler words, pauses noted \
 in brackets, and emotional tone observations in brackets where clinically relevant.
-6. **Create `current.md` copies** for profile and treatment plan so the latest \
-versions are always at a predictable path.
+
+### Phase 3: Create current.md Copies
+6. After Phase 2 writes are approved, **create `current.md` copies** for profile \
+and treatment plan so the latest versions are always at a predictable path. \
+If any writes were rejected, skip the corresponding copies.
 
 ## File Structure
 

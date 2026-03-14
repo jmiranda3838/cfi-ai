@@ -1,3 +1,5 @@
+import logging
+import os
 import sys
 
 from cfi_ai import __version__
@@ -25,6 +27,12 @@ def _check_adc() -> None:
 
 
 def main() -> None:
+    level = os.environ.get("CFI_AI_LOG_LEVEL", "WARNING").upper()
+    logging.basicConfig(
+        level=getattr(logging, level, logging.WARNING),
+        format="%(name)s %(levelname)s %(message)s",
+    )
+
     # Handle --version and --help
     if "--version" in sys.argv:
         print(f"cfi-ai {__version__}")

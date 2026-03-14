@@ -26,6 +26,7 @@ class CommandResult:
     parts: list[types.Part] | None = None
     handled: bool = False
     error: str | None = None
+    workflow_mode: bool = False
 
 
 CommandHandler = Callable[["str | None", "UI", "Workspace"], CommandResult]

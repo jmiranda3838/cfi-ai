@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import logging
 import sys
 from typing import Generator
 
@@ -8,21 +9,23 @@ from google.genai import types
 
 from cfi_ai.config import Config
 
+_log = logging.getLogger(__name__)
+
 # Repetition detection constants
-_REPEAT_BLOCK_SIZE = 500
+_REPEAT_BLOCK_SIZES = (200, 500)
 _REPEAT_MIN_TEXT_LENGTH = 2000
 _REPEAT_CHECK_INTERVAL = 500
 
 
 def _is_repeated_suffix(text: str) -> bool:
-    """Return True if the last ``_REPEAT_BLOCK_SIZE`` chars of *text* appear
-    consecutively — i.e. the block immediately before them is identical."""
-    block = text[-_REPEAT_BLOCK_SIZE:]
-    preceding_end = len(text) - _REPEAT_BLOCK_SIZE
-    if preceding_end < _REPEAT_BLOCK_SIZE:
-        return False
-    preceding_block = text[preceding_end - _REPEAT_BLOCK_SIZE : preceding_end]
-    return preceding_block == block
+    """Return True if the last block of *text* appears consecutively for any
+    of the configured block sizes."""
+    for block_size in _REPEAT_BLOCK_SIZES:
+        if len(text) < block_size * 2:
+            continue
+        if text[-block_size:] == text[-block_size * 2 : -block_size]:
+            return True
+    return False
 
 
 class Client:
@@ -78,6 +81,7 @@ class StreamResult:
         """Yield text delta chunks as they arrive."""
         buf = ""
         last_check_len = 0
+        chunk_idx = 0
         for chunk in self._stream:
             if not chunk.candidates:
                 continue
@@ -89,6 +93,13 @@ class StreamResult:
             for part in candidate.content.parts:
                 self._parts.append(part)
                 if part.text:
+                    _log.debug(
+                        "chunk %d len=%d text=%r",
+                        chunk_idx,
+                        len(part.text),
+                        part.text[:80],
+                    )
+                    chunk_idx += 1
                     buf += part.text
                     # Check for repetition once we have enough text
                     if (
@@ -97,6 +108,9 @@ class StreamResult:
                     ):
                         last_check_len = len(buf)
                         if _is_repeated_suffix(buf):
+                            _log.warning(
+                                "Repetition detected at %d chars", len(buf)
+                            )
                             self._repetition_detected = True
                             return
                     yield part.text
