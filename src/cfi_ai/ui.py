@@ -151,6 +151,17 @@ class UI:
         except (EOFError, KeyboardInterrupt):
             return False
 
+    def prompt_multiline(self, instruction: str) -> str | None:
+        """Prompt for multi-line input. Returns text or None on cancel."""
+        self.console.print(f"[muted]{instruction}[/muted]")
+        self.console.print("[dim]Esc+Enter to submit, Ctrl+C to cancel.[/dim]")
+        try:
+            return self.session.prompt(
+                [("class:prompt", "transcript> ")], multiline=True
+            )
+        except (EOFError, KeyboardInterrupt):
+            return None
+
     def print_error(self, message: str) -> None:
         self.console.print(f"[error]error:[/error] {message}")
 

@@ -1,4 +1,5 @@
 from cfi_ai.prompts.system import build_system_prompt
+from cfi_ai.workspace import Workspace
 
 
 def test_build_system_prompt():
@@ -18,3 +19,22 @@ def test_prompt_includes_workspace_summary():
     prompt = build_system_prompt("/tmp/test", summary)
     assert "foo.py" in prompt
     assert "Python" in prompt
+
+
+def test_prompt_includes_clients_section_when_dir_exists(tmp_path):
+    (tmp_path / "clients").mkdir()
+    ws = Workspace(str(tmp_path))
+    prompt = build_system_prompt(str(tmp_path), ws.summary(), workspace=ws)
+    assert "Client File Structure" in prompt
+    assert "/intake" in prompt
+
+
+def test_prompt_excludes_clients_section_when_no_dir(tmp_path):
+    ws = Workspace(str(tmp_path))
+    prompt = build_system_prompt(str(tmp_path), ws.summary(), workspace=ws)
+    assert "Client File Structure" not in prompt
+
+
+def test_prompt_excludes_clients_section_when_no_workspace():
+    prompt = build_system_prompt("/tmp/test", "summary")
+    assert "Client File Structure" not in prompt

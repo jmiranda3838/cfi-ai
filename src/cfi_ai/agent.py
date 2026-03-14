@@ -5,6 +5,7 @@ import time
 from google.genai import types
 
 from cfi_ai.client import Client
+from cfi_ai.commands import parse_command, dispatch
 from cfi_ai.planner import ExecutionPlan, format_plan
 from cfi_ai.ui import UI
 from cfi_ai.workspace import Workspace
@@ -44,7 +45,26 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
         if not user_input.strip():
             continue
 
-        messages.append(types.Content(role="user", parts=[types.Part.from_text(text=user_input)]))
+        # Check for slash commands
+        user_parts = None
+        parsed = parse_command(user_input)
+        if parsed is not None:
+            cmd_name, cmd_args = parsed
+            result = dispatch(cmd_name, cmd_args, ui, workspace)
+            if result.error:
+                ui.print_error(result.error)
+                continue
+            if result.handled and result.message is None and result.parts is None:
+                continue
+            if result.parts is not None:
+                user_parts = result.parts
+            elif result.message is not None:
+                user_input = result.message
+
+        if user_parts is not None:
+            messages.append(types.Content(role="user", parts=user_parts))
+        else:
+            messages.append(types.Content(role="user", parts=[types.Part.from_text(text=user_input)]))
         ui.print_separator()
 
         # Inner loop: handle tool use chains

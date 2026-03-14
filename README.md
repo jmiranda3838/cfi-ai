@@ -74,6 +74,50 @@ Environment variables take precedence over the config file when set:
 | `CFI_AI_MODEL` | `gemini-2.5-flash` | Model to use |
 | `CFI_AI_MAX_TOKENS` | `8192` | Max response tokens |
 
+## Slash Commands
+
+| Command | Description |
+|---------|-------------|
+| `/help` | Show available commands |
+| `/intake` | Process a session transcript or audio recording into intake documents |
+
+### `/intake` — Clinical Intake Workflow
+
+Process a session transcript or audio recording into structured clinical documents:
+
+```bash
+# From a text file
+~ /intake session-notes.txt
+
+# From an audio file (.mp3, .wav, .m4a, .aac, .ogg, .flac, .aiff, .webm)
+~ /intake session-recording.mp3
+
+# Paste interactively
+~ /intake
+transcript> [paste text or enter a file path, then Esc+Enter to submit]
+```
+
+Audio files are sent directly to Gemini for transcription and clinical document generation — no separate speech-to-text step needed.
+
+The workflow generates:
+- **Intake Assessment** — presenting concerns, history, symptoms, risk, impressions
+- **Client Profile** — reusable summary of demographics, context, strengths
+- **Treatment Plan** — problems, goals, objectives, interventions, review timeline
+
+Files are saved under `clients/<client-id>/` with dated filenames:
+
+```
+clients/jane-doe/
+  intake/2025-01-15-intake-assessment.md
+  profile/2025-01-15-profile.md
+  profile/current.md
+  treatment-plan/2025-01-15-treatment-plan.md
+  treatment-plan/current.md
+  sessions/2025-01-15-intake-transcript.md
+```
+
+All file writes go through the normal plan-and-approve flow.
+
 ## How It Works
 
 - **Read-only tools** (`list_files`, `read_file`, `search_files`) execute immediately

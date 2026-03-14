@@ -39,8 +39,30 @@ The inner loop handles multi-turn tool-use chains. Messages are `list[types.Cont
 - Streaming chunks may have empty `candidates` — guard with `if not chunk.candidates: continue`.
 - No `tool_use_id` — tool results match by function `name`; order matters.
 
+### Slash commands (`commands/`)
+
+- `commands/__init__.py` defines `parse_command()`, `dispatch()`, `CommandResult`, and a `@register` decorator.
+- Commands are registered by importing their modules at the bottom of `__init__.py`.
+- `agent.py` intercepts slash commands between input and message append — if `parse_command` matches, `dispatch` runs the handler.
+- `CommandResult.message` set → replaces user input sent to LLM. `CommandResult.parts` set → multipart content (e.g. text + audio) sent directly. `handled=True` + no message/parts → skip to next prompt. `error` → display and skip.
+- `/help` prints available commands. `/intake` processes a session transcript (text file or pasted) or audio recording (.mp3, .wav, .m4a, etc.) into clinical intake documents. Audio files are sent inline to Gemini via `types.Part.from_bytes()`.
+
+### Client file structure (`clients.py`)
+
+- `list_clients(workspace)` → sorted client-id slugs from `clients/` subdirs.
+- `load_client_context(workspace, client_id)` → reads `profile/current.md` + `treatment-plan/current.md`.
+- `sanitize_client_id(name)` → slug conversion ("Jane Doe" → "jane-doe").
+
 ### Configuration
 
 - Config file: `~/.config/cfi-ai/config.toml` (created via `cfi-ai --setup` or on first run)
 - Env vars (`GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, `CFI_AI_MODEL`, `CFI_AI_MAX_TOKENS`) override config file values when set
 - ADC via `gcloud auth application-default login` (validated at startup with a clear error message)
+
+### Versioning
+
+The version is defined in two places — keep them in sync:
+- `pyproject.toml` → `version = "X.Y.Z"`
+- `src/cfi_ai/__init__.py` → `__version__ = "X.Y.Z"`
+
+Bump the version on any user-facing change (bug fix → patch, new feature or breaking change → minor).

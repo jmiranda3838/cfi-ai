@@ -72,7 +72,7 @@ def main() -> None:
     _check_adc()
 
     workspace = Workspace()
-    system_prompt = build_system_prompt(str(workspace.root), workspace.summary())
+    system_prompt = build_system_prompt(str(workspace.root), workspace.summary(), workspace=workspace)
     client = Client(config)
     ui = UI()
 
