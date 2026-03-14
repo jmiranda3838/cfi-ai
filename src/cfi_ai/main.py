@@ -1,0 +1,84 @@
+import sys
+
+from cfi_ai import __version__
+from cfi_ai.config import Config
+from cfi_ai.client import Client
+from cfi_ai.workspace import Workspace
+from cfi_ai.prompts.system import build_system_prompt
+from cfi_ai.ui import UI
+from cfi_ai.agent import run_agent_loop
+
+
+def _check_adc() -> None:
+    """Verify Application Default Credentials are available."""
+    try:
+        import google.auth
+
+        google.auth.default()
+    except google.auth.exceptions.DefaultCredentialsError:
+        print(
+            "Error: Google Cloud Application Default Credentials not found.\n"
+            "Run: gcloud auth application-default login",
+            file=sys.stderr,
+        )
+        sys.exit(1)
+
+
+def main() -> None:
+    # Handle --version and --help
+    if "--version" in sys.argv:
+        print(f"cfi-ai {__version__}")
+        return
+    if "--help" in sys.argv or "-h" in sys.argv:
+        print("Usage: cfi-ai [--version] [--model MODEL] [--setup]")
+        print("\nTerminal-first agentic assistant.")
+        print(f"\nConfig file: ~/.config/cfi-ai/config.toml")
+        print("\nOptions:")
+        print("  --setup    Run interactive setup (creates/updates config file)")
+        print("  --model    Override the model name")
+        print("  --version  Show version and exit")
+        print("\nEnvironment variable overrides:")
+        print("  GOOGLE_CLOUD_PROJECT    GCP project ID")
+        print("  GOOGLE_CLOUD_LOCATION   Vertex AI location (default: global)")
+        print("  CFI_AI_MODEL            Model name (default: gemini-2.5-flash)")
+        print("  CFI_AI_MAX_TOKENS       Max tokens (default: 8192)")
+        return
+
+    # Parse --model flag
+    model_override = None
+    if "--model" in sys.argv:
+        idx = sys.argv.index("--model")
+        if idx + 1 < len(sys.argv):
+            model_override = sys.argv[idx + 1]
+        else:
+            print("Error: --model requires a value.", file=sys.stderr)
+            sys.exit(1)
+
+    is_setup = "--setup" in sys.argv
+    config = Config.load(run_setup=is_setup)
+
+    if is_setup:
+        print("Setup complete.")
+        return
+
+    if model_override:
+        config = Config(
+            project=config.project,
+            location=config.location,
+            model=model_override,
+            max_tokens=config.max_tokens,
+        )
+
+    _check_adc()
+
+    workspace = Workspace()
+    system_prompt = build_system_prompt(str(workspace.root), workspace.summary())
+    client = Client(config)
+    ui = UI()
+
+    ui.print_welcome(str(workspace.root))
+
+    try:
+        run_agent_loop(client, ui, workspace, system_prompt)
+    except KeyboardInterrupt:
+        ui.print_info("\nClawdius waves goodbye.")
