@@ -26,7 +26,8 @@ class ReadAudioTool(BaseTool):
         return ToolDefinition(
             name=self.name,
             description=(
-                "Read an audio file and make its contents available for processing. "
+                "Read an audio file and embed its contents in the conversation so you can "
+                "listen to the audio directly. Use this to transcribe or analyze audio recordings. "
                 "Accepts absolute paths or paths relative to the workspace. "
                 f"Supports: {_SUPPORTED_LIST}."
             ),
@@ -69,6 +70,9 @@ class ReadAudioTool(BaseTool):
         except PermissionError:
             return f"Error: permission denied reading '{raw}'."
 
-        summary = f"Audio file loaded: {target.name} ({len(data) / 1024:.0f} KB, {mime_type})"
+        summary = (
+            f"Audio file loaded: {target.name} ({len(data) / 1024:.0f} KB, {mime_type}). "
+            f"The audio is now available in this conversation for you to listen to."
+        )
         inline_part = types.Part.from_bytes(data=data, mime_type=mime_type)
         return (summary, [inline_part])

@@ -12,6 +12,7 @@ def test_read_audio_relative_path(tmp_path):
     text, parts = result
     assert "session.mp3" in text
     assert "audio/mp3" in text
+    assert "listen" in text
     assert len(parts) == 1
 
 
@@ -26,6 +27,7 @@ def test_read_audio_absolute_path(tmp_path):
     text, parts = result
     assert "recording.m4a" in text
     assert "audio/mp4" in text
+    assert "listen" in text
 
 
 def test_read_audio_unsupported_format(tmp_path):

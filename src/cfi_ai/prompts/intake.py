@@ -105,22 +105,22 @@ etc.), interpret them as a shell would — e.g. `Bristol\\ St\\ 4.m4a` means \
 ## Workflow
 
 1. **Load the file** using the appropriate tool (`read_audio` or `read_file`).
-2. **If audio**: Transcribe the session — produce a full transcription with \
-speaker labels (e.g. "Therapist:", "Client:"). Capture the dialogue as faithfully \
-as possible including filler words, pauses noted in brackets, and emotional tone \
-observations in brackets where clinically relevant.
-3. **Identify the client** from the transcript/transcription. Generate a \
-`client-id` slug (lowercase, hyphenated — e.g. "jane-doe").
-4. **Check existing clients** by using `list_files` on `clients/`. If this client \
+   If audio, the data from `read_audio` is embedded directly in this conversation — you can hear it.
+2. **Identify the client** from the session. Generate a `client-id` slug \
+(lowercase, hyphenated — e.g. "jane-doe").
+3. **Check existing clients** by using `list_files` on `clients/`. If this client \
 already exists, use `read_file` to load their current profile and treatment plan \
 for context.
-5. **Generate and present** the following documents for review:
+4. **Generate and present** the following documents for review:
    - Intake Assessment
    - Client Profile
    - Initial Treatment Plan
-6. **After presenting**, save all files using `write_file` (the user will approve \
-the writes in a single batch). Also save the transcript/transcription.
-7. **Create `current.md` copies** for profile and treatment plan so the latest \
+5. **After presenting**, save all files using `write_file` (the user will approve \
+the writes in a single batch). For audio sources, also save a written transcript \
+of the session with speaker labels (e.g. "Therapist:", "Client:") — capture \
+dialogue faithfully including filler words, pauses noted in brackets, and \
+emotional tone observations in brackets where clinically relevant.
+6. **Create `current.md` copies** for profile and treatment plan so the latest \
 versions are always at a predictable path.
 
 ## File Structure

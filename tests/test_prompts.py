@@ -11,6 +11,7 @@ def test_build_system_prompt():
     assert "write_file" in prompt
     assert "search_files" in prompt
     assert "edit_file" in prompt
+    assert "read_audio" in prompt
     assert "run_command" not in prompt
 
 

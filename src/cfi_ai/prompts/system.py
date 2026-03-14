@@ -48,6 +48,7 @@ You can inspect and modify files in the workspace using the tools provided.
 - Use search_files to find patterns across files.
 - Use write_file to create or overwrite files.
 - Use edit_file to make targeted search-and-replace edits to existing files.
+- Use read_audio to load audio files — the audio data is embedded directly in the conversation for you to listen to, transcribe, and analyze.
 
 ## Guidelines
 - Stay within the workspace directory. Never reference paths outside it.
