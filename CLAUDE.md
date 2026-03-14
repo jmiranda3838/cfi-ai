@@ -27,7 +27,9 @@ The inner loop handles multi-turn tool-use chains. Messages are `list[types.Cont
 - Each tool is a `BaseTool` subclass with `definition()` returning a `ToolDefinition` and `execute(workspace, **kwargs)`.
 - `tools/__init__.py` maintains a registry. `get_api_tools()` returns a single `types.Tool` with all `FunctionDeclaration`s.
 - Tools are split into **read-only** (execute immediately) and **mutating** (`mutating = True` → plan-and-approve via `planner.py` before execution).
+- `execute()` can return `str` or `tuple[str, list[Part]]`. The tuple form signals inline binary data (e.g. audio) — `agent.py` appends the function response *and* the extra parts to the tool result message.
 - Tool results are sent as `Part.from_function_response(name=..., response={"result": ...})`. Rejected ops use `response={"error": ...}`.
+- `read_file` and `read_audio` accept both absolute and workspace-relative paths. `AUDIO_EXTENSIONS` is defined in `tools/read_audio.py`.
 
 ### Streaming (`client.py`)
 
@@ -45,7 +47,8 @@ The inner loop handles multi-turn tool-use chains. Messages are `list[types.Cont
 - Commands are registered by importing their modules at the bottom of `__init__.py`.
 - `agent.py` intercepts slash commands between input and message append — if `parse_command` matches, `dispatch` runs the handler.
 - `CommandResult.message` set → replaces user input sent to LLM. `CommandResult.parts` set → multipart content (e.g. text + audio) sent directly. `handled=True` + no message/parts → skip to next prompt. `error` → display and skip.
-- `/help` prints available commands. `/intake` processes a session transcript (text file or pasted) or audio recording (.mp3, .wav, .m4a, etc.) into clinical intake documents. Audio files are sent inline to Gemini via `types.Part.from_bytes()`.
+- `/help` prints available commands. `/intake` processes a session transcript (text file or pasted) or audio recording (.mp3, .wav, .m4a, etc.) into clinical intake documents. File references are passed to the LLM which uses `read_file` or `read_audio` tools to load them (handling shell escapes, spaces in paths, etc.). Pasted multi-line text is embedded directly in the prompt.
+- Typing `/` in the prompt shows autocomplete for available commands via `SlashCommandCompleter` (prompt-toolkit).
 
 ### Client file structure (`clients.py`)
 

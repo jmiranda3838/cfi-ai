@@ -3,6 +3,7 @@ from google.genai import types
 from cfi_ai.tools.base import ToolDefinition
 from cfi_ai.tools.edit_file import EditFileTool
 from cfi_ai.tools.list_files import ListFilesTool
+from cfi_ai.tools.read_audio import ReadAudioTool
 from cfi_ai.tools.read_file import ReadFileTool
 from cfi_ai.tools.search_files import SearchFilesTool
 from cfi_ai.tools.write_file import WriteFileTool
@@ -10,7 +11,8 @@ from cfi_ai.tools.write_file import WriteFileTool
 MUTATING_TOOLS: set[str] = set()
 
 _ALL_TOOLS: list[type] = [
-    EditFileTool, ListFilesTool, ReadFileTool, SearchFilesTool, WriteFileTool,
+    EditFileTool, ListFilesTool, ReadAudioTool, ReadFileTool,
+    SearchFilesTool, WriteFileTool,
 ]
 _REGISTRY: dict[str, type] = {}
 
@@ -32,8 +34,8 @@ def get_api_tools() -> types.Tool:
     return types.Tool(function_declarations=declarations)
 
 
-def execute(name: str, workspace, **kwargs) -> str:
-    """Execute a tool by name and return its result as a string."""
+def execute(name: str, workspace, **kwargs) -> str | tuple[str, list]:
+    """Execute a tool by name. Returns a string or (string, [Part]) tuple."""
     cls = _REGISTRY.get(name)
     if cls is None:
         return f"Error: unknown tool '{name}'"

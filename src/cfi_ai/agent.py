@@ -34,6 +34,9 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
     messages: list[types.Content] = []
     api_tools = tools.get_api_tools()
 
+    from cfi_ai.commands import get_command_descriptions
+    ui.set_commands(get_command_descriptions())
+
     while True:
         # Get user input
         ui.status.set_mode("chatting")
@@ -119,10 +122,18 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                 fc_args = dict(fc.args)
                 ui.show_tool_call(fc.name, _summarize_input(fc_args))
                 result = tools.execute(fc.name, workspace, **fc_args)
-                ui.show_tool_result(fc.name, result)
-                tool_result_parts.append(
-                    types.Part.from_function_response(name=fc.name, response={"result": result})
-                )
+                if isinstance(result, tuple):
+                    text, inline_parts = result
+                    ui.show_tool_result(fc.name, text)
+                    tool_result_parts.append(
+                        types.Part.from_function_response(name=fc.name, response={"result": text})
+                    )
+                    tool_result_parts.extend(inline_parts)
+                else:
+                    ui.show_tool_result(fc.name, result)
+                    tool_result_parts.append(
+                        types.Part.from_function_response(name=fc.name, response={"result": result})
+                    )
 
             # Handle mutating ops with plan-and-approve
             if mutate_ops:
@@ -142,12 +153,22 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                         fc_args = dict(fc.args)
                         ui.show_tool_call(fc.name, _post_approval_summary(fc.name, fc_args))
                         result = tools.execute(fc.name, workspace, **fc_args)
-                        ui.show_tool_result(fc.name, result)
-                        tool_result_parts.append(
-                            types.Part.from_function_response(
-                                name=fc.name, response={"result": result}
+                        if isinstance(result, tuple):
+                            text, inline_parts = result
+                            ui.show_tool_result(fc.name, text)
+                            tool_result_parts.append(
+                                types.Part.from_function_response(
+                                    name=fc.name, response={"result": text}
+                                )
                             )
-                        )
+                            tool_result_parts.extend(inline_parts)
+                        else:
+                            ui.show_tool_result(fc.name, result)
+                            tool_result_parts.append(
+                                types.Part.from_function_response(
+                                    name=fc.name, response={"result": result}
+                                )
+                            )
                 else:
                     for fc in mutate_ops:
                         tool_result_parts.append(

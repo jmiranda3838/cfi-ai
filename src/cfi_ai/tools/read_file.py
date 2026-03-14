@@ -1,3 +1,5 @@
+from pathlib import Path
+
 from cfi_ai.tools.base import BaseTool, ToolDefinition
 
 
@@ -8,13 +10,13 @@ class ReadFileTool(BaseTool):
     def definition(self) -> ToolDefinition:
         return ToolDefinition(
             name=self.name,
-            description="Read the contents of a file at a path relative to the workspace root. Returns the file content as text.",
+            description="Read the contents of a file. Accepts absolute paths or paths relative to the workspace root. Returns the file content as text.",
             input_schema={
                 "type": "object",
                 "properties": {
                     "path": {
                         "type": "string",
-                        "description": "Relative path to the file within the workspace.",
+                        "description": "Path to the file (absolute or relative to workspace).",
                     },
                 },
                 "required": ["path"],
@@ -23,7 +25,11 @@ class ReadFileTool(BaseTool):
 
     def execute(self, workspace, **kwargs) -> str:
         rel = kwargs["path"]
-        target = workspace.validate_path(rel)
+        p = Path(rel)
+        if p.is_absolute():
+            target = p.resolve()
+        else:
+            target = workspace.validate_path(rel)
         if not target.is_file():
             return f"Error: '{rel}' is not a file or does not exist."
         try:

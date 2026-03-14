@@ -116,7 +116,7 @@ def test_edit_file_old_text_ambiguous(tmp_path):
 def test_registry():
     api_tools = tools.get_api_tools()
     names = {fd.name for fd in api_tools.function_declarations}
-    assert names == {"edit_file", "list_files", "read_file", "search_files", "write_file"}
+    assert names == {"edit_file", "list_files", "read_audio", "read_file", "search_files", "write_file"}
 
 
 def test_is_mutating():

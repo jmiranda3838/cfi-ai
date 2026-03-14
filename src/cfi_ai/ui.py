@@ -3,6 +3,7 @@ from __future__ import annotations
 from pathlib import Path
 
 from prompt_toolkit import PromptSession
+from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.styles import Style as PTStyle
@@ -70,16 +71,41 @@ class StatusManager:
         return MODE_DISPLAY.get(self._mode, self._mode)
 
 
+class SlashCommandCompleter(Completer):
+    """Autocomplete for slash commands."""
+
+    def __init__(self) -> None:
+        self._commands: dict[str, str] = {}
+
+    def set_commands(self, commands: dict[str, str]) -> None:
+        self._commands = commands
+
+    def get_completions(self, document, complete_event):
+        text = document.text_before_cursor
+        if " " in text or not text.startswith("/"):
+            return
+        prefix = text[1:]
+        for name, desc in sorted(self._commands.items()):
+            if name.startswith(prefix):
+                yield Completion(name, start_position=-len(prefix), display_meta=desc)
+
+
 class UI:
     def __init__(self) -> None:
         self.console = Console(theme=CFI_THEME)
         self.status = StatusManager()
+        self._completer = SlashCommandCompleter()
         history_dir = Path.home() / ".cfi-ai"
         history_dir.mkdir(exist_ok=True)
         self.session: PromptSession[str] = PromptSession(
             history=FileHistory(str(history_dir / "history")),
             style=PT_STYLE,
+            completer=self._completer,
         )
+
+    def set_commands(self, commands: dict[str, str]) -> None:
+        """Set the available slash commands for autocomplete."""
+        self._completer.set_commands(commands)
 
     def print_welcome(self, workspace_path: str) -> None:
         self.console.print(f"[primary]{MASCOT}[/primary]")

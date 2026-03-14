@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 
 from cfi_ai.commands import parse_command, dispatch, CommandResult
-from cfi_ai.prompts.intake import INTAKE_AUDIO_WORKFLOW_PROMPT
+from cfi_ai.prompts.intake import INTAKE_FILE_WORKFLOW_PROMPT
 from cfi_ai.workspace import Workspace
 
 
@@ -74,18 +74,17 @@ def test_command_result_parts_default():
     assert result.error is None
 
 
-# --- Audio prompt tests ---
+# --- File workflow prompt tests ---
 
-def test_audio_prompt_has_placeholders():
-    """INTAKE_AUDIO_WORKFLOW_PROMPT formats without error and has no {transcript}."""
-    formatted = INTAKE_AUDIO_WORKFLOW_PROMPT.format(
+def test_file_prompt_has_placeholders():
+    """INTAKE_FILE_WORKFLOW_PROMPT formats without error."""
+    formatted = INTAKE_FILE_WORKFLOW_PROMPT.format(
         date="2026-03-13",
         existing_clients="## Existing Clients\nNone.",
-        filename="session.mp3",
+        file_reference="session.mp3",
     )
     assert "2026-03-13" in formatted
     assert "session.mp3" in formatted
-    assert "{transcript}" not in formatted
+    assert "{file_reference}" not in formatted
     assert "{date}" not in formatted
-    assert "{filename}" not in formatted
     assert "{existing_clients}" not in formatted

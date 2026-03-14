@@ -82,30 +82,45 @@ Write a structured initial treatment plan:
 wrapped with a brief header noting the date and session type.
 """
 
-INTAKE_AUDIO_WORKFLOW_PROMPT = """\
-You are conducting a clinical intake assessment based on an audio recording of a \
-therapy session. Today's date is {date}. The audio file "{filename}" is attached.
+INTAKE_FILE_WORKFLOW_PROMPT = """\
+You are conducting a clinical intake assessment based on a file provided by the \
+user. Today's date is {date}.
+
+The user wants to process an intake from a file. The file reference is: \
+`{file_reference}`
+
+Determine the file type from the extension:
+- For audio files (mp3, wav, m4a, aac, ogg, flac, aiff, webm), use the \
+`read_audio` tool to load the file.
+- For text files, use the `read_file` tool to load the file.
+- If the reference looks like raw transcript text rather than a file path, treat \
+it as the transcript directly and skip the file-loading step.
+
+If the path contains shell escape characters (backslashes before spaces, quotes, \
+etc.), interpret them as a shell would — e.g. `Bristol\\ St\\ 4.m4a` means \
+`Bristol St 4.m4a`.
 
 {existing_clients}
 
 ## Workflow
 
-1. **Transcribe the session** — Listen to the attached audio recording and produce \
-a full transcription with speaker labels (e.g. "Therapist:", "Client:"). Capture \
-the dialogue as faithfully as possible including filler words, pauses noted in \
-brackets, and emotional tone observations in brackets where clinically relevant.
-2. **Identify the client** from the transcription. Generate a `client-id` slug \
-(lowercase, hyphenated — e.g. "jane-doe").
-3. **Check existing clients** by using `list_files` on `clients/`. If this client \
+1. **Load the file** using the appropriate tool (`read_audio` or `read_file`).
+2. **If audio**: Transcribe the session — produce a full transcription with \
+speaker labels (e.g. "Therapist:", "Client:"). Capture the dialogue as faithfully \
+as possible including filler words, pauses noted in brackets, and emotional tone \
+observations in brackets where clinically relevant.
+3. **Identify the client** from the transcript/transcription. Generate a \
+`client-id` slug (lowercase, hyphenated — e.g. "jane-doe").
+4. **Check existing clients** by using `list_files` on `clients/`. If this client \
 already exists, use `read_file` to load their current profile and treatment plan \
 for context.
-4. **Generate and present** the following documents for review:
+5. **Generate and present** the following documents for review:
    - Intake Assessment
    - Client Profile
    - Initial Treatment Plan
-5. **After presenting**, save all files using `write_file` (the user will approve \
-the writes in a single batch). Also save the transcription.
-6. **Create `current.md` copies** for profile and treatment plan so the latest \
+6. **After presenting**, save all files using `write_file` (the user will approve \
+the writes in a single batch). Also save the transcript/transcription.
+7. **Create `current.md` copies** for profile and treatment plan so the latest \
 versions are always at a predictable path.
 
 ## File Structure
@@ -124,8 +139,8 @@ clients/<client-id>/
 
 Use today's date ({date}) for all dated filenames.
 
-The sessions/ file should note that it was transcribed from audio \
-(e.g. "Transcribed from audio recording: {filename}") in its header.
+If the source was an audio file, the sessions/ file should note that it was \
+transcribed from audio in its header.
 
 ## Intake Assessment Guidance
 
@@ -160,8 +175,8 @@ Write a structured initial treatment plan:
 ## Important Notes
 
 - Use professional clinical language appropriate for documentation.
-- Include only information present in or reasonably inferred from the audio.
+- Include only information present in or reasonably inferred from the source material.
 - Clearly note when information is absent or was not assessed.
-- Do NOT fabricate clinical details not supported by the audio.
-- Transcribe as accurately as possible — do not omit or embellish content.
+- Do NOT fabricate clinical details not supported by the source material.
+- If transcribing audio, transcribe as accurately as possible — do not omit or embellish content.
 """
