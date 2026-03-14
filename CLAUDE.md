@@ -20,7 +20,7 @@ cfi-ai is a terminal-first agentic assistant that binds to the user's current wo
 
 ### Agent loop (`agent.py`)
 
-The inner loop handles multi-turn tool-use chains. Messages are `list[types.Content]` with roles `"user"`, `"model"`, and `"user"` (for tool results). End-of-turn is detected by the **absence of function_call parts** — not by finish_reason (Gemini uses `"STOP"` for both).
+The inner loop handles multi-turn tool-use chains. Messages are `list[types.Content]` with roles `"user"`, `"model"`, and `"user"` (for tool results). End-of-turn is detected by the **absence of function_call parts** — not by finish_reason (Gemini uses `"STOP"` for both). The loop is capped at `MAX_TOOL_ITERATIONS` (25) as a safety net. If `StreamResult.repetition_detected` fires, the garbage turn is discarded, a corrective user message is injected, and the model retries once — a second detection breaks with an error.
 
 ### Tool system (`tools/`)
 
@@ -34,6 +34,8 @@ The inner loop handles multi-turn tool-use chains. Messages are `list[types.Cont
 ### Streaming (`client.py`)
 
 `StreamResult` wraps `generate_content_stream()`. `text_chunks()` yields text for `ui.stream_markdown()` and accumulates all parts. After exhaustion, `.function_calls` and `.parts` are available.
+
+**Repetition detection**: `text_chunks()` monitors accumulated text for consecutive repetition of the same 500-char block (suffix-based check, starting after 2000 chars). If detected, streaming stops early and `repetition_detected` is set. Constants `_REPEAT_BLOCK_SIZE`, `_REPEAT_MIN_TEXT_LENGTH`, `_REPEAT_CHECK_INTERVAL` are module-level and tunable.
 
 ### Key Vertex AI / Gemini gotchas
 

@@ -11,6 +11,8 @@ from cfi_ai.ui import UI
 from cfi_ai.workspace import Workspace
 import cfi_ai.tools as tools
 
+MAX_TOOL_ITERATIONS = 25
+
 
 def _summarize_input(tool_input: dict) -> str:
     """Create a short summary of tool input for display."""
@@ -73,7 +75,8 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
         # Inner loop: handle tool use chains
         t0 = time.monotonic()
         approval_wait = 0.0
-        while True:
+        repetition_retries = 0
+        for _iteration in range(MAX_TOOL_ITERATIONS):
             ui.status.set_mode("thinking")
 
             try:
@@ -94,6 +97,25 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
             except KeyboardInterrupt:
                 ui.print_info("Cancelled.")
                 break
+
+            # Handle repetition detection
+            if stream_result.repetition_detected:
+                if repetition_retries >= 1:
+                    ui.print_error("Model output is stuck in a loop. Please try again.")
+                    break
+                repetition_retries += 1
+                # Do not append the garbage turn — inject corrective message
+                messages.append(
+                    types.Content(
+                        role="user",
+                        parts=[types.Part.from_text(
+                            text="Your previous response became repetitive. "
+                            "Do not restate the plan. Summarize in 1-2 sentences "
+                            "and proceed directly to tool calls.",
+                        )],
+                    )
+                )
+                continue
 
             if not stream_result.parts:
                 break
@@ -182,6 +204,10 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
             # "user" and "model" roles, and tool results are part of the user turn.
             messages.append(types.Content(role="user", parts=tool_result_parts))
             continue  # Continue inner loop to let model process results
+
+        else:
+            # for-loop exhausted without break — max iterations reached
+            ui.print_info(f"Reached max tool iterations ({MAX_TOOL_ITERATIONS}). Stopping.")
 
         elapsed = time.monotonic() - t0 - approval_wait
         ui.print_elapsed(elapsed)

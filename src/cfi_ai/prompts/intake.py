@@ -17,12 +17,12 @@ Today's date is {date}.
 2. **Check existing clients** by using `list_files` on `clients/`. If this client \
 already exists, use `read_file` to load their current profile and treatment plan \
 for context.
-3. **Generate and present** the following documents for review:
-   - Intake Assessment
-   - Client Profile
-   - Initial Treatment Plan
-4. **After presenting**, save all files using `write_file` (the user will approve \
-the writes in a single batch). Also save the transcript.
+3. **Briefly summarize** your clinical impressions and planned documents in 2-3 \
+sentences (do NOT reproduce full document content in your response — the user \
+will review content in the approval step).
+4. **Save all files** using `write_file` — create the intake assessment, client \
+profile, initial treatment plan, and session transcript. The user will review \
+and approve the writes before they are executed.
 5. **Create `current.md` copies** for profile and treatment plan so the latest \
 versions are always at a predictable path.
 
@@ -111,15 +111,15 @@ etc.), interpret them as a shell would — e.g. `Bristol\\ St\\ 4.m4a` means \
 3. **Check existing clients** by using `list_files` on `clients/`. If this client \
 already exists, use `read_file` to load their current profile and treatment plan \
 for context.
-4. **Generate and present** the following documents for review:
-   - Intake Assessment
-   - Client Profile
-   - Initial Treatment Plan
-5. **After presenting**, save all files using `write_file` (the user will approve \
-the writes in a single batch). For audio sources, also save a written transcript \
-of the session with speaker labels (e.g. "Therapist:", "Client:") — capture \
-dialogue faithfully including filler words, pauses noted in brackets, and \
-emotional tone observations in brackets where clinically relevant.
+4. **Briefly summarize** your clinical impressions and planned documents in 2-3 \
+sentences (do NOT reproduce full document content in your response — the user \
+will review content in the approval step).
+5. **Save all files** using `write_file` — create the intake assessment, client \
+profile, initial treatment plan, and session transcript. The user will review \
+and approve the writes before they are executed. For audio sources, also save a \
+written transcript of the session with speaker labels (e.g. "Therapist:", \
+"Client:") — capture dialogue faithfully including filler words, pauses noted \
+in brackets, and emotional tone observations in brackets where clinically relevant.
 6. **Create `current.md` copies** for profile and treatment plan so the latest \
 versions are always at a predictable path.
 

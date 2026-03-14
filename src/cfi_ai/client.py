@@ -8,6 +8,22 @@ from google.genai import types
 
 from cfi_ai.config import Config
 
+# Repetition detection constants
+_REPEAT_BLOCK_SIZE = 500
+_REPEAT_MIN_TEXT_LENGTH = 2000
+_REPEAT_CHECK_INTERVAL = 500
+
+
+def _is_repeated_suffix(text: str) -> bool:
+    """Return True if the last ``_REPEAT_BLOCK_SIZE`` chars of *text* appear
+    consecutively — i.e. the block immediately before them is identical."""
+    block = text[-_REPEAT_BLOCK_SIZE:]
+    preceding_end = len(text) - _REPEAT_BLOCK_SIZE
+    if preceding_end < _REPEAT_BLOCK_SIZE:
+        return False
+    preceding_block = text[preceding_end - _REPEAT_BLOCK_SIZE : preceding_end]
+    return preceding_block == block
+
 
 class Client:
     def __init__(self, config: Config) -> None:
@@ -56,9 +72,12 @@ class StreamResult:
         self._stream = stream
         self._parts: list[types.Part] = []
         self._finish_reason: str | None = None
+        self._repetition_detected: bool = False
 
     def text_chunks(self) -> Generator[str, None, None]:
         """Yield text delta chunks as they arrive."""
+        buf = ""
+        last_check_len = 0
         for chunk in self._stream:
             if not chunk.candidates:
                 continue
@@ -70,7 +89,21 @@ class StreamResult:
             for part in candidate.content.parts:
                 self._parts.append(part)
                 if part.text:
+                    buf += part.text
+                    # Check for repetition once we have enough text
+                    if (
+                        len(buf) >= _REPEAT_MIN_TEXT_LENGTH
+                        and len(buf) - last_check_len >= _REPEAT_CHECK_INTERVAL
+                    ):
+                        last_check_len = len(buf)
+                        if _is_repeated_suffix(buf):
+                            self._repetition_detected = True
+                            return
                     yield part.text
+
+    @property
+    def repetition_detected(self) -> bool:
+        return self._repetition_detected
 
     @property
     def parts(self) -> list[types.Part]:
