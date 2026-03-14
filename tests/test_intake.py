@@ -73,6 +73,47 @@ def test_resolve_input_missing_file(tmp_path):
     ui.print_error.assert_called_once()
 
 
+def test_resolve_input_absolute_path_audio(tmp_path):
+    """Absolute path to an audio file outside the workspace resolves correctly."""
+    external_dir = tmp_path / "external"
+    external_dir.mkdir()
+    audio_file = external_dir / "recording.m4a"
+    audio_data = b"\x00\x00\x00\x1cftypisom" + b"\x00" * 50
+    audio_file.write_bytes(audio_data)
+    ui = MagicMock()
+    ws_dir = tmp_path / "workspace"
+    ws_dir.mkdir()
+    ws = Workspace(str(ws_dir))
+    result = _resolve_input(str(audio_file), ui, ws)
+    assert isinstance(result, _AudioInput)
+    assert result.mime_type == "audio/mp4"
+    assert result.data == audio_data
+
+
+def test_resolve_input_absolute_path_text(tmp_path):
+    """Absolute path to a text file outside the workspace resolves correctly."""
+    external_dir = tmp_path / "external"
+    external_dir.mkdir()
+    text_file = external_dir / "session.txt"
+    text_file.write_text("External transcript content.")
+    ui = MagicMock()
+    ws_dir = tmp_path / "workspace"
+    ws_dir.mkdir()
+    ws = Workspace(str(ws_dir))
+    result = _resolve_input(str(text_file), ui, ws)
+    assert isinstance(result, _TextInput)
+    assert result.text == "External transcript content."
+
+
+def test_resolve_input_absolute_path_missing(tmp_path):
+    """Absolute path to a nonexistent file returns None with error."""
+    ui = MagicMock()
+    ws = Workspace(str(tmp_path))
+    result = _resolve_input("/tmp/nonexistent_intake_file.txt", ui, ws)
+    assert result is None
+    ui.print_error.assert_called_once()
+
+
 def test_resolve_input_path_escape(tmp_path):
     ui = MagicMock()
     ws = Workspace(str(tmp_path))

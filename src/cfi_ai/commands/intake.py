@@ -51,17 +51,24 @@ def _get_audio_mime_type(path: Path) -> str | None:
 def _resolve_file_path(
     raw_path: str, ui: UI, workspace: Workspace
 ) -> Path | None:
-    """Validate and resolve a file path within the workspace.
+    """Validate and resolve a file path.
 
+    Absolute paths are resolved directly (read-only input).
+    Relative paths are sandboxed to the workspace via validate_path.
     Returns the resolved Path, or None if invalid/missing.
     """
-    try:
-        path = workspace.validate_path(raw_path.strip())
-    except ValueError as e:
-        ui.print_error(str(e))
-        return None
+    stripped = raw_path.strip()
+    candidate = Path(stripped)
+    if candidate.is_absolute():
+        path = candidate.resolve()
+    else:
+        try:
+            path = workspace.validate_path(stripped)
+        except ValueError as e:
+            ui.print_error(str(e))
+            return None
     if not path.is_file():
-        ui.print_error(f"File not found: {raw_path.strip()}")
+        ui.print_error(f"File not found: {stripped}")
         return None
     return path
 
@@ -112,12 +119,18 @@ def _resolve_input(
 
     # Check if the input looks like a file path (single line)
     if "\n" not in text:
-        try:
-            path = workspace.validate_path(text)
+        candidate = Path(text)
+        if candidate.is_absolute():
+            path = candidate.resolve()
             if path.is_file():
                 return _load_file(path, ui)
-        except ValueError:
-            pass  # Not a valid path, treat as transcript text
+        else:
+            try:
+                path = workspace.validate_path(text)
+                if path.is_file():
+                    return _load_file(path, ui)
+            except ValueError:
+                pass  # Not a valid path, treat as transcript text
 
     return _TextInput(text=text)
 

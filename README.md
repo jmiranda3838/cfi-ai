@@ -92,6 +92,9 @@ Process a session transcript or audio recording into structured clinical documen
 # From an audio file (.mp3, .wav, .m4a, .aac, .ogg, .flac, .aiff, .webm)
 ~ /intake session-recording.mp3
 
+# From an absolute path (e.g. Downloads)
+~ /intake /Users/you/Downloads/session-recording.m4a
+
 # Paste interactively
 ~ /intake
 transcript> [paste text or enter a file path, then Esc+Enter to submit]
