@@ -1,18 +1,15 @@
 from google.genai import types
 
 from cfi_ai.tools.base import ToolDefinition
-from cfi_ai.tools.edit_file import EditFileTool
-from cfi_ai.tools.list_files import ListFilesTool
-from cfi_ai.tools.read_audio import ReadAudioTool
-from cfi_ai.tools.read_file import ReadFileTool
-from cfi_ai.tools.search_files import SearchFilesTool
+from cfi_ai.tools.apply_patch import ApplyPatchTool
+from cfi_ai.tools.attach_path import AttachPathTool
+from cfi_ai.tools.run_command import RunCommandTool, is_command_mutating
 from cfi_ai.tools.write_file import WriteFileTool
 
 MUTATING_TOOLS: set[str] = set()
 
 _ALL_TOOLS: list[type] = [
-    EditFileTool, ListFilesTool, ReadAudioTool, ReadFileTool,
-    SearchFilesTool, WriteFileTool,
+    ApplyPatchTool, AttachPathTool, RunCommandTool, WriteFileTool,
 ]
 _REGISTRY: dict[str, type] = {}
 
@@ -45,7 +42,10 @@ def execute(name: str, workspace, **kwargs) -> str | tuple[str, list]:
         return f"Error: {e}"
 
 
-def is_mutating(name: str) -> bool:
+def classify_mutation(name: str, args: dict) -> bool:
+    """Check if a tool call is mutating, handling dynamic classification for run_command."""
+    if name == "run_command":
+        return is_command_mutating(args.get("command", ""))
     return name in MUTATING_TOOLS
 
 
@@ -53,6 +53,6 @@ __all__ = [
     "ToolDefinition",
     "get_api_tools",
     "execute",
-    "is_mutating",
+    "classify_mutation",
     "MUTATING_TOOLS",
 ]

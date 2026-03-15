@@ -87,6 +87,6 @@ def main() -> None:
     ui.print_welcome(str(workspace.root))
 
     try:
-        run_agent_loop(client, ui, workspace, system_prompt)
+        run_agent_loop(client, ui, workspace, system_prompt, config)
     except KeyboardInterrupt:
         ui.print_info("\nClawdius waves goodbye.")

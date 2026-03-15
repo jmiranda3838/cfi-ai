@@ -21,7 +21,7 @@ Today's date is {date}.
 1. **Identify the client** from the transcript. Generate a `client-id` slug \
 (lowercase, hyphenated — e.g. "jane-doe").
 2. **Check existing clients** — if this client matches an existing ID, use \
-`read_file` to load `clients/<client-id>/profile/current.md` and \
+`attach_path` to load `clients/<client-id>/profile/current.md` and \
 `clients/<client-id>/treatment-plan/current.md` for context.
 3. **State** the client name and a 1-2 sentence clinical summary. Stop text \
 output, then proceed to Phase 2.
@@ -104,11 +104,8 @@ user. Today's date is {date}.
 The user wants to process an intake from a file. The file reference is: \
 `{file_reference}`
 
-Determine the file type from the extension:
-- For audio files (mp3, wav, m4a, aac, ogg, flac, aiff, webm), use the \
-`read_audio` tool to load the file.
-- For text files, use the `read_file` tool to load the file.
-- If the reference looks like raw transcript text rather than a file path, treat \
+Use `attach_path` to load the file — it handles both audio and text files automatically.
+If the reference looks like raw transcript text rather than a file path, treat \
 it as the transcript directly and skip the file-loading step.
 
 If the path contains shell escape characters (backslashes before spaces, quotes, \
@@ -120,12 +117,12 @@ etc.), interpret them as a shell would — e.g. `Bristol\\ St\\ 4.m4a` means \
 ## Workflow
 
 ### Phase 1: Load, Identify & Summarize
-1. **Load the file** using the appropriate tool (`read_audio` or `read_file`). \
-If audio, the data from `read_audio` is embedded directly in this conversation — you can hear it.
+1. **Load the file** using `attach_path`. \
+If audio, the data is embedded directly in this conversation — you can hear it.
 2. **Identify the client** from the session. Generate a `client-id` slug \
 (lowercase, hyphenated — e.g. "jane-doe").
 3. **Check existing clients** — if this client matches an existing ID, use \
-`read_file` to load `clients/<client-id>/profile/current.md` and \
+`attach_path` to load `clients/<client-id>/profile/current.md` and \
 `clients/<client-id>/treatment-plan/current.md` for context.
 4. **State** the client name and a 1-2 sentence clinical summary. Stop text \
 output, then proceed to Phase 2.

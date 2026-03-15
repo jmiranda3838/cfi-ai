@@ -1,11 +1,14 @@
 from __future__ import annotations
 
+import subprocess
 import time
 
+from google.auth import exceptions as auth_exceptions
 from google.genai import types
 
 from cfi_ai.client import Client
 from cfi_ai.commands import parse_command, dispatch
+from cfi_ai.config import Config
 from cfi_ai.planner import ExecutionPlan, format_plan
 from cfi_ai.ui import UI
 from cfi_ai.workspace import Workspace
@@ -14,6 +17,41 @@ import cfi_ai.tools as tools
 MAX_TOOL_ITERATIONS = 25
 
 _NARRATION_THRESHOLD = 800
+
+
+def _is_auth_error(exc: Exception) -> bool:
+    """Check if an exception is caused by expired Google Cloud credentials."""
+    current: BaseException | None = exc
+    while current is not None:
+        if isinstance(current, auth_exceptions.RefreshError):
+            return True
+        if "Reauthentication" in str(current):
+            return True
+        current = current.__cause__ or current.__context__
+    return False
+
+
+def _run_reauth(ui: UI) -> bool:
+    """Launch interactive gcloud reauth flow. Returns True on success."""
+    ui.print_info(
+        "Google Cloud credentials have expired. Launching reauthentication..."
+    )
+    try:
+        result = subprocess.run(
+            ["gcloud", "auth", "application-default", "login"],
+        )
+    except FileNotFoundError:
+        ui.print_error(
+            "gcloud CLI not found. Install it from "
+            "https://cloud.google.com/sdk/docs/install and run:\n"
+            "  gcloud auth application-default login"
+        )
+        return False
+    if result.returncode == 0:
+        ui.print_info("Reauthentication successful. Retrying request...")
+        return True
+    ui.print_error("Reauthentication failed. Please try manually:\n  gcloud auth application-default login")
+    return False
 
 
 def _summarize_input(tool_input: dict) -> str:
@@ -29,12 +67,14 @@ def _summarize_input(tool_input: dict) -> str:
 
 def _post_approval_summary(name: str, args: dict) -> str:
     """Return a condensed summary for post-approval display."""
-    if name in ("write_file", "edit_file"):
+    if name in ("write_file", "apply_patch"):
         return f"path={args.get('path', '?')}"
+    if name == "run_command":
+        return f"command={args.get('command', '?')}"
     return _summarize_input(args)
 
 
-def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: str) -> None:
+def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: str, config: Config) -> None:
     messages: list[types.Content] = []
     api_tools = tools.get_api_tools()
 
@@ -81,6 +121,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
         approval_wait = 0.0
         repetition_retries = 0
         narration_retries = 0
+        reauth_attempted = False
         for _iteration in range(MAX_TOOL_ITERATIONS):
             ui.status.set_mode("thinking")
 
@@ -91,6 +132,11 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                     tools=api_tools,
                 )
             except Exception as e:
+                if not reauth_attempted and _is_auth_error(e):
+                    reauth_attempted = True
+                    if _run_reauth(ui):
+                        client = Client(config)
+                        continue
                 ui.print_error(f"API error: {e}")
                 # Remove the last user message so they can retry
                 messages.pop()
@@ -101,6 +147,14 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                 full_text = ui.stream_markdown(stream_result.text_chunks())
             except KeyboardInterrupt:
                 ui.print_info("Cancelled.")
+                break
+            except Exception as e:
+                if not reauth_attempted and _is_auth_error(e):
+                    reauth_attempted = True
+                    if _run_reauth(ui):
+                        client = Client(config)
+                        continue
+                ui.print_error(f"API error: {e}")
                 break
 
             # Handle repetition detection
@@ -158,7 +212,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
             read_ops = []
             mutate_ops = []
             for fc in function_calls:
-                if tools.is_mutating(fc.name):
+                if tools.classify_mutation(fc.name, dict(fc.args)):
                     mutate_ops.append(fc)
                 else:
                     read_ops.append(fc)

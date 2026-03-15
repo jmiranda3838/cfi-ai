@@ -69,7 +69,7 @@ def _build_existing_clients_section(workspace: Workspace) -> str:
         "## Existing Clients\n\n"
         "The following client IDs already exist:\n"
         f"{client_list}\n\n"
-        "If the session subject matches an existing client, use `read_file` to load "
+        "If the session subject matches an existing client, use `attach_path` to load "
         "`clients/<client-id>/profile/current.md` and "
         "`clients/<client-id>/treatment-plan/current.md` for context before writing."
     )

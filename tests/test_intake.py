@@ -104,7 +104,7 @@ def test_handle_intake_file_reference(tmp_path):
     result = handle_intake("session.mp3", ui, ws)
     assert result.message is not None
     assert "session.mp3" in result.message
-    assert "read_audio" in result.message
+    assert "attach_path" in result.message
     assert result.parts is None
 
 

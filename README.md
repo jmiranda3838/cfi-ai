@@ -100,7 +100,7 @@ Process a session transcript or audio recording into structured clinical documen
 transcript> [paste text or enter a file path, then Esc+Enter to submit]
 ```
 
-File paths are passed to the LLM, which uses the appropriate tool (`read_file` or `read_audio`) to load them — this handles shell escapes, spaces in paths, and other tricky filenames naturally. Audio is sent inline to Gemini for transcription and clinical document generation.
+File paths are passed to the LLM, which uses `attach_path` to load them — this handles shell escapes, spaces in paths, and other tricky filenames naturally. Audio is sent inline to Gemini for transcription and clinical document generation.
 
 The workflow generates:
 - **Intake Assessment** — presenting concerns, history, symptoms, risk, impressions
@@ -119,12 +119,12 @@ clients/jane-doe/
   sessions/2025-01-15-intake-transcript.md
 ```
 
-All file writes go through the normal plan-and-approve flow.
+Mutating operations (file writes, destructive commands) require user approval.
 
 ## How It Works
 
-- **Read-only tools** (`list_files`, `read_file`, `read_audio`, `search_files`) execute immediately
-- **Mutating tools** (`write_file`, `edit_file`) require an execution plan + user approval before running
+- **4 core tools** — `run_command` (allowlisted shell commands), `attach_path` (file/audio/image ingestion), `apply_patch` (search-and-replace edits), `write_file` (new files only)
+- **Mutation classification** — read-only operations execute immediately; mutating operations (`apply_patch`, `write_file`, destructive commands) require user approval
 - **Slash command autocomplete** — type `/` to see available commands
 - Status indicator shows current mode: chatting, thinking, planning, awaiting approval, executing
 

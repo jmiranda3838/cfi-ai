@@ -1,3 +1,5 @@
+from unittest.mock import patch
+
 from cfi_ai.prompts.system import build_system_prompt
 from cfi_ai.workspace import Workspace
 
@@ -6,13 +8,16 @@ def test_build_system_prompt():
     prompt = build_system_prompt("/home/user/project", "Workspace: /home/user/project\nContents:\n  src/")
     assert "cfi-ai" in prompt
     assert "/home/user/project" in prompt
-    assert "list_files" in prompt
-    assert "read_file" in prompt
+    assert "run_command" in prompt
+    assert "attach_path" in prompt
+    assert "apply_patch" in prompt
     assert "write_file" in prompt
-    assert "search_files" in prompt
-    assert "edit_file" in prompt
-    assert "read_audio" in prompt
-    assert "run_command" not in prompt
+    # Old tools should not be present
+    assert "list_files" not in prompt
+    assert "read_file" not in prompt
+    assert "search_files" not in prompt
+    assert "edit_file" not in prompt
+    assert "read_audio" not in prompt
 
 
 def test_prompt_includes_workspace_summary():
@@ -39,3 +44,17 @@ def test_prompt_excludes_clients_section_when_no_dir(tmp_path):
 def test_prompt_excludes_clients_section_when_no_workspace():
     prompt = build_system_prompt("/tmp/test", "summary")
     assert "Client File Structure" not in prompt
+
+
+def test_prompt_without_rg():
+    with patch("cfi_ai.prompts.system.shutil.which", return_value=None):
+        prompt = build_system_prompt("/tmp/test", "summary")
+    assert "grep" in prompt
+    # rg should not appear as a standalone command recommendation
+    assert "rg" not in prompt
+
+
+def test_prompt_with_rg():
+    with patch("cfi_ai.prompts.system.shutil.which", return_value="/usr/local/bin/rg"):
+        prompt = build_system_prompt("/tmp/test", "summary")
+    assert "rg" in prompt

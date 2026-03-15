@@ -23,35 +23,17 @@ class ExecutionPlan:
             path = tool_input.get("path", "?")
             content = tool_input.get("content", "")
             args_summary = f"path={path}"
-            diff = None
 
             if not content:
                 desc = f"Create empty file {path}"
-            elif workspace:
-                try:
-                    target = workspace.validate_path(path)
-                    if target.is_file():
-                        old = target.read_text()
-                        diff = list(difflib.unified_diff(
-                            old.splitlines(keepends=True),
-                            content.splitlines(keepends=True),
-                            fromfile=path,
-                            tofile=path,
-                        ))
-                        desc = f"Modify {path}"
-                    else:
-                        desc = f"Write to {path} ({len(content)} chars)"
-                except Exception:
-                    desc = f"Write to {path} ({len(content)} chars)"
             else:
                 desc = f"Write to {path} ({len(content)} chars)"
 
-            self.operations.append(PlannedOperation(tool_name, desc, args_summary, diff))
+            self.operations.append(PlannedOperation(tool_name, desc, args_summary))
 
-        elif tool_name == "edit_file":
+        elif tool_name == "apply_patch":
             path = tool_input.get("path", "?")
-            old_text = tool_input.get("old_text", "")
-            new_text = tool_input.get("new_text", "")
+            edits = tool_input.get("edits", [])
             args_summary = f"path={path}"
             diff = None
 
@@ -60,7 +42,16 @@ class ExecutionPlan:
                     target = workspace.validate_path(path)
                     if target.is_file():
                         old_content = target.read_text()
-                        new_content = old_content.replace(old_text, new_text, 1)
+                        new_content = old_content
+                        for edit in edits:
+                            old_text = edit.get("old_text", "")
+                            new_text = edit.get("new_text", "")
+                            replace_all = edit.get("replace_all", False)
+                            if old_text:
+                                if replace_all:
+                                    new_content = new_content.replace(old_text, new_text)
+                                elif new_content.count(old_text) == 1:
+                                    new_content = new_content.replace(old_text, new_text, 1)
                         diff = list(difflib.unified_diff(
                             old_content.splitlines(keepends=True),
                             new_content.splitlines(keepends=True),
@@ -70,8 +61,19 @@ class ExecutionPlan:
                 except Exception:
                     pass
 
-            desc = f"Edit {path}"
+            n = len(edits)
+            desc = f"Edit {path} ({n} edit{'s' if n != 1 else ''})"
             self.operations.append(PlannedOperation(tool_name, desc, args_summary, diff))
+
+        elif tool_name == "run_command":
+            command = tool_input.get("command", "?")
+            args_summary = f"command={command}"
+            # Label rm as destructive
+            if command.strip().startswith("rm "):
+                desc = f"[red]DELETE[/red] {command}"
+            else:
+                desc = f"Run: {command}"
+            self.operations.append(PlannedOperation(tool_name, desc, args_summary))
 
         else:
             desc = f"Execute {tool_name}"
