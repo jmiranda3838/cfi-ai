@@ -261,8 +261,28 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
         if not user_text.strip():
             continue
 
+        # --- SLASH COMMAND PARSING (before plan/normal mode branch) ---
+        user_parts = None
+        workflow_mode = False
+        parsed = parse_command(user_text)
+        if parsed is not None:
+            cmd_name, cmd_args = parsed
+            result = dispatch(cmd_name, cmd_args, ui, workspace)
+            if result.error:
+                ui.print_error(result.error)
+                continue
+            if result.handled and result.message is None and result.parts is None:
+                continue
+            workflow_mode = result.workflow_mode
+            if workflow_mode:
+                _log.debug("command_set workflow_mode=True")
+            if result.parts is not None:
+                user_parts = result.parts
+            elif result.message is not None:
+                user_text = result.message
+
         # --- PLAN MODE FLOW ---
-        if is_plan_mode:
+        if is_plan_mode and not workflow_mode:
             ui.print_separator()
             ui.print_info("Plan mode: researching and planning (read-only)...")
 
@@ -336,26 +356,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                 continue
         else:
             # --- NORMAL CHAT FLOW ---
-            user_parts = None
-            workflow_mode = False
             _log.debug("normal_chat_flow")
-            parsed = parse_command(user_text)
-            if parsed is not None:
-                cmd_name, cmd_args = parsed
-                result = dispatch(cmd_name, cmd_args, ui, workspace)
-                if result.error:
-                    ui.print_error(result.error)
-                    continue
-                if result.handled and result.message is None and result.parts is None:
-                    continue
-                workflow_mode = result.workflow_mode
-                if workflow_mode:
-                    _log.debug("command_set workflow_mode=True")
-                if result.parts is not None:
-                    user_parts = result.parts
-                elif result.message is not None:
-                    user_text = result.message
-
             if user_parts is not None:
                 messages.append(types.Content(role="user", parts=user_parts))
             else:
