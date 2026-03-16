@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import logging
+import os
 import subprocess
 import time
 
@@ -15,9 +17,46 @@ from cfi_ai.ui import UI, UserInput
 from cfi_ai.workspace import Workspace
 import cfi_ai.tools as tools
 
+_log = logging.getLogger(__name__)
+
 MAX_TOOL_ITERATIONS = 25
 
 _NARRATION_THRESHOLD = 800
+
+
+def _safe_tool_summary(name: str, args: dict) -> str:
+    """Return a PHI-safe metadata summary of tool call args.
+
+    Never logs raw args, basenames, path segments, or content.
+    """
+    if name == "attach_path":
+        path = args.get("path", "")
+        ext = os.path.splitext(path)[1] if path else ""
+        return (
+            f"attach_path ext={ext!r} absolute={os.path.isabs(path)} "
+            f"path_len={len(path)}"
+        )
+    if name == "run_command":
+        cmd = args.get("command", "")
+        argv = cmd.split() if isinstance(cmd, str) else []
+        return f"run_command cmd={argv[0] if argv else '?'} argc={len(argv)}"
+    if name == "apply_patch":
+        path = args.get("path", "")
+        ext = os.path.splitext(path)[1] if path else ""
+        edits = args.get("edits", [])
+        return (
+            f"apply_patch ext={ext!r} edits={len(edits) if isinstance(edits, list) else '?'} "
+            f"path_len={len(path)}"
+        )
+    if name == "write_file":
+        path = args.get("path", "")
+        ext = os.path.splitext(path)[1] if path else ""
+        content = args.get("content", "")
+        return (
+            f"write_file ext={ext!r} content_len={len(content)} "
+            f"path_len={len(path)}"
+        )
+    return f"{name} keys={sorted(args.keys())}"
 
 
 def _is_auth_error(exc: Exception) -> bool:
@@ -84,10 +123,12 @@ def _run_plan_mode(
     messages: list[types.Content],
 ) -> str | None:
     """Run the plan-mode inner loop. Returns the plan text, or None on error/cancel."""
+    _log.debug("plan_mode_enter messages=%d", len(messages))
     repetition_retries = 0
     plan_text = None
 
     for _iteration in range(MAX_TOOL_ITERATIONS):
+        _log.debug("plan_mode iteration=%d messages=%d", _iteration, len(messages))
         ui.status.set_mode("thinking_plan")
 
         try:
@@ -95,6 +136,7 @@ def _run_plan_mode(
                 messages=messages,
                 system=plan_system_prompt,
                 tools=readonly_tools,
+                mode="plan",
             )
         except Exception as e:
             ui.print_error(f"API error: {e}")
@@ -103,13 +145,18 @@ def _run_plan_mode(
         try:
             full_text = ui.stream_markdown(stream_result.text_chunks())
         except KeyboardInterrupt:
+            _log.debug("[req:%s] stream_aborted reason=keyboard_interrupt", stream_result.request_id)
             ui.print_info("Plan cancelled.")
             return None
         except Exception as e:
+            _log.debug("[req:%s] stream_aborted reason=api_error", stream_result.request_id)
             ui.print_error(f"API error: {e}")
             return None
+        finally:
+            stream_result.log_completion()
 
         if stream_result.repetition_detected:
+            _log.debug("plan_mode repetition_detected retries=%d", repetition_retries)
             if repetition_retries >= 1:
                 ui.print_error("Model output is stuck in a loop.")
                 return None
@@ -122,12 +169,14 @@ def _run_plan_mode(
                     )],
                 )
             )
+            _log.debug("plan_mode corrective_inject repetition")
             continue
 
         if not stream_result.parts:
             break
 
         messages.append(types.Content(role="model", parts=stream_result.parts))
+        _log.debug("plan_mode model_turn_appended parts=%d", len(stream_result.parts))
 
         function_calls = stream_result.function_calls
         if not function_calls:
@@ -138,6 +187,7 @@ def _run_plan_mode(
         tool_result_parts: list[types.Part] = []
         for fc in function_calls:
             fc_args = dict(fc.args)
+            _log.debug("plan_mode tool_call %s", _safe_tool_summary(fc.name, fc_args))
 
             # Reject mutations (belt-and-suspenders)
             if tools.classify_mutation(fc.name, fc_args):
@@ -158,13 +208,26 @@ def _run_plan_mode(
                     types.Part.from_function_response(name=fc.name, response={"result": text})
                 )
                 tool_result_parts.extend(inline_parts)
+                _log.debug(
+                    "plan_mode tool_result %s type=tuple inline_parts=%d text_len=%d",
+                    fc.name, len(inline_parts), len(text),
+                )
             else:
                 ui.show_tool_result(fc.name, result)
                 tool_result_parts.append(
                     types.Part.from_function_response(name=fc.name, response={"result": result})
                 )
+                _log.debug(
+                    "plan_mode tool_result %s type=text text_len=%d",
+                    fc.name, len(result),
+                )
 
         messages.append(types.Content(role="user", parts=tool_result_parts))
+        _log.debug(
+            "plan_mode tool_results_appended parts=%d functions=%s",
+            len(tool_result_parts),
+            [fc.name for fc in function_calls],
+        )
         continue
 
     else:
@@ -208,6 +271,10 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
             plan_messages.append(
                 types.Content(role="user", parts=[types.Part.from_text(text=user_text)])
             )
+            _log.debug(
+                "plan_mode_entry cloned_messages=%d total_plan_messages=%d",
+                len(messages), len(plan_messages),
+            )
 
             t0 = time.monotonic()
             plan_text = _run_plan_mode(
@@ -230,6 +297,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                 ui.print_separator()
 
                 # Clear history, inject plan as first user message
+                _log.debug("plan_approved clearing_messages=%d", len(messages))
                 messages.clear()
                 execution_prompt = (
                     "Execute the following implementation plan. Follow each step precisely. "
@@ -242,6 +310,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                 )
                 # Fall through to the normal inner loop with workflow_mode enabled
                 workflow_mode = True
+                _log.debug("plan_execution_inject workflow_mode=True")
             else:
                 # Rejected: preserve plan exchange in history for refinement
                 messages.append(
@@ -256,6 +325,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
             # --- NORMAL CHAT FLOW ---
             user_parts = None
             workflow_mode = False
+            _log.debug("normal_chat_flow")
             parsed = parse_command(user_text)
             if parsed is not None:
                 cmd_name, cmd_args = parsed
@@ -266,6 +336,8 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                 if result.handled and result.message is None and result.parts is None:
                     continue
                 workflow_mode = result.workflow_mode
+                if workflow_mode:
+                    _log.debug("command_set workflow_mode=True")
                 if result.parts is not None:
                     user_parts = result.parts
                 elif result.message is not None:
@@ -283,7 +355,9 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
         repetition_retries = 0
         narration_retries = 0
         reauth_attempted = False
+        _log.debug("inner_loop_start workflow_mode=%s messages=%d", workflow_mode, len(messages))
         for _iteration in range(MAX_TOOL_ITERATIONS):
+            _log.debug("inner_loop iteration=%d messages=%d", _iteration, len(messages))
             ui.status.set_mode("thinking")
 
             try:
@@ -291,6 +365,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                     messages=messages,
                     system=system_prompt,
                     tools=api_tools,
+                    mode="workflow" if workflow_mode else "normal",
                 )
             except Exception as e:
                 if not reauth_attempted and _is_auth_error(e):
@@ -307,9 +382,11 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
             try:
                 full_text = ui.stream_markdown(stream_result.text_chunks())
             except KeyboardInterrupt:
+                _log.debug("[req:%s] stream_aborted reason=keyboard_interrupt", stream_result.request_id)
                 ui.print_info("Cancelled.")
                 break
             except Exception as e:
+                _log.debug("[req:%s] stream_aborted reason=api_error", stream_result.request_id)
                 if not reauth_attempted and _is_auth_error(e):
                     reauth_attempted = True
                     if _run_reauth(ui):
@@ -317,9 +394,12 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                         continue
                 ui.print_error(f"API error: {e}")
                 break
+            finally:
+                stream_result.log_completion()
 
             # Handle repetition detection
             if stream_result.repetition_detected:
+                _log.debug("inner_loop repetition_detected retries=%d", repetition_retries)
                 if repetition_retries >= 1:
                     ui.print_error("Model output is stuck in a loop. Please try again.")
                     break
@@ -335,6 +415,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                         )],
                     )
                 )
+                _log.debug("inner_loop corrective_inject repetition")
                 continue
 
             if not stream_result.parts:
@@ -342,6 +423,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
 
             # Append assistant message to history
             messages.append(types.Content(role="model", parts=stream_result.parts))
+            _log.debug("inner_loop model_turn_appended parts=%d", len(stream_result.parts))
 
             # Check for function calls
             function_calls = stream_result.function_calls
@@ -354,6 +436,10 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                     and narration_retries < 1
                 ):
                     narration_retries += 1
+                    _log.debug(
+                        "inner_loop narration_guard_discard text_len=%d threshold=%d",
+                        len(full_text), _NARRATION_THRESHOLD,
+                    )
                     # Discard the narrating model turn
                     messages.pop()
                     messages.append(
@@ -383,6 +469,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
             # Execute read ops immediately
             for fc in read_ops:
                 fc_args = dict(fc.args)
+                _log.debug("inner_loop tool_call %s", _safe_tool_summary(fc.name, fc_args))
                 ui.show_tool_call(fc.name, _summarize_input(fc_args))
                 result = tools.execute(fc.name, workspace, **fc_args)
                 if isinstance(result, tuple):
@@ -392,14 +479,24 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                         types.Part.from_function_response(name=fc.name, response={"result": text})
                     )
                     tool_result_parts.extend(inline_parts)
+                    _log.debug(
+                        "inner_loop tool_result %s type=tuple inline_parts=%d text_len=%d",
+                        fc.name, len(inline_parts), len(text),
+                    )
                 else:
                     ui.show_tool_result(fc.name, result)
                     tool_result_parts.append(
                         types.Part.from_function_response(name=fc.name, response={"result": result})
                     )
+                    _log.debug(
+                        "inner_loop tool_result %s type=text text_len=%d",
+                        fc.name, len(result),
+                    )
 
             # Handle mutating ops with plan-and-approve
             if mutate_ops:
+                for fc in mutate_ops:
+                    _log.debug("inner_loop mutate_call %s", _safe_tool_summary(fc.name, dict(fc.args)))
                 ui.status.set_mode("planning")
                 plan = ExecutionPlan()
                 for fc in mutate_ops:
@@ -425,12 +522,20 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                                 )
                             )
                             tool_result_parts.extend(inline_parts)
+                            _log.debug(
+                                "inner_loop mutate_result %s type=tuple inline_parts=%d text_len=%d",
+                                fc.name, len(inline_parts), len(text),
+                            )
                         else:
                             ui.show_tool_result(fc.name, result)
                             tool_result_parts.append(
                                 types.Part.from_function_response(
                                     name=fc.name, response={"result": result}
                                 )
+                            )
+                            _log.debug(
+                                "inner_loop mutate_result %s type=text text_len=%d",
+                                fc.name, len(result),
                             )
                 else:
                     for fc in mutate_ops:
@@ -444,6 +549,11 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
             # Gemini uses role="user" for function responses — the API only supports
             # "user" and "model" roles, and tool results are part of the user turn.
             messages.append(types.Content(role="user", parts=tool_result_parts))
+            _log.debug(
+                "inner_loop tool_results_appended parts=%d functions=%s",
+                len(tool_result_parts),
+                [fc.name for fc in function_calls],
+            )
             continue  # Continue inner loop to let model process results
 
         else:
