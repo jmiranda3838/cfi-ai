@@ -19,7 +19,7 @@ log = logging.getLogger(__name__)
 
 GITHUB_REPO = "jmiranda3838/cfi-ai"
 CACHE_FILE = Path.home() / ".config" / "cfi-ai" / "update-check.json"
-CHECK_INTERVAL = 86_400  # 24 hours
+CHECK_INTERVAL = 3_600  # 1 hour
 _NETWORK_TIMEOUT = 5  # seconds
 
 
