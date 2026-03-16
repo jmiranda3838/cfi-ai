@@ -12,11 +12,13 @@ from cfi_ai.agent import run_agent_loop
 
 
 def _check_adc() -> None:
-    """Verify Application Default Credentials are available."""
+    """Verify Application Default Credentials are available and valid."""
     try:
         import google.auth
+        import google.auth.transport.requests
 
-        google.auth.default()
+        credentials, _ = google.auth.default()
+        credentials.refresh(google.auth.transport.requests.Request())
     except google.auth.exceptions.DefaultCredentialsError:
         print(
             "Error: Google Cloud Application Default Credentials not found.\n"
@@ -24,6 +26,32 @@ def _check_adc() -> None:
             file=sys.stderr,
         )
         sys.exit(1)
+    except google.auth.exceptions.RefreshError:
+        import subprocess
+
+        print(
+            "Google Cloud credentials have expired. Launching reauthentication...",
+            file=sys.stderr,
+        )
+        try:
+            result = subprocess.run(
+                ["gcloud", "auth", "application-default", "login"],
+            )
+        except FileNotFoundError:
+            print(
+                "Error: gcloud CLI not found. Install it from\n"
+                "https://cloud.google.com/sdk/docs/install and run:\n"
+                "  gcloud auth application-default login",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+        if result.returncode != 0:
+            print(
+                "Error: Reauthentication failed. Please try manually:\n"
+                "  gcloud auth application-default login",
+                file=sys.stderr,
+            )
+            sys.exit(1)
 
 
 def main() -> None:

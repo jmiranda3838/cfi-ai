@@ -92,7 +92,7 @@ wheels = [
 
 [[package]]
 name = "cfi-ai"
-version = "0.13.1"
+version = "0.13.2"
 source = { editable = "." }
 dependencies = [
     { name = "google-genai" },
