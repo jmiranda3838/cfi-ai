@@ -53,9 +53,24 @@ def main() -> None:
         print("  CFI_AI_MAX_TOKENS       Max tokens (default: 8192)")
         return
     if "--update" in sys.argv:
+        import shutil
         import subprocess as sp
 
-        result = sp.run(["uv", "tool", "upgrade", "cfi-ai"])
+        uv_path = shutil.which("uv")
+        if not uv_path:
+            print(
+                "Error: 'uv' is not installed or not on your PATH.\n"
+                "\n"
+                "To fix this, run:\n"
+                "  curl -LsSf https://astral.sh/uv/install.sh | sh\n"
+                "\n"
+                "Then restart your terminal and try again:\n"
+                "  cfi-ai --update",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
+        result = sp.run([uv_path, "tool", "upgrade", "cfi-ai"])
         sys.exit(result.returncode)
 
     # Check for updates (reads cache synchronously, spawns refresh if stale)

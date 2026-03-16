@@ -4,55 +4,45 @@ Terminal-first agentic assistant. An interactive CLI that launches a conversatio
 
 ## Install
 
-```bash
-# From GitHub (private repo — requires authentication)
-uv tool install git+https://github.com/jmiranda3838/cfi-ai.git
+Open Terminal and run:
 
-# Or from a local clone
-uv tool install .
+```bash
+curl -fsSL https://raw.githubusercontent.com/jmiranda3838/cfi-ai/main/scripts/install.sh | bash
 ```
 
-### Upgrade
+The installer sets up everything you need. After it finishes, restart your terminal and run `cfi-ai`.
+
+### Update
 
 ```bash
 cfi-ai --update
 ```
 
-## Setup
+### Prerequisites
 
-### 1. Authenticate with Google Cloud
+The installer handles the package manager (`uv`) automatically. You will also need:
 
-```bash
-gcloud auth application-default login
-```
+- **Google Cloud SDK** — the installer will remind you if it's missing. Install from https://cloud.google.com/sdk/docs/install, then run:
+  ```bash
+  gcloud auth application-default login
+  ```
 
-### 2. Configure cfi-ai
+### Configuration
 
-On first run, cfi-ai will interactively prompt you to create a config file at `~/.config/cfi-ai/config.toml`:
-
-```bash
-cfi-ai
-```
-
-Or run setup explicitly:
+On first run, cfi-ai will prompt you to set up your Google Cloud project. You can re-run setup anytime:
 
 ```bash
 cfi-ai --setup
 ```
 
-Example generated config:
+<details>
+<summary>Manual install (advanced)</summary>
 
-```toml
-[project]
-id = "my-gcp-project"
-location = "global"
-
-[model]
-name = "gemini-2.5-flash"
-max_tokens = 8192
+```bash
+# Requires uv (https://docs.astral.sh/uv/)
+uv tool install git+https://github.com/jmiranda3838/cfi-ai.git
 ```
-
-Re-running `--setup` pre-fills existing values as defaults.
+</details>
 
 ## Usage
 
