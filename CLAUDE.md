@@ -69,6 +69,17 @@ The inner loop handles multi-turn tool-use chains. Messages are `list[types.Cont
 - Env vars (`GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, `CFI_AI_MODEL`, `CFI_AI_MAX_TOKENS`) override config file values when set
 - ADC via `gcloud auth application-default login` (validated at startup with a clear error message)
 
+### Update checker (`update_check.py`)
+
+Uses a detached subprocess pattern (like npm's `update-notifier`). On startup, `main.py` calls `check_for_update(__version__)` which reads the cache file synchronously — zero latency. If the cache has a newer version, it returns the update message. If the cache is stale (>24h) or missing, it spawns a fire-and-forget detached subprocess (`start_new_session=True`, DEVNULL stdio) to refresh the cache. The update notification is therefore one run behind.
+
+- Cache: `~/.config/cfi-ai/update-check.json` — stores `last_check` timestamp + `latest_version`. Skips network if <24h old.
+- Detached subprocess: `sys.executable -c "..."` with self-contained token discovery + network fetch logic.
+- GitHub token discovery: `GITHUB_TOKEN` env → `GH_TOKEN` env → `gh auth token` subprocess.
+- All errors silently caught — never blocks or crashes startup.
+- No new dependencies (stdlib only: `urllib.request`, `json`, `subprocess`, `textwrap`).
+- `GITHUB_REPO` constant in `update_check.py` controls which repo is checked.
+
 ### Versioning
 
 The version is defined in two places — keep them in sync:
@@ -76,3 +87,9 @@ The version is defined in two places — keep them in sync:
 - `src/cfi_ai/__init__.py` → `__version__ = "X.Y.Z"`
 
 Bump the version on any user-facing change (bug fix → patch, new feature or breaking change → minor).
+
+### Releasing
+
+1. Bump version in `pyproject.toml` + `src/cfi_ai/__init__.py`
+2. Commit, tag (`git tag vX.Y.Z`), push with tags
+3. GitHub Actions (`.github/workflows/release.yml`) validates the tag matches `pyproject.toml` and creates a GitHub Release with auto-generated notes

@@ -5,11 +5,21 @@ Terminal-first agentic assistant. An interactive CLI that launches a conversatio
 ## Install
 
 ```bash
+# From GitHub (private repo — requires authentication)
+pipx install git+https://github.com/jonzywoo/cfi-ai.git
+
+# Or from a local clone
 pip install -e .
 # or
 pipx install .
 # or
 uv tool install .
+```
+
+### Upgrade
+
+```bash
+pipx upgrade cfi-ai
 ```
 
 ## Setup
@@ -139,3 +149,15 @@ Mutating operations (file writes, destructive commands) require user approval.
 pip install -e ".[dev]"
 pytest
 ```
+
+## Releasing
+
+1. Bump the version in both `pyproject.toml` and `src/cfi_ai/__init__.py`
+2. Commit the version bump
+3. Tag and push:
+
+```bash
+git tag v0.9.0 && git push origin main --tags
+```
+
+The GitHub Actions workflow validates the tag matches `pyproject.toml` and creates a GitHub Release with auto-generated notes.

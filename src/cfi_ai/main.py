@@ -52,6 +52,11 @@ def main() -> None:
         print("  CFI_AI_MAX_TOKENS       Max tokens (default: 8192)")
         return
 
+    # Check for updates (reads cache synchronously, spawns refresh if stale)
+    from cfi_ai.update_check import check_for_update
+
+    update_msg = check_for_update(__version__)
+
     # Parse --model flag
     model_override = None
     if "--model" in sys.argv:
@@ -85,6 +90,9 @@ def main() -> None:
     ui = UI()
 
     ui.print_welcome(str(workspace.root))
+
+    if update_msg:
+        ui.print_info(update_msg)
 
     try:
         run_agent_loop(client, ui, workspace, system_prompt, config)
