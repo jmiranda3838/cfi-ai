@@ -223,7 +223,7 @@ class UI:
     def stream_markdown(self, chunks: "Iterator") -> str:
         """Stream text chunks and render as markdown. Returns full accumulated text."""
         accumulated = ""
-        with Live(Markdown(""), console=self.console, refresh_per_second=8, vertical_overflow="visible") as live:
+        with Live(Markdown(""), console=self.console, refresh_per_second=8) as live:
             for chunk in chunks:
                 accumulated += chunk
                 live.update(Markdown(accumulated))
