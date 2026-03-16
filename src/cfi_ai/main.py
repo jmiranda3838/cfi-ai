@@ -57,9 +57,9 @@ def _check_adc() -> None:
 def main() -> None:
     level = os.environ.get("CFI_AI_LOG_LEVEL", "WARNING").upper()
     logging.basicConfig(
-        level=getattr(logging, level, logging.WARNING),
         format="%(name)s %(levelname)s %(message)s",
     )
+    logging.getLogger("cfi_ai").setLevel(getattr(logging, level, logging.WARNING))
 
     # Handle --version, --help, and --update
     if "--version" in sys.argv:
