@@ -44,7 +44,7 @@ def main() -> None:
         print("\nOptions:")
         print("  --setup    Run interactive setup (creates/updates config file)")
         print("  --model    Override the model name")
-        print("  --update   Update to the latest version (via pipx)")
+        print("  --update   Update to the latest version")
         print("  --version  Show version and exit")
         print("\nEnvironment variable overrides:")
         print("  GOOGLE_CLOUD_PROJECT    GCP project ID")
@@ -55,7 +55,7 @@ def main() -> None:
     if "--update" in sys.argv:
         import subprocess as sp
 
-        result = sp.run(["pipx", "upgrade", "cfi-ai"])
+        result = sp.run(["uv", "tool", "upgrade", "cfi-ai"])
         sys.exit(result.returncode)
 
     # Check for updates (reads cache synchronously, spawns refresh if stale)

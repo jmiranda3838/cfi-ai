@@ -6,13 +6,9 @@ Terminal-first agentic assistant. An interactive CLI that launches a conversatio
 
 ```bash
 # From GitHub (private repo — requires authentication)
-pipx install git+https://github.com/jonzywoo/cfi-ai.git
+uv tool install git+https://github.com/jmiranda3838/cfi-ai.git
 
 # Or from a local clone
-pip install -e .
-# or
-pipx install .
-# or
 uv tool install .
 ```
 
@@ -70,7 +66,7 @@ cfi-ai
 cfi-ai --version       Show version
 cfi-ai --model MODEL   Override the default model
 cfi-ai --setup         Run interactive setup (creates/updates config file)
-cfi-ai --update        Update to the latest version (via pipx)
+cfi-ai --update        Update to the latest version
 cfi-ai --help          Show help
 ```
 
@@ -147,18 +143,14 @@ Mutating operations (file writes, destructive commands) require user approval.
 ## Development
 
 ```bash
-pip install -e ".[dev]"
-pytest
+uv pip install -e ".[dev]"
+uv run pytest
 ```
 
 ## Releasing
 
-1. Bump the version in both `pyproject.toml` and `src/cfi_ai/__init__.py`
-2. Commit the version bump
-3. Tag and push:
-
 ```bash
-git tag v0.9.0 && git push origin main --tags
+scripts/release.sh <version>   # e.g. scripts/release.sh 0.12.0
 ```
 
-The GitHub Actions workflow validates the tag matches `pyproject.toml` and creates a GitHub Release with auto-generated notes.
+The script bumps `pyproject.toml`, commits, tags, and pushes. GitHub Actions creates the release.
