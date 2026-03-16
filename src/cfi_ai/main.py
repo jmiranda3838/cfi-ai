@@ -1,6 +1,7 @@
 import logging
 import os
 import sys
+import warnings
 
 from cfi_ai import __version__
 from cfi_ai.config import Config
@@ -9,6 +10,21 @@ from cfi_ai.workspace import Workspace
 from cfi_ai.prompts.system import build_system_prompt
 from cfi_ai.ui import UI
 from cfi_ai.agent import run_agent_loop
+
+
+class _ConsoleLogHandler(logging.Handler):
+    """Routes log output through Rich Console for Live-safe display."""
+
+    def __init__(self, console):
+        super().__init__()
+        self._console = console
+
+    def emit(self, record):
+        try:
+            msg = self.format(record)
+            self._console.print(msg, highlight=False, markup=False, style="dim")
+        except Exception:
+            self.handleError(record)
 
 
 def _check_adc() -> None:
@@ -131,12 +147,35 @@ def main() -> None:
             max_tokens=config.max_tokens,
         )
 
+    warnings.filterwarnings(
+        "ignore",
+        message="Your application has authenticated using end user credentials.*quota project",
+        category=UserWarning,
+        module=r"google\.auth\._default",
+    )
     _check_adc()
 
     workspace = Workspace()
     system_prompt = build_system_prompt(str(workspace.root), workspace.summary(), workspace=workspace)
     client = Client(config)
     ui = UI()
+
+    # Route all log output through Rich console for Live-safe display
+    _fmt = logging.Formatter("%(name)s %(levelname)s %(message)s")
+    _handler = _ConsoleLogHandler(ui.console)
+    _handler.setFormatter(_fmt)
+
+    # Replace root logger's StreamHandler (which holds a stale stderr reference)
+    root = logging.getLogger()
+    for h in list(root.handlers):
+        if isinstance(h, logging.StreamHandler):
+            root.removeHandler(h)
+    root.addHandler(_handler)
+
+    # Dedicated cfi_ai handler (propagate=False avoids double output via root)
+    cfi_logger = logging.getLogger("cfi_ai")
+    cfi_logger.propagate = False
+    cfi_logger.addHandler(_handler)
 
     ui.print_welcome(str(workspace.root))
 

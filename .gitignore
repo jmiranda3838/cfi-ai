@@ -23,3 +23,7 @@ htmlcov/
 
 # Local user config
 *.local.toml
+
+# Claude Code agents
+.agents/
+AGENTS.md
