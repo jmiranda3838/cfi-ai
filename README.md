@@ -107,7 +107,7 @@ Process a session transcript or audio recording into structured clinical documen
 
 # Paste interactively
 ~ /intake
-transcript> [paste text or enter a file path, then Esc+Enter to submit]
+transcript> [paste text or enter a file path, then Enter to submit]
 ```
 
 File paths are passed to the LLM, which uses `attach_path` to load them — this handles shell escapes, spaces in paths, and other tricky filenames naturally. Audio is sent inline to Gemini for transcription and clinical document generation.
@@ -140,8 +140,8 @@ Mutating operations (file writes, destructive commands) require user approval.
 
 ## Keybindings
 
-- `Ctrl+C` — cancel current generation
-- `Ctrl+D` — exit
+- `Ctrl+C` — exit
+- `Escape` — cancel current generation
 
 ## Development
 

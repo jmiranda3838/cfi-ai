@@ -6,6 +6,7 @@ from prompt_toolkit import PromptSession
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.formatted_text import HTML
+from prompt_toolkit.key_binding import KeyBindings
 from prompt_toolkit.styles import Style as PTStyle
 from rich import box
 from rich.console import Console
@@ -71,6 +72,48 @@ class StatusManager:
         return MODE_DISPLAY.get(self._mode, self._mode)
 
 
+def _chat_key_bindings() -> KeyBindings:
+    """Key bindings for the main chat prompt.
+
+    Escape → cancel (return ""), Ctrl+D → disabled (no-op).
+    Ctrl+C raises KeyboardInterrupt by default; get_input() catches it to exit.
+    """
+    kb = KeyBindings()
+
+    @kb.add("escape")
+    def _escape(event):
+        event.app.exit(result="")
+
+    @kb.add("c-d")
+    def _ctrl_d(event):
+        pass  # disabled
+
+    return kb
+
+
+def _multiline_key_bindings() -> KeyBindings:
+    """Key bindings for the multiline transcript prompt.
+
+    Enter → submit, Escape → cancel.
+    Ctrl+C raises KeyboardInterrupt which propagates up to exit.
+    """
+    kb = KeyBindings()
+
+    @kb.add("enter")
+    def _enter(event):
+        event.current_buffer.validate_and_handle()
+
+    @kb.add("escape")
+    def _escape(event):
+        event.app.exit(exception=EOFError)
+
+    @kb.add("c-d")
+    def _ctrl_d(event):
+        pass  # disabled
+
+    return kb
+
+
 class SlashCommandCompleter(Completer):
     """Autocomplete for slash commands."""
 
@@ -116,22 +159,21 @@ class UI:
         )
         self.console.print(f"[grey70]{workspace_path}[/grey70]")
         self.console.print()
-        self.console.print("[muted]Ctrl+C to cancel, Ctrl+D to exit.[/muted]")
+        self.console.print("[muted]Ctrl+C to exit, Escape to cancel.[/muted]")
         self.console.print()
 
     def get_input(self) -> str | None:
-        """Prompt the user for input. Returns None on EOF (Ctrl+D)."""
+        """Prompt the user for input. Returns None on Ctrl+C (exit)."""
         try:
             toolbar = HTML(f"cfi-ai | {self.status.display}")
             return self.session.prompt(
                 [("class:prompt", "~ ")],
                 bottom_toolbar=toolbar,
                 multiline=False,
+                key_bindings=_chat_key_bindings(),
             )
-        except EOFError:
+        except (EOFError, KeyboardInterrupt):
             return None
-        except KeyboardInterrupt:
-            return ""
 
     def stream_markdown(self, chunks: "Iterator") -> str:
         """Stream text chunks and render as markdown. Returns full accumulated text."""
@@ -172,20 +214,25 @@ class UI:
             response = self.session.prompt(
                 [("class:approval", "approve? [Y/n] ")],
                 bottom_toolbar=HTML(f"cfi-ai | {self.status.display}"),
+                key_bindings=_chat_key_bindings(),
             )
             return response.strip().lower() in ("", "y", "yes")
-        except (EOFError, KeyboardInterrupt):
+        except KeyboardInterrupt:
+            raise
+        except EOFError:
             return False
 
     def prompt_multiline(self, instruction: str) -> str | None:
         """Prompt for multi-line input. Returns text or None on cancel."""
         self.console.print(f"[muted]{instruction}[/muted]")
-        self.console.print("[dim]Esc+Enter to submit, Ctrl+C to cancel.[/dim]")
+        self.console.print("[dim]Enter to submit, Escape to cancel.[/dim]")
         try:
             return self.session.prompt(
-                [("class:prompt", "transcript> ")], multiline=True
+                [("class:prompt", "transcript> ")],
+                multiline=True,
+                key_bindings=_multiline_key_bindings(),
             )
-        except (EOFError, KeyboardInterrupt):
+        except EOFError:
             return None
 
     def print_error(self, message: str) -> None:
