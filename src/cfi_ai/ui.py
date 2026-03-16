@@ -193,17 +193,23 @@ class UI:
     def get_input(self) -> UserInput | None:
         """Prompt the user for input. Returns UserInput or None on Ctrl+C (exit)."""
         try:
-            mode = "chatting_plan" if self._plan_mode else "chatting"
-            self.status.set_mode(mode)
-            prompt_class = "class:prompt-plan" if self._plan_mode else "class:prompt"
-            prompt_char = "@ " if self._plan_mode else "~ "
-            toolbar = HTML(
-                f"cfi-ai | {self.status.display}"
-                "  <i>Shift+Tab to toggle plan mode</i>"
-            )
+            def _prompt_message():
+                prompt_class = "class:prompt-plan" if self._plan_mode else "class:prompt"
+                prompt_char = "@ " if self._plan_mode else "~ "
+                return [(prompt_class, prompt_char)]
+
+            def _toolbar():
+                mode = "chatting_plan" if self._plan_mode else "chatting"
+                self.status.set_mode(mode)
+                display = self.status.display
+                return HTML(
+                    f"cfi-ai | {display}"
+                    "  <i>Shift+Tab to toggle plan mode</i>"
+                )
+
             text = self.session.prompt(
-                [(prompt_class, prompt_char)],
-                bottom_toolbar=toolbar,
+                _prompt_message,
+                bottom_toolbar=_toolbar,
                 multiline=False,
                 key_bindings=_chat_key_bindings(on_toggle_plan=self.toggle_plan_mode),
             )
