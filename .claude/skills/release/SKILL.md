@@ -31,7 +31,7 @@ Compute the next version by incrementing the appropriate component and resetting
 
 If there are no commits since the last tag, stop and tell the user there is nothing to release.
 
-Show the user the proposed version with a brief explanation (e.g. "Detected new feature commits → minor bump: 0.10.0 → 0.11.0") and ask them to confirm or provide an override.
+Do NOT ask the user to confirm the version — just proceed with the computed version. Do NOT ask the user for a commit message — write one yourself based on the changes.
 
 ## 2. Run tests
 
@@ -40,9 +40,8 @@ Run `uv run pytest tests/ -v`. If any test fails, stop and report the failures. 
 ## 3. Commit pending changes
 
 Run `git status` to check for uncommitted changes (staged, unstaged, or untracked). If there are changes:
-- Show the user what has changed
-- Ask the user for a commit message
-- Stage the relevant files and commit
+- Stage the relevant files and commit with an appropriate message you write yourself
+- Include `Co-Authored-By: Claude Opus 4.6 (1M context) <noreply@anthropic.com>` in the commit message
 
 If the working tree is clean, skip this step.
 

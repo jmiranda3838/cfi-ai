@@ -296,6 +296,18 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                 ui.print_info("Executing plan with full tool access...")
                 ui.print_separator()
 
+                # Extract binary parts (PDFs, images, audio) from planning phase
+                binary_parts = []
+                for msg in plan_messages:
+                    if msg.role == "user":
+                        for part in (msg.parts or []):
+                            if hasattr(part, "inline_data") and part.inline_data:
+                                binary_parts.append(part)
+                _log.debug(
+                    "plan_approved binary_parts=%d from_messages=%d",
+                    len(binary_parts), len(plan_messages),
+                )
+
                 # Clear history, inject plan as first user message
                 _log.debug("plan_approved clearing_messages=%d", len(messages))
                 messages.clear()
@@ -305,8 +317,9 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                     "write_file) to implement all changes described.\n\n"
                     f"## Plan\n\n{plan_text}"
                 )
+                execution_parts = [types.Part.from_text(text=execution_prompt)] + binary_parts
                 messages.append(
-                    types.Content(role="user", parts=[types.Part.from_text(text=execution_prompt)])
+                    types.Content(role="user", parts=execution_parts)
                 )
                 # Fall through to the normal inner loop with workflow_mode enabled
                 workflow_mode = True

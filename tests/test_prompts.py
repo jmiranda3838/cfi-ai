@@ -1,6 +1,6 @@
 from unittest.mock import patch
 
-from cfi_ai.prompts.system import build_system_prompt
+from cfi_ai.prompts.system import build_system_prompt, build_plan_mode_system_prompt, CLIENTS_SECTION
 from cfi_ai.workspace import Workspace
 
 
@@ -58,3 +58,27 @@ def test_prompt_with_rg():
     with patch("cfi_ai.prompts.system.shutil.which", return_value="/usr/local/bin/rg"):
         prompt = build_system_prompt("/tmp/test", "summary")
     assert "rg" in prompt
+
+
+def test_clients_section_contains_integrate_guidance():
+    assert "integrate" in CLIENTS_SECTION.lower()
+    assert "rewrite the document" in CLIENTS_SECTION
+
+
+def test_system_prompt_inherits_integrate_guidance(tmp_path):
+    (tmp_path / "clients").mkdir()
+    ws = Workspace(str(tmp_path))
+    prompt = build_system_prompt(str(tmp_path), ws.summary(), workspace=ws)
+    assert "rewrite the document" in prompt
+
+
+def test_plan_mode_prompt_conciseness_guideline():
+    prompt = build_plan_mode_system_prompt("/tmp/ws", "Test workspace.")
+    assert "Do NOT include full document content" in prompt
+
+
+def test_plan_mode_prompt_completeness_guideline(tmp_path):
+    (tmp_path / "clients").mkdir()
+    ws = Workspace(str(tmp_path))
+    prompt = build_plan_mode_system_prompt(str(tmp_path), ws.summary(), workspace=ws)
+    assert "ALL affected document types" in prompt

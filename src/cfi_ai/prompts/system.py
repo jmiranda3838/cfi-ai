@@ -24,6 +24,9 @@ clients/<client-id>/
 
 - `current.md` files are copies of the latest dated version for quick access.
 - Use the `/intake` command to process a new intake session transcript.
+- When asked to "integrate" new data into existing documents, rewrite the document \
+content to incorporate the new information seamlessly — do not just link or attach \
+the source file.
 """
 
 
@@ -81,6 +84,15 @@ For each step:
 - Use attach_path to load files into context.
 - Do not attempt to modify any files or run mutating commands.
 - Be specific — include function names, parameter types, and concrete code locations.
+- When the task involves updating client documents, ensure the plan covers ALL \
+affected document types (intake assessment, profile, treatment plan) and the \
+corresponding current.md files for profile and treatment-plan. Do not flag \
+omissions as "Risks" — include them as steps.
+- Do NOT include full document content in the plan. Describe what sections will \
+be added or modified and summarize the data to be integrated. The execution phase \
+will read source files and produce the actual content.
+- During execution, emit all file modifications for a given step in a single \
+response to minimize approval prompts for the user.
 {clients_section}"""
 
 

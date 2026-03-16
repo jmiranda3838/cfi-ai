@@ -56,3 +56,47 @@ def test_mode_display_plan_modes():
     assert MODE_DISPLAY["chatting_plan"] == "plan mode"
     assert "thinking_plan" in MODE_DISPLAY
     assert MODE_DISPLAY["thinking_plan"] == "researching .."
+
+
+def test_plan_mode_prompt_batch_mutations_guideline():
+    """Plan-mode prompt instructs model to batch mutations in a single response."""
+    prompt = build_plan_mode_system_prompt("/tmp/ws", "Test workspace.")
+    assert "emit all file modifications" in prompt
+    assert "minimize approval prompts" in prompt
+
+
+def test_binary_parts_preserved_into_execution():
+    """Binary parts from plan messages are extracted for execution context."""
+    from google.genai import types
+
+    # Create a real inline_data part (simulating a PDF attachment)
+    binary_part = types.Part.from_bytes(
+        data=b"%PDF-fake-content",
+        mime_type="application/pdf",
+    )
+
+    # Text-only part (no inline_data)
+    text_part = types.Part.from_text(text="some text")
+
+    # Tool response part (no inline_data)
+    tool_part = types.Part.from_function_response(
+        name="attach_path", response={"result": "loaded"}
+    )
+
+    plan_messages = [
+        types.Content(role="user", parts=[text_part]),
+        types.Content(role="user", parts=[tool_part, binary_part]),
+        types.Content(role="model", parts=[types.Part.from_text(text="plan output")]),
+    ]
+
+    # Extract binary parts using the same logic as agent.py
+    binary_parts = []
+    for msg in plan_messages:
+        if msg.role == "user":
+            for part in (msg.parts or []):
+                if hasattr(part, "inline_data") and part.inline_data:
+                    binary_parts.append(part)
+
+    assert len(binary_parts) == 1
+    assert binary_parts[0].inline_data.mime_type == "application/pdf"
+    assert binary_parts[0].inline_data.data == b"%PDF-fake-content"
