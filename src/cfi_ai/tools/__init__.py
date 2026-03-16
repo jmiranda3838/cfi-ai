@@ -31,6 +31,19 @@ def get_api_tools() -> types.Tool:
     return types.Tool(function_declarations=declarations)
 
 
+_READONLY_TOOL_NAMES = {"run_command", "attach_path"}
+
+
+def get_readonly_api_tools() -> types.Tool:
+    """Return only read-only tool declarations (for plan mode)."""
+    declarations = [
+        cls().definition().to_function_declaration()
+        for name, cls in _REGISTRY.items()
+        if name in _READONLY_TOOL_NAMES
+    ]
+    return types.Tool(function_declarations=declarations)
+
+
 def execute(name: str, workspace, **kwargs) -> str | tuple[str, list]:
     """Execute a tool by name. Returns a string or (string, [Part]) tuple."""
     cls = _REGISTRY.get(name)
@@ -52,6 +65,7 @@ def classify_mutation(name: str, args: dict) -> bool:
 __all__ = [
     "ToolDefinition",
     "get_api_tools",
+    "get_readonly_api_tools",
     "execute",
     "classify_mutation",
     "MUTATING_TOOLS",

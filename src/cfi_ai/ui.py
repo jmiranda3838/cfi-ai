@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from dataclasses import dataclass
 from pathlib import Path
 
 from prompt_toolkit import PromptSession
@@ -18,6 +19,13 @@ from rich.text import Text
 from rich.theme import Theme
 
 from cfi_ai import __version__
+
+
+@dataclass
+class UserInput:
+    """Result from get_input() carrying the text and which mode was active."""
+    text: str
+    plan_mode: bool = False
 
 CFI_THEME = Theme({
     "primary": "dark_cyan",
@@ -43,13 +51,16 @@ TAGLINE = "terminal clarity, one prompt at a time."
 
 PT_STYLE = PTStyle.from_dict({
     "prompt": "#5f8787",
+    "prompt-plan": "#af8700",
     "bottom-toolbar": "bg:#1c1c1c #585858",
     "approval": "#af8700",
 })
 
 MODE_DISPLAY = {
     "chatting": "ready",
+    "chatting_plan": "plan mode",
     "thinking": "thinking ..",
+    "thinking_plan": "researching ..",
     "planning": "planning ..",
     "awaiting_approval": "awaiting approval",
     "executing": "executing ..",
@@ -72,10 +83,11 @@ class StatusManager:
         return MODE_DISPLAY.get(self._mode, self._mode)
 
 
-def _chat_key_bindings() -> KeyBindings:
+def _chat_key_bindings(on_toggle_plan=None) -> KeyBindings:
     """Key bindings for the main chat prompt.
 
-    Escape → cancel (return ""), Ctrl+D → disabled (no-op).
+    Escape → cancel (return ""), Ctrl+D → disabled (no-op),
+    Shift+Tab → toggle plan mode (if callback provided).
     Ctrl+C raises KeyboardInterrupt by default; get_input() catches it to exit.
     """
     kb = KeyBindings()
@@ -87,6 +99,12 @@ def _chat_key_bindings() -> KeyBindings:
     @kb.add("c-d")
     def _ctrl_d(event):
         pass  # disabled
+
+    @kb.add("s-tab")
+    def _shift_tab(event):
+        if on_toggle_plan is not None:
+            on_toggle_plan()
+            event.app.invalidate()
 
     return kb
 
@@ -138,6 +156,7 @@ class UI:
         self.console = Console(theme=CFI_THEME)
         self.status = StatusManager()
         self._completer = SlashCommandCompleter()
+        self._plan_mode = False
         history_dir = Path.home() / ".cfi-ai"
         history_dir.mkdir(exist_ok=True)
         self.session: PromptSession[str] = PromptSession(
@@ -145,6 +164,15 @@ class UI:
             style=PT_STYLE,
             completer=self._completer,
         )
+
+    @property
+    def plan_mode(self) -> bool:
+        return self._plan_mode
+
+    def toggle_plan_mode(self) -> None:
+        self._plan_mode = not self._plan_mode
+        mode = "chatting_plan" if self._plan_mode else "chatting"
+        self.status.set_mode(mode)
 
     def set_commands(self, commands: dict[str, str]) -> None:
         """Set the available slash commands for autocomplete."""
@@ -159,19 +187,30 @@ class UI:
         )
         self.console.print(f"[grey70]{workspace_path}[/grey70]")
         self.console.print()
-        self.console.print("[muted]Ctrl+C to exit, Escape to cancel.[/muted]")
+        self.console.print("[muted]Ctrl+C to exit, Escape to cancel, Shift+Tab for plan mode.[/muted]")
         self.console.print()
 
-    def get_input(self) -> str | None:
-        """Prompt the user for input. Returns None on Ctrl+C (exit)."""
+    def get_input(self) -> UserInput | None:
+        """Prompt the user for input. Returns UserInput or None on Ctrl+C (exit)."""
         try:
-            toolbar = HTML(f"cfi-ai | {self.status.display}")
-            return self.session.prompt(
-                [("class:prompt", "~ ")],
+            mode = "chatting_plan" if self._plan_mode else "chatting"
+            self.status.set_mode(mode)
+            prompt_class = "class:prompt-plan" if self._plan_mode else "class:prompt"
+            prompt_char = "@ " if self._plan_mode else "~ "
+            toolbar = HTML(
+                f"cfi-ai | {self.status.display}"
+                "  <i>Shift+Tab to toggle plan mode</i>"
+            )
+            text = self.session.prompt(
+                [(prompt_class, prompt_char)],
                 bottom_toolbar=toolbar,
                 multiline=False,
-                key_bindings=_chat_key_bindings(),
+                key_bindings=_chat_key_bindings(on_toggle_plan=self.toggle_plan_mode),
             )
+            was_plan_mode = self._plan_mode
+            if was_plan_mode:
+                self._plan_mode = False
+            return UserInput(text=text, plan_mode=was_plan_mode)
         except (EOFError, KeyboardInterrupt):
             return None
 
@@ -207,6 +246,33 @@ class UI:
                 padding=(1, 2),
             )
         )
+
+    def show_research_plan(self, plan_text: str) -> None:
+        """Display the LLM's research plan for user review."""
+        self.console.print(
+            Panel(
+                Markdown(plan_text),
+                title="[accent]Implementation Plan[/accent]",
+                border_style="accent",
+                box=box.ROUNDED,
+                padding=(1, 2),
+            )
+        )
+
+    def prompt_plan_approval(self) -> bool:
+        """Prompt user to approve or reject a plan. Returns True for approve."""
+        self.status.set_mode("awaiting_approval")
+        try:
+            response = self.session.prompt(
+                [("class:approval", "execute plan? [Y/n] ")],
+                bottom_toolbar=HTML(f"cfi-ai | {self.status.display}"),
+                key_bindings=_chat_key_bindings(),
+            )
+            return response.strip().lower() in ("", "y", "yes")
+        except KeyboardInterrupt:
+            raise
+        except EOFError:
+            return False
 
     def prompt_approval(self) -> bool:
         self.status.set_mode("awaiting_approval")

@@ -69,13 +69,19 @@ The inner loop handles multi-turn tool-use chains. Messages are `list[types.Cont
 - Env vars (`GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, `CFI_AI_MODEL`, `CFI_AI_MAX_TOKENS`) override config file values when set
 - ADC via `gcloud auth application-default login` (validated at startup with a clear error message)
 
+### Installation (`scripts/install.sh`)
+
+One-command installer for non-technical users: `curl -fsSL https://raw.githubusercontent.com/jmiranda3838/cfi-ai/main/scripts/install.sh | bash`. Installs `uv` if missing, installs cfi-ai via `uv tool install`, fixes PATH via `uv tool update-shell`, and checks for `gcloud`. Idempotent — safe to run again (upgrades if already installed).
+
+The `--update` flag in `main.py` runs `uv tool upgrade cfi-ai`. It uses `shutil.which("uv")` to find `uv` and prints a friendly error if not found.
+
 ### Update checker (`update_check.py`)
 
 Uses a detached subprocess pattern (like npm's `update-notifier`). On startup, `main.py` calls `check_for_update(__version__)` which reads the cache file synchronously — zero latency. If the cache has a newer version, it returns the update message. If the cache is stale (>24h) or missing, it spawns a fire-and-forget detached subprocess (`start_new_session=True`, DEVNULL stdio) to refresh the cache. The update notification is therefore one run behind.
 
 - Cache: `~/.config/cfi-ai/update-check.json` — stores `last_check` timestamp + `latest_version`. Skips network if <24h old.
 - Detached subprocess: `sys.executable -c "..."` with self-contained token discovery + network fetch logic.
-- GitHub token discovery: `GITHUB_TOKEN` env → `GH_TOKEN` env → `gh auth token` subprocess.
+- Repo is public — no GitHub token needed, but token discovery (`GITHUB_TOKEN` env → `GH_TOKEN` env → `gh auth token`) is still in place for rate-limit avoidance.
 - All errors silently caught — never blocks or crashes startup.
 - No new dependencies (stdlib only: `urllib.request`, `json`, `subprocess`, `textwrap`).
 - `GITHUB_REPO` constant in `update_check.py` controls which repo is checked.
