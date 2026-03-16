@@ -138,4 +138,4 @@ def test_message_when_behind(tmp_path):
         msg = check_for_update("0.8.0")
         assert msg is not None
         assert "1.0.0" in msg
-        assert "pipx upgrade" in msg
+        assert "cfi-ai --update" in msg

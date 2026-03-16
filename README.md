@@ -19,7 +19,7 @@ uv tool install .
 ### Upgrade
 
 ```bash
-pipx upgrade cfi-ai
+cfi-ai --update
 ```
 
 ## Setup
@@ -70,6 +70,7 @@ cfi-ai
 cfi-ai --version       Show version
 cfi-ai --model MODEL   Override the default model
 cfi-ai --setup         Run interactive setup (creates/updates config file)
+cfi-ai --update        Update to the latest version (via pipx)
 cfi-ai --help          Show help
 ```
 

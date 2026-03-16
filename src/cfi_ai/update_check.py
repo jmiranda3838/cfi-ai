@@ -124,7 +124,7 @@ def check_for_update(current_version: str) -> str | None:
             if _parse_version(latest) > _parse_version(current_version):
                 return (
                     f"Update available: {current_version} → {latest}"
-                    f" — run 'pipx upgrade cfi-ai' to update"
+                    f" — run 'cfi-ai --update' to update"
                 )
     except Exception:
         log.debug("Update check failed", exc_info=True)

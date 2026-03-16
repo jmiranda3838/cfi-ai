@@ -33,17 +33,18 @@ def main() -> None:
         format="%(name)s %(levelname)s %(message)s",
     )
 
-    # Handle --version and --help
+    # Handle --version, --help, and --update
     if "--version" in sys.argv:
         print(f"cfi-ai {__version__}")
         return
     if "--help" in sys.argv or "-h" in sys.argv:
-        print("Usage: cfi-ai [--version] [--model MODEL] [--setup]")
+        print("Usage: cfi-ai [--version] [--model MODEL] [--setup] [--update]")
         print("\nTerminal-first agentic assistant.")
         print(f"\nConfig file: ~/.config/cfi-ai/config.toml")
         print("\nOptions:")
         print("  --setup    Run interactive setup (creates/updates config file)")
         print("  --model    Override the model name")
+        print("  --update   Update to the latest version (via pipx)")
         print("  --version  Show version and exit")
         print("\nEnvironment variable overrides:")
         print("  GOOGLE_CLOUD_PROJECT    GCP project ID")
@@ -51,6 +52,11 @@ def main() -> None:
         print("  CFI_AI_MODEL            Model name (default: gemini-2.5-flash)")
         print("  CFI_AI_MAX_TOKENS       Max tokens (default: 8192)")
         return
+    if "--update" in sys.argv:
+        import subprocess as sp
+
+        result = sp.run(["pipx", "upgrade", "cfi-ai"])
+        sys.exit(result.returncode)
 
     # Check for updates (reads cache synchronously, spawns refresh if stale)
     from cfi_ai.update_check import check_for_update
