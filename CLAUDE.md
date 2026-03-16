@@ -82,14 +82,10 @@ Uses a detached subprocess pattern (like npm's `update-notifier`). On startup, `
 
 ### Versioning
 
-The version is defined in two places — keep them in sync:
-- `pyproject.toml` → `version = "X.Y.Z"`
-- `src/cfi_ai/__init__.py` → `__version__ = "X.Y.Z"`
+Single source of truth: `pyproject.toml` → `version = "X.Y.Z"`. At runtime, `src/cfi_ai/__init__.py` reads it via `importlib.metadata.version("cfi-ai")` — no hardcoded version string to keep in sync. After changing `pyproject.toml`, run `uv pip install -e .` to refresh the metadata.
 
 Bump the version on any user-facing change (bug fix → patch, new feature or breaking change → minor).
 
 ### Releasing
 
-1. Bump version in `pyproject.toml` + `src/cfi_ai/__init__.py`
-2. Commit, tag (`git tag vX.Y.Z`), push with tags
-3. GitHub Actions (`.github/workflows/release.yml`) validates the tag matches `pyproject.toml` and creates a GitHub Release with auto-generated notes
+Run `scripts/release.sh <version>` (e.g. `scripts/release.sh 0.10.0`). The script validates inputs, updates `pyproject.toml`, reinstalls, commits, tags `vX.Y.Z`, and pushes. GitHub Actions (`.github/workflows/release.yml`) then creates the GitHub Release.
