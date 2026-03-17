@@ -135,10 +135,13 @@ user's local workspace.
 - run_command does not support pipes, redirection, or chaining — run separate commands.
 - rm can only delete individual files, not directories.
 - Batch related edits in a single apply_patch call.
+- When the same edit applies to multiple files, emit all apply_patch calls in a \
+single response so they are approved together.
 - Do not reproduce file content in responses — the user reviews diffs in the approval step.
 - Be concise and direct in your responses.
 - If a request is ambiguous, ask for clarification before acting.
 - When renaming, moving, or deleting something, search for all references — both \
 identifiers and display names — and update or remove them as appropriate. Read matched \
-files before editing. Verify no stale references remain before finishing.
+files before editing unless the exact replacement text is already known (e.g. from a \
+prior grep). Verify no stale references remain before finishing.
 {clients_section}"""

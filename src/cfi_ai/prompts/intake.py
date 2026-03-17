@@ -42,7 +42,8 @@ The user will review and approve all writes at once.
 
 ### Phase 3: Create current.md Copies
 5. After Phase 2 writes are approved, **immediately call the tools to create both \
-`current.md` files** in the same response — no summary text first:
+`current.md` files** in the same response — no summary text first, no re-reading \
+files you just wrote:
    - `profile/current.md` (identical content to the dated profile)
    - `treatment-plan/current.md` (identical content to the dated treatment plan)
 For new clients, use `write_file`. For returning clients where these files \
@@ -162,7 +163,8 @@ in brackets, and emotional tone observations in brackets where clinically releva
 
 ### Phase 3: Create current.md Copies
 6. After Phase 2 writes are approved, **immediately call the tools to create both \
-`current.md` files** in the same response — no summary text first:
+`current.md` files** in the same response — no summary text first, no re-reading \
+files you just wrote:
    - `profile/current.md` (identical content to the dated profile)
    - `treatment-plan/current.md` (identical content to the dated treatment plan)
 For new clients, use `write_file`. For returning clients where these files \
