@@ -18,7 +18,9 @@ Today's date is {date}.
 ## Workflow
 
 ### Phase 1: Identify & Summarize
-1. **Identify the client** from the transcript. Generate a `client-id` slug \
+1. **Identify the client**: If the user explicitly provides a client name \
+in their input, use that name. Otherwise, identify the client from the \
+transcript. Generate a `client-id` slug \
 (lowercase, hyphenated — e.g. "jane-doe").
 2. **Check existing clients** — if this client matches an existing ID, use \
 `attach_path` to load `clients/<client-id>/profile/current.md` and \
@@ -104,19 +106,22 @@ wrapped with a brief header noting the date and session type.
 """
 
 INTAKE_FILE_WORKFLOW_PROMPT = """\
-You are conducting a clinical intake assessment based on a file provided by the \
-user. Today's date is {date}.
+You are conducting a clinical intake assessment based on one or more files \
+provided by the user. Today's date is {date}.
 
 ## CRITICAL INSTRUCTIONS
 - Do NOT narrate the workflow or reproduce document content in your response text.
 - Keep free-text responses to 2-3 sentences maximum. Proceed directly to tool calls.
 - The user reviews all file content in the approval step — do not preview it in chat.
 
-The user wants to process an intake from a file. The file reference is: \
+The user wants to process an intake from one or more files. The input is: \
 `{file_reference}`
 
-Use `attach_path` to load the file — it handles both audio and text files automatically.
-If the reference looks like raw transcript text rather than a file path, treat \
+The input may contain one or more file paths mixed with instructions or context \
+(e.g., "heres the audio: /path/to/file.m4a and the wellness form: /path/to/form.pdf \
+clients name is james"). Extract each file path and call `attach_path` once per file. \
+`attach_path` handles audio, text files, and PDFs automatically. \
+If the input looks like raw transcript text rather than file paths, treat \
 it as the transcript directly and skip the file-loading step.
 
 If the path contains shell escape characters (backslashes before spaces, quotes, \
@@ -128,9 +133,11 @@ etc.), interpret them as a shell would — e.g. `Bristol\\ St\\ 4.m4a` means \
 ## Workflow
 
 ### Phase 1: Load, Identify & Summarize
-1. **Load the file** using `attach_path`. \
-If audio, the data is embedded directly in this conversation — you can hear it.
-2. **Identify the client** from the session. Generate a `client-id` slug \
+1. **Load the file(s)** using `attach_path` (one call per file). \
+Audio and PDF data is embedded directly in this conversation.
+2. **Identify the client**: If the user explicitly provides a client name \
+in their input, use that name for the `client-id` slug. Otherwise, identify \
+the client from the session content. Generate a `client-id` slug \
 (lowercase, hyphenated — e.g. "jane-doe").
 3. **Check existing clients** — if this client matches an existing ID, use \
 `attach_path` to load `clients/<client-id>/profile/current.md` and \
@@ -223,7 +230,7 @@ Write a structured initial treatment plan:
 INTAKE_FILE_PLAN_PROMPT = """\
 You are planning a clinical intake workflow. Today's date is {date}.
 
-The user has provided an audio recording for intake processing: \
+The user has provided one or more files for intake processing: \
 `{file_reference}`
 
 {existing_clients}
@@ -231,16 +238,18 @@ The user has provided an audio recording for intake processing: \
 ## Instructions
 
 Create a structured execution plan for the intake workflow. \
-Do NOT load or process the audio file — the execution agent will do that.
+Do NOT load or process the files — the execution agent will do that.
 
-1. **Derive a placeholder client-id** from the filename \
-(e.g., "Bristol St 4.m4a" → "bristol-st-4"). Note that the actual client \
-identity will be confirmed from the audio during execution.
+1. **Determine the client-id**: If the user explicitly provides a client name \
+in their input (e.g., "clients name is james"), use that name for the \
+client-id slug (e.g., "james"). Otherwise, derive a placeholder client-id \
+from the filename (e.g., "Bristol St 4.m4a" → "bristol-st-4"). Note that \
+the actual client identity will be confirmed from the source material during execution.
 
 2. **List all 6 files** to create with their full paths and quality criteria \
 (using the guidance sections below).
 
-3. **Include execution steps**: load audio → identify client → write all Phase 2 \
+3. **Include execution steps**: load file(s) → identify client → write all Phase 2 \
 documents in a single batch → after approval, create Phase 3 current.md copies.
 
 ## File Structure

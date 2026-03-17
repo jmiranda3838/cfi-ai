@@ -2,7 +2,7 @@
 
 from google.genai import types
 
-from cfi_ai.agent import _split_tool_results
+from cfi_ai.agent import _build_result_slots, _split_tool_results
 
 
 def test_split_no_binary():
@@ -15,15 +15,37 @@ def test_split_no_binary():
 
 
 def test_split_with_binary():
-    """Binary parts get their own groups, preserving order."""
+    """All fn_responses in first group, binary parts in separate groups."""
     fn1 = types.Part.from_function_response(name="a", response={"result": "ok"})
     bin1 = types.Part.from_bytes(data=b"audio", mime_type="audio/mp4")
     fn2 = types.Part.from_function_response(name="b", response={"result": "ok"})
     groups = _split_tool_results([fn1, bin1, fn2])
-    assert len(groups) == 3
-    assert groups[0] == [fn1]
+    assert len(groups) == 2
+    assert groups[0] == [fn1, fn2]
     assert groups[1] == [bin1]
-    assert groups[2] == [fn2]
+
+
+def test_split_multi_binary():
+    """Multiple binary parts: fn_responses grouped first, then each binary separate."""
+    fn1 = types.Part.from_function_response(name="attach_path", response={"result": "loaded audio"})
+    bin1 = types.Part.from_bytes(data=b"audio_data", mime_type="audio/mp4")
+    fn2 = types.Part.from_function_response(name="attach_path", response={"result": "loaded pdf"})
+    bin2 = types.Part.from_bytes(data=b"pdf_data", mime_type="application/pdf")
+    groups = _split_tool_results([fn1, bin1, fn2, bin2])
+    assert len(groups) == 3
+    assert groups[0] == [fn1, fn2]
+    assert groups[1] == [bin1]
+    assert groups[2] == [bin2]
+
+
+def test_split_only_binary():
+    """Edge case: binary parts with no fn_responses."""
+    bin1 = types.Part.from_bytes(data=b"audio", mime_type="audio/mp4")
+    bin2 = types.Part.from_bytes(data=b"pdf", mime_type="application/pdf")
+    groups = _split_tool_results([bin1, bin2])
+    assert len(groups) == 2
+    assert groups[0] == [bin1]
+    assert groups[1] == [bin2]
 
 
 def test_split_single_binary():
@@ -113,3 +135,45 @@ class TestWorkflowContinuationLogic:
                 should_break = True
 
         assert should_break is True
+
+
+class TestBuildResultSlots:
+    """Tests for _build_result_slots ordering preservation."""
+
+    def test_preserves_order_mixed_read_mutate(self):
+        """Mixed read/mutate run_command calls maintain original indices."""
+        fc_cp = types.FunctionCall(name="run_command", args={"command": "cp a b"})
+        fc_ls = types.FunctionCall(name="run_command", args={"command": "ls"})
+        fc_cat = types.FunctionCall(name="run_command", args={"command": "cat f"})
+        read_ops, mutate_ops, slots = _build_result_slots([fc_cp, fc_ls, fc_cat])
+        # cp is mutating (index 0), ls and cat are read-only (indices 1, 2)
+        assert [(i, fc.name) for i, fc in read_ops] == [(1, "run_command"), (2, "run_command")]
+        assert [(i, fc.name) for i, fc in mutate_ops] == [(0, "run_command")]
+        assert len(slots) == 3
+        # Simulate filling slots in execution order (reads first, then mutates)
+        slots[1].append(types.Part.from_function_response(name="run_command", response={"result": "ls output"}))
+        slots[2].append(types.Part.from_function_response(name="run_command", response={"result": "cat output"}))
+        slots[0].append(types.Part.from_function_response(name="run_command", response={"result": "cp done"}))
+        # Flatten — should be in original call order: cp, ls, cat
+        flat = [p for slot in slots for p in slot]
+        assert flat[0].function_response.response["result"] == "cp done"
+        assert flat[1].function_response.response["result"] == "ls output"
+        assert flat[2].function_response.response["result"] == "cat output"
+
+    def test_all_read(self):
+        """All read-only calls: no mutate_ops, indices preserved."""
+        fc1 = types.FunctionCall(name="attach_path", args={"path": "/a"})
+        fc2 = types.FunctionCall(name="run_command", args={"command": "ls"})
+        read_ops, mutate_ops, slots = _build_result_slots([fc1, fc2])
+        assert len(read_ops) == 2
+        assert len(mutate_ops) == 0
+        assert len(slots) == 2
+
+    def test_all_mutate(self):
+        """All mutating calls: no read_ops, indices preserved."""
+        fc1 = types.FunctionCall(name="write_file", args={"path": "a.md", "content": "x"})
+        fc2 = types.FunctionCall(name="apply_patch", args={"path": "b.md", "patches": []})
+        read_ops, mutate_ops, slots = _build_result_slots([fc1, fc2])
+        assert len(read_ops) == 0
+        assert len(mutate_ops) == 2
+        assert len(slots) == 2

@@ -24,25 +24,47 @@ MAX_TOOL_ITERATIONS = 25
 _NARRATION_THRESHOLD = 800
 
 
+def _build_result_slots(
+    function_calls: list[types.FunctionCall],
+) -> tuple[list[tuple[int, types.FunctionCall]], list[tuple[int, types.FunctionCall]], list[list[types.Part]]]:
+    """Separate function calls into indexed read/mutate lists with result slots.
+
+    Returns (read_ops, mutate_ops, result_slots) where each op is (original_index, fc)
+    and result_slots[i] collects parts for function_calls[i].
+    """
+    import cfi_ai.tools as _tools
+    read_ops: list[tuple[int, types.FunctionCall]] = []
+    mutate_ops: list[tuple[int, types.FunctionCall]] = []
+    for i, fc in enumerate(function_calls):
+        if _tools.classify_mutation(fc.name, dict(fc.args)):
+            mutate_ops.append((i, fc))
+        else:
+            read_ops.append((i, fc))
+    result_slots: list[list[types.Part]] = [[] for _ in function_calls]
+    return read_ops, mutate_ops, result_slots
+
+
 def _split_tool_results(parts: list[types.Part]) -> list[list[types.Part]]:
     """Split tool result parts so inline binary data gets its own Content message.
 
-    Preserves ordering: [fn1, binary1, fn2, binary2] → [[fn1], [binary1], [fn2], [binary2]].
-    When no binary parts exist, returns a single group (identical to current behavior).
+    All function_response parts are collected into the first group so their count
+    matches the function_call count from the model turn (Gemini API requirement).
+    Each binary part then goes in a separate subsequent group.
     """
-    groups: list[list[types.Part]] = []
-    current: list[types.Part] = []
+    fn_responses: list[types.Part] = []
+    binary_parts: list[types.Part] = []
     for p in parts:
         is_binary = hasattr(p, "inline_data") and p.inline_data
-        if is_binary and current:
-            groups.append(current)
-            current = []
-        current.append(p)
         if is_binary:
-            groups.append(current)
-            current = []
-    if current:
-        groups.append(current)
+            binary_parts.append(p)
+        else:
+            fn_responses.append(p)
+
+    groups: list[list[types.Part]] = []
+    if fn_responses:
+        groups.append(fn_responses)
+    for bp in binary_parts:
+        groups.append([bp])
     return groups
 
 
@@ -549,19 +571,11 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                     continue
                 break
 
-            # Separate read and mutating tool calls
-            read_ops = []
-            mutate_ops = []
-            for fc in function_calls:
-                if tools.classify_mutation(fc.name, dict(fc.args)):
-                    mutate_ops.append(fc)
-                else:
-                    read_ops.append(fc)
-
-            tool_result_parts: list[types.Part] = []
+            # Separate read and mutating tool calls, tracking original order
+            read_ops, mutate_ops, result_slots = _build_result_slots(function_calls)
 
             # Execute read ops immediately
-            for fc in read_ops:
+            for i, fc in read_ops:
                 fc_args = dict(fc.args)
                 _log.debug("inner_loop tool_call %s", _safe_tool_summary(fc.name, fc_args))
                 ui.show_tool_call(fc.name, _summarize_input(fc_args))
@@ -569,17 +583,17 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                 if isinstance(result, tuple):
                     text, inline_parts = result
                     ui.show_tool_result(fc.name, text)
-                    tool_result_parts.append(
+                    result_slots[i].append(
                         types.Part.from_function_response(name=fc.name, response={"result": text})
                     )
-                    tool_result_parts.extend(inline_parts)
+                    result_slots[i].extend(inline_parts)
                     _log.debug(
                         "inner_loop tool_result %s type=tuple inline_parts=%d text_len=%d",
                         fc.name, len(inline_parts), len(text),
                     )
                 else:
                     ui.show_tool_result(fc.name, result)
-                    tool_result_parts.append(
+                    result_slots[i].append(
                         types.Part.from_function_response(name=fc.name, response={"result": result})
                     )
                     _log.debug(
@@ -589,11 +603,11 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
 
             # Handle mutating ops with plan-and-approve
             if mutate_ops:
-                for fc in mutate_ops:
+                for _i, fc in mutate_ops:
                     _log.debug("inner_loop mutate_call %s", _safe_tool_summary(fc.name, dict(fc.args)))
                 ui.status.set_mode("planning")
                 plan = ExecutionPlan()
-                for fc in mutate_ops:
+                for _i, fc in mutate_ops:
                     plan.add(fc.name, dict(fc.args), workspace=workspace)
 
                 ui.show_plan(format_plan(plan))
@@ -606,26 +620,26 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
 
                 if approved:
                     ui.status.set_mode("executing")
-                    for fc in mutate_ops:
+                    for i, fc in mutate_ops:
                         fc_args = dict(fc.args)
                         ui.show_tool_call(fc.name, _post_approval_summary(fc.name, fc_args))
                         result = tools.execute(fc.name, workspace, **fc_args)
                         if isinstance(result, tuple):
                             text, inline_parts = result
                             ui.show_tool_result(fc.name, text)
-                            tool_result_parts.append(
+                            result_slots[i].append(
                                 types.Part.from_function_response(
                                     name=fc.name, response={"result": text}
                                 )
                             )
-                            tool_result_parts.extend(inline_parts)
+                            result_slots[i].extend(inline_parts)
                             _log.debug(
                                 "inner_loop mutate_result %s type=tuple inline_parts=%d text_len=%d",
                                 fc.name, len(inline_parts), len(text),
                             )
                         else:
                             ui.show_tool_result(fc.name, result)
-                            tool_result_parts.append(
+                            result_slots[i].append(
                                 types.Part.from_function_response(
                                     name=fc.name, response={"result": result}
                                 )
@@ -635,13 +649,18 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                                 fc.name, len(result),
                             )
                 else:
-                    for fc in mutate_ops:
-                        tool_result_parts.append(
+                    for i, fc in mutate_ops:
+                        result_slots[i].append(
                             types.Part.from_function_response(
                                 name=fc.name,
                                 response={"error": "User rejected this operation."},
                             )
                         )
+
+            # Flatten indexed slots back into original call order
+            tool_result_parts: list[types.Part] = []
+            for slot in result_slots:
+                tool_result_parts.extend(slot)
 
             # Gemini uses role="user" for function responses — the API only supports
             # "user" and "model" roles, and tool results are part of the user turn.
