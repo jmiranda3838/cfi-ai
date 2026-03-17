@@ -14,16 +14,17 @@ This workspace contains a `clients/` directory for clinical documentation. Files
 
 ```
 clients/<client-id>/
-  intake/<YYYY-MM-DD>-intake-assessment.md
-  profile/<YYYY-MM-DD>-profile.md
+  intake/<YYYY-MM-DD>-initial-assessment.md   (TheraNest Initial Assessment fields)
+  profile/<YYYY-MM-DD>-profile.md             (internal reference)
   profile/current.md
-  treatment-plan/<YYYY-MM-DD>-treatment-plan.md
+  treatment-plan/<YYYY-MM-DD>-treatment-plan.md  (TheraNest Treatment Plan fields)
   treatment-plan/current.md
-  sessions/<YYYY-MM-DD>-<session-type>-transcript.md
+  sessions/<YYYY-MM-DD>-progress-note.md      (TheraNest standard note, DAP)
+  sessions/<YYYY-MM-DD>-intake-transcript.md
 ```
 
 - `current.md` files are copies of the latest dated version for quick access.
-- Use the `/intake` command to process a new intake session transcript.
+- Use the `/intake` command to process intake materials into TheraNest-ready clinical documents.
 - When asked to "integrate" new data into existing documents, rewrite the document \
 content to incorporate the new information seamlessly — do not just link or attach \
 the source file.

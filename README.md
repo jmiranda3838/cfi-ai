@@ -76,43 +76,46 @@ Environment variables take precedence over the config file when set:
 | Command | Description |
 |---------|-------------|
 | `/help` | Show available commands |
-| `/intake` | Process a session transcript or audio recording into intake documents |
+| `/intake` | Process intake materials into TheraNest-ready clinical documents |
 
 ### `/intake` — Clinical Intake Workflow
 
-Process a session transcript or audio recording into structured clinical documents:
+Process intake materials into TheraNest-ready clinical documents. Upload a combination of session audio, intake questionnaire, wellness assessment, and other assessments — the LLM generates output structured to TheraNest's exact field layout for direct copy-paste.
 
 ```bash
-# From a text file
-~ /intake session-notes.txt
+# Audio + intake questionnaire + wellness assessment
+~ /intake /path/to/session.m4a /path/to/intake-questionnaire.pdf /path/to/wellness-assessment.pdf
 
-# From an audio file (.mp3, .wav, .m4a, .aac, .ogg, .flac, .aiff, .webm)
-~ /intake session-recording.mp3
+# Just an audio file
+~ /intake session-recording.m4a
 
-# From an absolute path (e.g. Downloads)
+# From an absolute path
 ~ /intake /Users/you/Downloads/session-recording.m4a
 
 # Paste interactively
 ~ /intake
-transcript> [paste text or enter a file path, then Enter to submit]
+transcript> [paste text or enter file paths, then Enter to submit]
 ```
 
 File paths are passed to the LLM, which uses `attach_path` to load them — this handles shell escapes, spaces in paths, and other tricky filenames naturally. Audio is sent inline to Gemini for transcription and clinical document generation.
 
-The workflow generates:
-- **Intake Assessment** — presenting concerns, history, symptoms, risk, impressions
-- **Client Profile** — reusable summary of demographics, context, strengths
-- **Treatment Plan** — problems, goals, objectives, interventions, review timeline
+The workflow generates 5 documents:
+- **Initial Assessment** — TheraNest "Initial Assessment & Diagnostic Codes" tab fields (diagnostic impressions, presenting problem, observations, history, risk assessment, strengths, goals, etc.)
+- **Treatment Plan** — TheraNest Treatment Plan tab fields (behavioral definitions, goals & objectives with interventions, modality, frequency, etc.)
+- **Progress Note** — TheraNest standard note fields in DAP format (data, assessment, plan)
+- **Intake Transcript** — raw session transcript with speaker labels
+- **Client Profile** — internal app reference for returning-client context (not a TheraNest deliverable)
 
 Files are saved under `clients/<client-id>/` with dated filenames:
 
 ```
 clients/jane-doe/
-  intake/2025-01-15-intake-assessment.md
+  intake/2025-01-15-initial-assessment.md
   profile/2025-01-15-profile.md
   profile/current.md
   treatment-plan/2025-01-15-treatment-plan.md
   treatment-plan/current.md
+  sessions/2025-01-15-progress-note.md
   sessions/2025-01-15-intake-transcript.md
 ```
 

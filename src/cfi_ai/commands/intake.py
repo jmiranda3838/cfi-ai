@@ -42,8 +42,8 @@ def _resolve_input(
 
     # No args — prompt for paste or file path
     ui.print_info(
-        "Paste the session transcript below, or enter a file path "
-        "(text or audio)."
+        "Paste the session transcript below, or enter file paths "
+        "(audio, intake questionnaire PDF, wellness assessment, etc.)."
     )
     text = ui.prompt_multiline("Transcript input:")
     if text is None:
@@ -79,7 +79,7 @@ def _build_existing_clients_section(workspace: Workspace) -> str:
     )
 
 
-@register("intake", description="Process a session transcript into intake documents")
+@register("intake", description="Process intake materials into TheraNest-ready clinical documents")
 def handle_intake(args: str | None, ui: UI, workspace: Workspace) -> CommandResult:
     resolved = _resolve_input(args, ui, workspace)
     if resolved is None:
@@ -99,7 +99,7 @@ def handle_intake(args: str | None, ui: UI, workspace: Workspace) -> CommandResu
             date=today,
             existing_clients=existing_clients,
         )
-        ui.print_info(f"Starting intake workflow for: {resolved.raw} ({today}).")
+        ui.print_info(f"Processing intake materials into TheraNest-ready documents: {resolved.raw} ({today}).")
         return CommandResult(message=message, workflow_mode=True, plan_prompt=plan_prompt)
 
     # Text flow — transcript embedded directly
@@ -109,7 +109,7 @@ def handle_intake(args: str | None, ui: UI, workspace: Workspace) -> CommandResu
         existing_clients=existing_clients,
     )
     ui.print_info(
-        f"Starting intake workflow ({len(resolved.text)} chars of transcript, "
-        f"{today})."
+        f"Processing intake transcript into TheraNest-ready documents "
+        f"({len(resolved.text)} chars, {today})."
     )
     return CommandResult(message=message, workflow_mode=True)
