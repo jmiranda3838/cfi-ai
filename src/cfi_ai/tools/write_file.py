@@ -11,7 +11,8 @@ class WriteFileTool(BaseTool):
             description=(
                 "Create a new file at a path relative to the workspace root. "
                 "Creates parent directories if needed. "
-                "Cannot overwrite existing files — use apply_patch to edit existing files."
+                "By default, rejects existing files — pass overwrite=true to replace an existing file entirely. "
+                "For targeted edits to specific sections, use apply_patch instead."
             ),
             input_schema={
                 "type": "object",
@@ -24,6 +25,10 @@ class WriteFileTool(BaseTool):
                         "type": "string",
                         "description": "The content to write to the file.",
                     },
+                    "overwrite": {
+                        "type": "boolean",
+                        "description": "If true, overwrite the file if it already exists. Default: false.",
+                    },
                 },
                 "required": ["path", "content"],
             },
@@ -32,9 +37,12 @@ class WriteFileTool(BaseTool):
     def execute(self, workspace, **kwargs) -> str:
         rel = kwargs["path"]
         content = kwargs["content"]
+        overwrite = kwargs.get("overwrite", False)
         target = workspace.validate_path(rel)
-        if target.is_file():
-            return f"Error: {rel} already exists. Use apply_patch to edit existing files."
+        if target.is_file() and not overwrite:
+            return f"Error: {rel} already exists. Use overwrite=true to replace it, or apply_patch to edit specific sections."
+        already_exists = target.is_file()
         target.parent.mkdir(parents=True, exist_ok=True)
         target.write_text(content)
-        return f"Wrote {len(content)} characters to {rel}"
+        action = "Overwrote" if already_exists else "Wrote"
+        return f"{action} {len(content)} characters to {rel}"

@@ -124,14 +124,15 @@ user's local workspace.
 
 ### Modification (requires approval)
 - apply_patch: multi-edit search/replace on existing files
-- write_file: create new files only
+- write_file: create new files, or overwrite existing files entirely (overwrite=true)
 - run_command: mv, cp, mkdir, rm (files only, no recursive delete)
 
 ## Guidelines
 - Prefer run_command for workspace inspection — use ls, find, cat, {search_cmd} naturally.
 - Use attach_path to load files into context (replaces explicit file reading).
-- Use apply_patch for all edits to existing files (supports multiple edits per file).
-- Use write_file only when creating new files from scratch.
+- Use write_file to create new files. Use write_file with overwrite=true when completely
+  replacing an existing file's content (e.g. rebuilding a document with integrated data).
+- Use apply_patch for focused edits to specific sections of existing files.
 - run_command does not support pipes, redirection, or chaining — run separate commands.
 - rm can only delete individual files, not directories.
 - Batch related edits in a single apply_patch call.
