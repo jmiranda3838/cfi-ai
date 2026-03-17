@@ -84,6 +84,36 @@ def test_plan_mode_prompt_completeness_guideline(tmp_path):
     assert "ALL affected document types" in prompt
 
 
+def test_plan_mode_prompt_clinical_identity():
+    prompt = build_plan_mode_system_prompt("/workspace", "summary")
+    assert "clinical documentation assistant" in prompt
+
+
+def test_plan_mode_prompt_verify_before_claiming():
+    prompt = build_plan_mode_system_prompt("/workspace", "summary")
+    assert "never claim something is unaffected without verifying" in prompt.lower()
+
+
+def test_execution_prompt_clinical_identity():
+    prompt = build_system_prompt("/workspace", "summary")
+    assert "clinical documentation assistant" in prompt
+
+
+def test_execution_prompt_ripple_effect_guideline():
+    prompt = build_system_prompt("/workspace", "summary")
+    assert "search for all references" in prompt.lower()
+
+
+def test_prompts_no_code_centric_language():
+    plan_prompt = build_plan_mode_system_prompt("/workspace", "summary")
+    exec_prompt = build_system_prompt("/workspace", "summary")
+    for prompt in (plan_prompt, exec_prompt):
+        assert "codebase" not in prompt
+        assert "code paths" not in prompt
+    assert "function names, parameter types" not in plan_prompt
+    assert "function signatures" not in plan_prompt
+
+
 def test_intake_file_plan_prompt_formats():
     from cfi_ai.prompts.intake import INTAKE_FILE_PLAN_PROMPT
     formatted = INTAKE_FILE_PLAN_PROMPT.format(
