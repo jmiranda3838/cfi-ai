@@ -24,6 +24,28 @@ MAX_TOOL_ITERATIONS = 25
 _NARRATION_THRESHOLD = 800
 
 
+def _split_tool_results(parts: list[types.Part]) -> list[list[types.Part]]:
+    """Split tool result parts so inline binary data gets its own Content message.
+
+    Preserves ordering: [fn1, binary1, fn2, binary2] → [[fn1], [binary1], [fn2], [binary2]].
+    When no binary parts exist, returns a single group (identical to current behavior).
+    """
+    groups: list[list[types.Part]] = []
+    current: list[types.Part] = []
+    for p in parts:
+        is_binary = hasattr(p, "inline_data") and p.inline_data
+        if is_binary and current:
+            groups.append(current)
+            current = []
+        current.append(p)
+        if is_binary:
+            groups.append(current)
+            current = []
+    if current:
+        groups.append(current)
+    return groups
+
+
 def _safe_tool_summary(name: str, args: dict) -> str:
     """Return a PHI-safe metadata summary of tool call args.
 
@@ -222,7 +244,8 @@ def _run_plan_mode(
                     fc.name, len(result),
                 )
 
-        messages.append(types.Content(role="user", parts=tool_result_parts))
+        for group in _split_tool_results(tool_result_parts):
+            messages.append(types.Content(role="user", parts=group))
         _log.debug(
             "plan_mode tool_results_appended parts=%d functions=%s",
             len(tool_result_parts),
@@ -424,8 +447,8 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                         role="user",
                         parts=[types.Part.from_text(
                             text="Your previous response became repetitive. "
-                            "Do not restate the plan. Summarize in 1-2 sentences "
-                            "and proceed directly to tool calls.",
+                            "Continue from the last useful point without repeating yourself. "
+                            "If tools are needed, call them directly.",
                         )],
                     )
                 )
@@ -562,7 +585,8 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
 
             # Gemini uses role="user" for function responses — the API only supports
             # "user" and "model" roles, and tool results are part of the user turn.
-            messages.append(types.Content(role="user", parts=tool_result_parts))
+            for group in _split_tool_results(tool_result_parts):
+                messages.append(types.Content(role="user", parts=group))
             _log.debug(
                 "inner_loop tool_results_appended parts=%d functions=%s",
                 len(tool_result_parts),

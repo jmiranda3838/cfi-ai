@@ -45,6 +45,16 @@ _REPEAT_BLOCK_SIZES = (200, 500)
 _REPEAT_MIN_TEXT_LENGTH = 2000
 _REPEAT_CHECK_INTERVAL = 500
 
+# Degenerate run detection: single character repeated this many times
+_DEGENERATE_RUN_LENGTH = 150
+
+
+def _is_degenerate_run(text: str) -> bool:
+    """Return True if the last _DEGENERATE_RUN_LENGTH chars are all the same character."""
+    if len(text) < _DEGENERATE_RUN_LENGTH:
+        return False
+    return len(set(text[-_DEGENERATE_RUN_LENGTH:])) == 1
+
 
 def _is_repeated_suffix(text: str) -> bool:
     """Return True if the last block of *text* appears consecutively for any
@@ -153,6 +163,14 @@ class StreamResult:
                     len(part.text) if part.text else 0, len(buf),
                 )
                 if part.text:
+                    # Fast check: degenerate single-char runs
+                    if _is_degenerate_run(buf):
+                        _log.warning(
+                            "[req:%s] Degenerate run detected at %d chars",
+                            rid, len(buf),
+                        )
+                        self._repetition_detected = True
+                        return
                     # Check for repetition once we have enough text
                     if (
                         len(buf) >= _REPEAT_MIN_TEXT_LENGTH

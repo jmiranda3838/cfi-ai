@@ -7,8 +7,10 @@ import pytest
 from cfi_ai.client import (
     StreamResult,
     _is_repeated_suffix,
+    _is_degenerate_run,
     _REPEAT_BLOCK_SIZES,
     _REPEAT_MIN_TEXT_LENGTH,
+    _DEGENERATE_RUN_LENGTH,
 )
 
 
@@ -79,4 +81,34 @@ def test_text_chunks_stops_on_repetition():
 
     assert sr.repetition_detected is True
     # The last chunk ("this should not appear") must not have been yielded.
+    assert "this should not appear" not in "".join(collected)
+
+
+# --- Degenerate run detection tests ---
+
+
+def test_degenerate_run_single_char():
+    assert _is_degenerate_run("0" * _DEGENERATE_RUN_LENGTH)
+
+
+def test_degenerate_run_with_preamble():
+    assert _is_degenerate_run("915" + "0" * _DEGENERATE_RUN_LENGTH)
+
+
+def test_degenerate_run_false_short():
+    assert not _is_degenerate_run("0" * (_DEGENERATE_RUN_LENGTH - 1))
+
+
+def test_degenerate_run_false_varied():
+    text = "a" * 75 + "b" * 75
+    assert not _is_degenerate_run(text)
+
+
+def test_text_chunks_stops_on_degenerate_run():
+    """Degenerate single-char run triggers early stop before 2000-char threshold."""
+    texts = ["915", "0" * 200, "this should not appear"]
+    stream = _make_stream_chunks(texts)
+    sr = StreamResult(stream)
+    collected = list(sr.text_chunks())
+    assert sr.repetition_detected is True
     assert "this should not appear" not in "".join(collected)
