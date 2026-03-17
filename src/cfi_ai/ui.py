@@ -5,10 +5,12 @@ from enum import Enum, auto
 from pathlib import Path
 
 from prompt_toolkit import PromptSession
+from prompt_toolkit.application import Application
 from prompt_toolkit.completion import Completer, Completion
 from prompt_toolkit.history import FileHistory
 from prompt_toolkit.formatted_text import HTML
 from prompt_toolkit.key_binding import KeyBindings
+from prompt_toolkit.layout import Layout, Window, FormattedTextControl
 from prompt_toolkit.styles import Style as PTStyle
 from rich import box
 from rich.console import Console
@@ -34,6 +36,13 @@ class PlanApproval(Enum):
     BYPASS = auto()         # b - keep context, bypass permissions
     PERMISSIONS = auto()    # p - clear context, keep permissions
     REJECT = auto()         # n - reject
+
+_APPROVAL_OPTIONS: list[tuple[PlanApproval, str]] = [
+    (PlanApproval.CLEAR_BYPASS, "Clear context + bypass permissions"),
+    (PlanApproval.BYPASS,       "Bypass permissions (keep context)"),
+    (PlanApproval.PERMISSIONS,  "Keep permissions (clear context)"),
+    (PlanApproval.REJECT,       "Reject"),
+]
 
 CFI_THEME = Theme({
     "primary": "dark_cyan",
@@ -62,6 +71,7 @@ PT_STYLE = PTStyle.from_dict({
     "prompt-plan": "#af8700",
     "bottom-toolbar": "bg:#1c1c1c #585858",
     "approval": "#af8700",
+    "muted": "#9e9e9e",
 })
 
 MODE_DISPLAY = {
@@ -274,30 +284,70 @@ class UI:
         )
 
     def prompt_plan_approval(self) -> PlanApproval:
-        """Prompt user to approve or reject a plan with execution options."""
+        """Prompt user to approve or reject a plan with an interactive menu."""
         self.status.set_mode("awaiting_approval")
-        self.console.print(
-            "[muted]  Y = clear context + bypass permissions (default)  "
-            "b = bypass permissions  p = keep permissions  n = reject[/muted]"
-        )
         try:
-            response = self.session.prompt(
-                [("class:approval", "execute plan? [Y/b/p/n] ")],
-                bottom_toolbar=HTML(f"cfi-ai | {self.status.display}"),
-                key_bindings=_chat_key_bindings(),
-            )
-            key = response.strip().lower()
-            if key in ("", "y", "yes"):
-                return PlanApproval.CLEAR_BYPASS
-            if key == "b":
-                return PlanApproval.BYPASS
-            if key == "p":
-                return PlanApproval.PERMISSIONS
-            return PlanApproval.REJECT
+            return self._run_plan_approval_app()
         except KeyboardInterrupt:
             raise
         except EOFError:
             return PlanApproval.REJECT
+
+    def _run_plan_approval_app(self) -> PlanApproval:
+        """Run an interactive arrow-key selection menu for plan approval."""
+        selected = [0]
+
+        def _get_menu_text():
+            fragments = [("class:approval", "  execute plan?\n\n")]
+            for i, (_, label) in enumerate(_APPROVAL_OPTIONS):
+                if i == selected[0]:
+                    fragments.append(("class:approval", f"    \u25b6 {label}\n"))
+                else:
+                    fragments.append(("class:muted", f"      {label}\n"))
+            fragments.append(("", "\n"))
+            fragments.append(("class:muted", "  \u2191/\u2193 select  enter confirm  esc reject"))
+            return fragments
+
+        kb = KeyBindings()
+
+        @kb.add("up")
+        def _up(event):
+            selected[0] = (selected[0] - 1) % len(_APPROVAL_OPTIONS)
+            event.app.invalidate()
+
+        @kb.add("down")
+        def _down(event):
+            selected[0] = (selected[0] + 1) % len(_APPROVAL_OPTIONS)
+            event.app.invalidate()
+
+        @kb.add("enter")
+        def _enter(event):
+            event.app.exit(result=_APPROVAL_OPTIONS[selected[0]][0])
+
+        @kb.add("escape")
+        def _escape(event):
+            event.app.exit(result=PlanApproval.REJECT)
+
+        @kb.add("c-c")
+        def _ctrl_c(event):
+            event.app.exit(exception=KeyboardInterrupt)
+
+        layout = Layout(
+            Window(
+                FormattedTextControl(_get_menu_text, show_cursor=False),
+                dont_extend_height=True,
+            )
+        )
+
+        app: Application[PlanApproval] = Application(
+            layout=layout,
+            key_bindings=kb,
+            style=PT_STYLE,
+            erase_when_done=True,
+            full_screen=False,
+        )
+
+        return app.run()
 
     def prompt_approval(self) -> bool:
         self.status.set_mode("awaiting_approval")

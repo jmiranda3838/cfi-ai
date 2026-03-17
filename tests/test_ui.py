@@ -77,44 +77,44 @@ def _make_ui(tmp_path):
 
 
 class TestPromptPlanApproval:
-    """Test prompt_plan_approval() input parsing."""
+    """Test prompt_plan_approval() interactive menu."""
 
-    def test_empty_returns_clear_bypass(self, tmp_path):
-        ui, session = _make_ui(tmp_path)
-        session.prompt.return_value = ""
+    def test_clear_bypass(self, tmp_path):
+        ui, _ = _make_ui(tmp_path)
+        ui._run_plan_approval_app = lambda: PlanApproval.CLEAR_BYPASS
         assert ui.prompt_plan_approval() == PlanApproval.CLEAR_BYPASS
 
-    def test_y_lower_returns_clear_bypass(self, tmp_path):
-        ui, session = _make_ui(tmp_path)
-        session.prompt.return_value = "y"
-        assert ui.prompt_plan_approval() == PlanApproval.CLEAR_BYPASS
-
-    def test_y_upper_returns_clear_bypass(self, tmp_path):
-        ui, session = _make_ui(tmp_path)
-        session.prompt.return_value = "Y"
-        assert ui.prompt_plan_approval() == PlanApproval.CLEAR_BYPASS
-
-    def test_b_returns_bypass(self, tmp_path):
-        ui, session = _make_ui(tmp_path)
-        session.prompt.return_value = "b"
+    def test_bypass(self, tmp_path):
+        ui, _ = _make_ui(tmp_path)
+        ui._run_plan_approval_app = lambda: PlanApproval.BYPASS
         assert ui.prompt_plan_approval() == PlanApproval.BYPASS
 
-    def test_p_returns_permissions(self, tmp_path):
-        ui, session = _make_ui(tmp_path)
-        session.prompt.return_value = "p"
+    def test_permissions(self, tmp_path):
+        ui, _ = _make_ui(tmp_path)
+        ui._run_plan_approval_app = lambda: PlanApproval.PERMISSIONS
         assert ui.prompt_plan_approval() == PlanApproval.PERMISSIONS
 
-    def test_n_returns_reject(self, tmp_path):
-        ui, session = _make_ui(tmp_path)
-        session.prompt.return_value = "n"
-        assert ui.prompt_plan_approval() == PlanApproval.REJECT
-
-    def test_unknown_returns_reject(self, tmp_path):
-        ui, session = _make_ui(tmp_path)
-        session.prompt.return_value = "anything else"
+    def test_reject(self, tmp_path):
+        ui, _ = _make_ui(tmp_path)
+        ui._run_plan_approval_app = lambda: PlanApproval.REJECT
         assert ui.prompt_plan_approval() == PlanApproval.REJECT
 
     def test_eof_returns_reject(self, tmp_path):
-        ui, session = _make_ui(tmp_path)
-        session.prompt.side_effect = EOFError
+        from unittest.mock import Mock
+        ui, _ = _make_ui(tmp_path)
+        ui._run_plan_approval_app = Mock(side_effect=EOFError)
         assert ui.prompt_plan_approval() == PlanApproval.REJECT
+
+    def test_keyboard_interrupt_propagates(self, tmp_path):
+        import pytest
+        from unittest.mock import Mock
+        ui, _ = _make_ui(tmp_path)
+        ui._run_plan_approval_app = Mock(side_effect=KeyboardInterrupt)
+        with pytest.raises(KeyboardInterrupt):
+            ui.prompt_plan_approval()
+
+
+def test_approval_options_covers_all_enum_values():
+    from cfi_ai.ui import _APPROVAL_OPTIONS, PlanApproval
+    option_values = {opt[0] for opt in _APPROVAL_OPTIONS}
+    assert option_values == set(PlanApproval)
