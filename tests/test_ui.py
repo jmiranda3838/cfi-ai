@@ -1,6 +1,8 @@
+from unittest.mock import patch
+
 from prompt_toolkit.document import Document
 
-from cfi_ai.ui import SlashCommandCompleter
+from cfi_ai.ui import SlashCommandCompleter, PlanApproval, UI
 
 
 def _get_completions(completer, text):
@@ -64,3 +66,55 @@ def test_stream_markdown_no_visible_overflow(tmp_path):
 
     assert result == "hello world"
     assert captured_kwargs.get("vertical_overflow", "ellipsis") != "visible"
+
+
+def _make_ui(tmp_path):
+    """Create a UI instance with mocked session."""
+    with patch("cfi_ai.ui.Path.home", return_value=tmp_path), \
+         patch("cfi_ai.ui.PromptSession") as mock_session_cls:
+        ui = UI()
+    return ui, mock_session_cls.return_value
+
+
+class TestPromptPlanApproval:
+    """Test prompt_plan_approval() input parsing."""
+
+    def test_empty_returns_clear_bypass(self, tmp_path):
+        ui, session = _make_ui(tmp_path)
+        session.prompt.return_value = ""
+        assert ui.prompt_plan_approval() == PlanApproval.CLEAR_BYPASS
+
+    def test_y_lower_returns_clear_bypass(self, tmp_path):
+        ui, session = _make_ui(tmp_path)
+        session.prompt.return_value = "y"
+        assert ui.prompt_plan_approval() == PlanApproval.CLEAR_BYPASS
+
+    def test_y_upper_returns_clear_bypass(self, tmp_path):
+        ui, session = _make_ui(tmp_path)
+        session.prompt.return_value = "Y"
+        assert ui.prompt_plan_approval() == PlanApproval.CLEAR_BYPASS
+
+    def test_b_returns_bypass(self, tmp_path):
+        ui, session = _make_ui(tmp_path)
+        session.prompt.return_value = "b"
+        assert ui.prompt_plan_approval() == PlanApproval.BYPASS
+
+    def test_p_returns_permissions(self, tmp_path):
+        ui, session = _make_ui(tmp_path)
+        session.prompt.return_value = "p"
+        assert ui.prompt_plan_approval() == PlanApproval.PERMISSIONS
+
+    def test_n_returns_reject(self, tmp_path):
+        ui, session = _make_ui(tmp_path)
+        session.prompt.return_value = "n"
+        assert ui.prompt_plan_approval() == PlanApproval.REJECT
+
+    def test_unknown_returns_reject(self, tmp_path):
+        ui, session = _make_ui(tmp_path)
+        session.prompt.return_value = "anything else"
+        assert ui.prompt_plan_approval() == PlanApproval.REJECT
+
+    def test_eof_returns_reject(self, tmp_path):
+        ui, session = _make_ui(tmp_path)
+        session.prompt.side_effect = EOFError
+        assert ui.prompt_plan_approval() == PlanApproval.REJECT

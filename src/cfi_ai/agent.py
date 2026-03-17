@@ -13,7 +13,7 @@ from cfi_ai.commands import parse_command, dispatch
 from cfi_ai.config import Config
 from cfi_ai.planner import ExecutionPlan, format_plan
 from cfi_ai.prompts.system import build_plan_mode_system_prompt
-from cfi_ai.ui import UI, UserInput
+from cfi_ai.ui import UI, UserInput, PlanApproval
 from cfi_ai.workspace import Workspace
 import cfi_ai.tools as tools
 
@@ -287,6 +287,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
         # --- SLASH COMMAND PARSING (before plan/normal mode branch) ---
         user_parts = None
         workflow_mode = False
+        auto_approve = False
         plan_prompt = None
         parsed = parse_command(user_text)
         if parsed is not None:
@@ -337,9 +338,13 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
             ui.show_research_plan(plan_text)
             ui.print_elapsed(elapsed)
 
-            approved = ui.prompt_plan_approval()
-            if approved:
-                ui.print_info("Executing plan with full tool access...")
+            approval = ui.prompt_plan_approval()
+            if approval != PlanApproval.REJECT:
+                auto_approve = approval in (PlanApproval.CLEAR_BYPASS, PlanApproval.BYPASS)
+                clear_context = approval in (PlanApproval.CLEAR_BYPASS, PlanApproval.PERMISSIONS)
+
+                mode_desc = "auto-approve" if auto_approve else "with permissions"
+                ui.print_info(f"Executing plan ({mode_desc})...")
                 ui.print_separator()
 
                 # Extract binary parts (PDFs, images, audio) from planning phase
@@ -350,13 +355,13 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                             if hasattr(part, "inline_data") and part.inline_data:
                                 binary_parts.append(part)
                 _log.debug(
-                    "plan_approved binary_parts=%d from_messages=%d",
-                    len(binary_parts), len(plan_messages),
+                    "plan_approved binary_parts=%d from_messages=%d auto_approve=%s clear_context=%s",
+                    len(binary_parts), len(plan_messages), auto_approve, clear_context,
                 )
 
-                # Clear history, inject plan as first user message
-                _log.debug("plan_approved clearing_messages=%d", len(messages))
-                messages.clear()
+                if clear_context:
+                    _log.debug("plan_approved clearing_messages=%d", len(messages))
+                    messages.clear()
 
                 if plan_prompt:
                     # Workflow command: use the original execution prompt + plan as guidance
@@ -382,7 +387,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                 )
                 # Fall through to the normal inner loop with workflow_mode enabled
                 workflow_mode = True
-                _log.debug("plan_execution_inject workflow_mode=True")
+                _log.debug("plan_execution_inject workflow_mode=True auto_approve=%s", auto_approve)
             else:
                 # Rejected: preserve plan exchange in history for refinement
                 messages.append(
@@ -473,6 +478,20 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                 continue
 
             if not stream_result.parts:
+                if workflow_mode and continuation_retries < 2:
+                    continuation_retries += 1
+                    _log.debug("inner_loop empty_response_continuation retries=%d", continuation_retries)
+                    messages.append(
+                        types.Content(
+                            role="user",
+                            parts=[types.Part.from_text(
+                                text="Continue with the remaining steps of the workflow. "
+                                "If there are more files to write, call write_file now. "
+                                "If all phases are complete, say 'Done.' and nothing else.",
+                            )],
+                        )
+                    )
+                    continue
                 break
 
             # Append assistant message to history
@@ -507,6 +526,9 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                         )
                     )
                     continue
+                # Workflow completion sentinel — model said "Done.", stop looping
+                if workflow_mode and full_text.strip().rstrip(".").lower() == "done":
+                    break
                 # Workflow continuation guard: give model a chance to resume mid-workflow
                 if workflow_mode and continuation_retries < 2:
                     continuation_retries += 1
@@ -575,9 +597,12 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                     plan.add(fc.name, dict(fc.args), workspace=workspace)
 
                 ui.show_plan(format_plan(plan))
-                approval_start = time.monotonic()
-                approved = ui.prompt_approval()
-                approval_wait += time.monotonic() - approval_start
+                if auto_approve:
+                    approved = True
+                else:
+                    approval_start = time.monotonic()
+                    approved = ui.prompt_approval()
+                    approval_wait += time.monotonic() - approval_start
 
                 if approved:
                     ui.status.set_mode("executing")

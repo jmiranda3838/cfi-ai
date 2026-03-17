@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
+from enum import Enum, auto
 from pathlib import Path
 
 from prompt_toolkit import PromptSession
@@ -26,6 +27,13 @@ class UserInput:
     """Result from get_input() carrying the text and which mode was active."""
     text: str
     plan_mode: bool = False
+
+
+class PlanApproval(Enum):
+    CLEAR_BYPASS = auto()   # Y - clear context, bypass permissions
+    BYPASS = auto()         # b - keep context, bypass permissions
+    PERMISSIONS = auto()    # p - clear context, keep permissions
+    REJECT = auto()         # n - reject
 
 CFI_THEME = Theme({
     "primary": "dark_cyan",
@@ -265,20 +273,31 @@ class UI:
             )
         )
 
-    def prompt_plan_approval(self) -> bool:
-        """Prompt user to approve or reject a plan. Returns True for approve."""
+    def prompt_plan_approval(self) -> PlanApproval:
+        """Prompt user to approve or reject a plan with execution options."""
         self.status.set_mode("awaiting_approval")
+        self.console.print(
+            "[muted]  Y = clear context + bypass permissions (default)  "
+            "b = bypass permissions  p = keep permissions  n = reject[/muted]"
+        )
         try:
             response = self.session.prompt(
-                [("class:approval", "execute plan? [Y/n] ")],
+                [("class:approval", "execute plan? [Y/b/p/n] ")],
                 bottom_toolbar=HTML(f"cfi-ai | {self.status.display}"),
                 key_bindings=_chat_key_bindings(),
             )
-            return response.strip().lower() in ("", "y", "yes")
+            key = response.strip().lower()
+            if key in ("", "y", "yes"):
+                return PlanApproval.CLEAR_BYPASS
+            if key == "b":
+                return PlanApproval.BYPASS
+            if key == "p":
+                return PlanApproval.PERMISSIONS
+            return PlanApproval.REJECT
         except KeyboardInterrupt:
             raise
         except EOFError:
-            return False
+            return PlanApproval.REJECT
 
     def prompt_approval(self) -> bool:
         self.status.set_mode("awaiting_approval")
