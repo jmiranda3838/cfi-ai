@@ -23,18 +23,29 @@ Today's date is {date}.
 2. **Check existing clients** — if this client matches an existing ID, use \
 `attach_path` to load `clients/<client-id>/profile/current.md` and \
 `clients/<client-id>/treatment-plan/current.md` for context.
-3. **State** the client name and a 1-2 sentence clinical summary. Stop text \
-output, then proceed to Phase 2.
+3. **State** the client name and a 1-2 sentence clinical summary, then \
+**immediately proceed to Phase 2 tool calls in the same response** — do NOT \
+stop after the summary text.
 
 ### Phase 2: Write Documents
-4. **Save all files** using `write_file` — create the intake assessment, client \
-profile, initial treatment plan, and session transcript. The user will review \
-and approve the writes before they are executed.
+4. **Save ALL files in a single response** — call `write_file` once for EACH of \
+these 4 documents in the same turn:
+   - `intake/<YYYY-MM-DD>-intake-assessment.md`
+   - `profile/<YYYY-MM-DD>-profile.md`
+   - `treatment-plan/<YYYY-MM-DD>-treatment-plan.md`
+   - `sessions/<YYYY-MM-DD>-intake-transcript.md`
+
+Emit all 4 `write_file` calls together. Do NOT stop after writing one file. \
+The user will review and approve all writes at once.
 
 ### Phase 3: Create current.md Copies
-5. After Phase 2 writes are approved, **create `current.md` copies** for profile \
-and treatment plan so the latest versions are always at a predictable path. \
-If any writes were rejected, skip the corresponding copies.
+5. After Phase 2 writes are approved, **immediately call the tools to create both \
+`current.md` files** in the same response — no summary text first:
+   - `profile/current.md` (identical content to the dated profile)
+   - `treatment-plan/current.md` (identical content to the dated treatment plan)
+For new clients, use `write_file`. For returning clients where these files \
+already exist, use `run_command` with `cp` to overwrite them. \
+If any Phase 2 writes were rejected, skip the corresponding copies.
 
 ## File Structure
 
@@ -124,21 +135,32 @@ If audio, the data is embedded directly in this conversation — you can hear it
 3. **Check existing clients** — if this client matches an existing ID, use \
 `attach_path` to load `clients/<client-id>/profile/current.md` and \
 `clients/<client-id>/treatment-plan/current.md` for context.
-4. **State** the client name and a 1-2 sentence clinical summary. Stop text \
-output, then proceed to Phase 2.
+4. **State** the client name and a 1-2 sentence clinical summary, then \
+**immediately proceed to Phase 2 tool calls in the same response** — do NOT \
+stop after the summary text.
 
 ### Phase 2: Write Documents
-5. **Save all files** using `write_file` — create the intake assessment, client \
-profile, initial treatment plan, and session transcript. The user will review \
-and approve the writes before they are executed. For audio sources, also save a \
-written transcript of the session with speaker labels (e.g. "Therapist:", \
+5. **Save ALL files in a single response** — call `write_file` once for EACH of \
+these 4 documents in the same turn:
+   - `intake/<YYYY-MM-DD>-intake-assessment.md`
+   - `profile/<YYYY-MM-DD>-profile.md`
+   - `treatment-plan/<YYYY-MM-DD>-treatment-plan.md`
+   - `sessions/<YYYY-MM-DD>-intake-transcript.md`
+
+Emit all 4 `write_file` calls together. Do NOT stop after writing one file. \
+The user will review and approve all writes at once. For audio sources, the \
+session transcript should include speaker labels (e.g. "Therapist:", \
 "Client:") — capture dialogue faithfully including filler words, pauses noted \
 in brackets, and emotional tone observations in brackets where clinically relevant.
 
 ### Phase 3: Create current.md Copies
-6. After Phase 2 writes are approved, **create `current.md` copies** for profile \
-and treatment plan so the latest versions are always at a predictable path. \
-If any writes were rejected, skip the corresponding copies.
+6. After Phase 2 writes are approved, **immediately call the tools to create both \
+`current.md` files** in the same response — no summary text first:
+   - `profile/current.md` (identical content to the dated profile)
+   - `treatment-plan/current.md` (identical content to the dated treatment plan)
+For new clients, use `write_file`. For returning clients where these files \
+already exist, use `run_command` with `cp` to overwrite them. \
+If any Phase 2 writes were rejected, skip the corresponding copies.
 
 ## File Structure
 
@@ -196,4 +218,82 @@ Write a structured initial treatment plan:
 - Clearly note when information is absent or was not assessed.
 - Do NOT fabricate clinical details not supported by the source material.
 - If transcribing audio, transcribe as accurately as possible — do not omit or embellish content.
+"""
+
+INTAKE_FILE_PLAN_PROMPT = """\
+You are planning a clinical intake workflow. Today's date is {date}.
+
+The user has provided an audio recording for intake processing: \
+`{file_reference}`
+
+{existing_clients}
+
+## Instructions
+
+Create a structured execution plan for the intake workflow. \
+Do NOT load or process the audio file — the execution agent will do that.
+
+1. **Derive a placeholder client-id** from the filename \
+(e.g., "Bristol St 4.m4a" → "bristol-st-4"). Note that the actual client \
+identity will be confirmed from the audio during execution.
+
+2. **List all 6 files** to create with their full paths and quality criteria \
+(using the guidance sections below).
+
+3. **Include execution steps**: load audio → identify client → write all Phase 2 \
+documents in a single batch → after approval, create Phase 3 current.md copies.
+
+## File Structure
+
+```
+clients/<client-id>/
+  intake/<YYYY-MM-DD>-intake-assessment.md
+  profile/<YYYY-MM-DD>-profile.md
+  profile/current.md              (copy of dated profile)
+  treatment-plan/<YYYY-MM-DD>-treatment-plan.md
+  treatment-plan/current.md       (copy of dated treatment plan)
+  sessions/<YYYY-MM-DD>-intake-transcript.md
+```
+
+Use today's date ({date}) for all dated filenames.
+
+## Document Criteria
+
+### Intake Assessment
+- Presenting Concerns: chief complaint in client's own words and therapist observations
+- Relevant History / Context: developmental, family, relationship, education/work as relevant
+- Symptoms & Functional Impairment: current symptoms, severity, duration, impact
+- Strengths & Supports: protective factors, coping skills, support systems
+- Risk & Safety: SI/HI, self-harm, substance use, safety concerns (note if not assessed)
+- Clinical Impressions: preliminary diagnostic impressions, case conceptualization
+- Initial Treatment Direction: recommended frequency, modality, focus areas
+
+### Client Profile
+- Demographics: age, pronouns, relationship status, living situation, occupation
+- Presenting Problems: brief summary of current concerns
+- Psychosocial Context: key relationships, stressors, supports
+- Medical / Substance History: conditions, medications, substance use
+- Strengths: resources and resilience factors
+- Cultural Considerations: cultural identity, relevant factors for treatment
+
+### Treatment Plan
+- Problem List: numbered problems with descriptions
+- Goals: broad, meaningful goals for each problem area
+- Measurable Objectives: specific, time-bound, observable objectives
+- Planned Interventions: therapeutic approaches and techniques
+- Review Timeline: when to review/update (typically 90 days)
+
+### Session Transcript (from audio)
+- Speaker labels (e.g. "Therapist:", "Client:")
+- Capture dialogue faithfully including filler words
+- Pauses noted in brackets, emotional tone observations where clinically relevant
+- Header noting date, session type, and that it was transcribed from audio
+
+## Plan Format
+
+Use the standard plan format:
+- **Summary**: 1-2 sentence overview
+- **Steps**: numbered, with File path, Action (Create), and Details for each
+- **Note**: remind the execution agent to emit all Phase 2 write_file calls \
+in a single response and Phase 3 copies immediately after approval
 """

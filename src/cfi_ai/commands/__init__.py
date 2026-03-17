@@ -27,6 +27,7 @@ class CommandResult:
     handled: bool = False
     error: str | None = None
     workflow_mode: bool = False
+    plan_prompt: str | None = None
 
 
 CommandHandler = Callable[["str | None", "UI", "Workspace"], CommandResult]

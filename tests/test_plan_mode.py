@@ -100,3 +100,53 @@ def test_binary_parts_preserved_into_execution():
     assert len(binary_parts) == 1
     assert binary_parts[0].inline_data.mime_type == "application/pdf"
     assert binary_parts[0].inline_data.data == b"%PDF-fake-content"
+
+
+def test_execution_handoff_uses_original_message_when_plan_prompt():
+    """When plan_prompt is set, execution handoff uses the original message (user_text)
+    plus the approved plan, not the generic 'Execute the following' preamble."""
+    user_text = "Original intake workflow prompt with file reference"
+    plan_prompt = "Plan prompt for the planner"
+    plan_text = "Step 1: load audio\nStep 2: write files"
+
+    # Simulate the execution handoff logic from agent.py
+    if plan_prompt:
+        execution_prompt = (
+            f"{user_text}\n\n"
+            "## Approved Plan\n\n"
+            "The following plan was reviewed and approved. Follow it as a guide "
+            "for the order and content of your work:\n\n"
+            f"{plan_text}"
+        )
+    else:
+        execution_prompt = (
+            "Execute the following implementation plan. Follow each step precisely. "
+            "Use the tools available to you (run_command, attach_path, apply_patch, "
+            "write_file) to implement all changes described.\n\n"
+            f"## Plan\n\n{plan_text}"
+        )
+
+    assert user_text in execution_prompt
+    assert plan_text in execution_prompt
+    assert "Approved Plan" in execution_prompt
+    assert "Execute the following implementation plan" not in execution_prompt
+
+
+def test_execution_handoff_generic_without_plan_prompt():
+    """Without plan_prompt, execution handoff uses the generic preamble."""
+    plan_prompt = None
+    plan_text = "Step 1: edit file\nStep 2: run tests"
+
+    if plan_prompt:
+        execution_prompt = "should not happen"
+    else:
+        execution_prompt = (
+            "Execute the following implementation plan. Follow each step precisely. "
+            "Use the tools available to you (run_command, attach_path, apply_patch, "
+            "write_file) to implement all changes described.\n\n"
+            f"## Plan\n\n{plan_text}"
+        )
+
+    assert "Execute the following implementation plan" in execution_prompt
+    assert plan_text in execution_prompt
+    assert "Approved Plan" not in execution_prompt

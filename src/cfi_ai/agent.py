@@ -287,6 +287,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
         # --- SLASH COMMAND PARSING (before plan/normal mode branch) ---
         user_parts = None
         workflow_mode = False
+        plan_prompt = None
         parsed = parse_command(user_text)
         if parsed is not None:
             cmd_name, cmd_args = parsed
@@ -297,6 +298,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
             if result.handled and result.message is None and result.parts is None:
                 continue
             workflow_mode = result.workflow_mode
+            plan_prompt = result.plan_prompt
             if workflow_mode:
                 _log.debug("command_set workflow_mode=True")
             if result.parts is not None:
@@ -305,14 +307,15 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                 user_text = result.message
 
         # --- PLAN MODE FLOW ---
-        if is_plan_mode and not workflow_mode:
+        if is_plan_mode and (not workflow_mode or plan_prompt):
             ui.print_separator()
             ui.print_info("Plan mode: researching and planning (read-only)...")
 
             # Copy existing context + new user request
             plan_messages: list[types.Content] = list(messages)
+            plan_user_text = plan_prompt if plan_prompt else user_text
             plan_messages.append(
-                types.Content(role="user", parts=[types.Part.from_text(text=user_text)])
+                types.Content(role="user", parts=[types.Part.from_text(text=plan_user_text)])
             )
             _log.debug(
                 "plan_mode_entry cloned_messages=%d total_plan_messages=%d",
@@ -354,12 +357,25 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                 # Clear history, inject plan as first user message
                 _log.debug("plan_approved clearing_messages=%d", len(messages))
                 messages.clear()
-                execution_prompt = (
-                    "Execute the following implementation plan. Follow each step precisely. "
-                    "Use the tools available to you (run_command, attach_path, apply_patch, "
-                    "write_file) to implement all changes described.\n\n"
-                    f"## Plan\n\n{plan_text}"
-                )
+
+                if plan_prompt:
+                    # Workflow command: use the original execution prompt + plan as guidance
+                    execution_prompt = (
+                        f"{user_text}\n\n"
+                        "## Approved Plan\n\n"
+                        "The following plan was reviewed and approved. Follow it as a guide "
+                        "for the order and content of your work:\n\n"
+                        f"{plan_text}"
+                    )
+                else:
+                    # Standard code task: plan-only execution
+                    execution_prompt = (
+                        "Execute the following implementation plan. Follow each step precisely. "
+                        "Use the tools available to you (run_command, attach_path, apply_patch, "
+                        "write_file) to implement all changes described.\n\n"
+                        f"## Plan\n\n{plan_text}"
+                    )
+
                 execution_parts = [types.Part.from_text(text=execution_prompt)] + binary_parts
                 messages.append(
                     types.Content(role="user", parts=execution_parts)
@@ -391,6 +407,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
         approval_wait = 0.0
         repetition_retries = 0
         narration_retries = 0
+        continuation_retries = 0
         reauth_attempted = False
         _log.debug("inner_loop_start workflow_mode=%s messages=%d", workflow_mode, len(messages))
         for _iteration in range(MAX_TOOL_ITERATIONS):
@@ -486,6 +503,24 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                                 text="Do not narrate the workflow or reproduce document content. "
                                 "Briefly summarize in 1-2 sentences, then proceed directly "
                                 "to tool calls.",
+                            )],
+                        )
+                    )
+                    continue
+                # Workflow continuation guard: give model a chance to resume mid-workflow
+                if workflow_mode and continuation_retries < 2:
+                    continuation_retries += 1
+                    _log.debug(
+                        "inner_loop workflow_continuation retries=%d text_len=%d",
+                        continuation_retries, len(full_text),
+                    )
+                    messages.append(
+                        types.Content(
+                            role="user",
+                            parts=[types.Part.from_text(
+                                text="Continue with the remaining steps of the workflow. "
+                                "If there are more files to write, call write_file now. "
+                                "If all phases are complete, say 'Done.' and nothing else.",
                             )],
                         )
                     )

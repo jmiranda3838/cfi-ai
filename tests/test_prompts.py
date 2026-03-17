@@ -82,3 +82,18 @@ def test_plan_mode_prompt_completeness_guideline(tmp_path):
     ws = Workspace(str(tmp_path))
     prompt = build_plan_mode_system_prompt(str(tmp_path), ws.summary(), workspace=ws)
     assert "ALL affected document types" in prompt
+
+
+def test_intake_file_plan_prompt_formats():
+    from cfi_ai.prompts.intake import INTAKE_FILE_PLAN_PROMPT
+    formatted = INTAKE_FILE_PLAN_PROMPT.format(
+        date="2026-03-16",
+        existing_clients="## Existing Clients\nNone.",
+        file_reference="session.m4a",
+    )
+    assert "session.m4a" in formatted
+    assert "2026-03-16" in formatted
+    assert "Do NOT load" in formatted
+    assert "placeholder client-id" in formatted
+    assert "{date}" not in formatted
+    assert "{file_reference}" not in formatted

@@ -97,9 +97,14 @@ class Client:
         """Start a streaming API call. Returns a StreamResult that yields text chunks
         and provides function calls when done."""
         request_id = uuid.uuid4().hex[:8]
+        max_tokens = self._max_tokens
+        if mode == "workflow":
+            # Workflow mode needs higher budget for multi-file writes.
+            # 65536 is Gemini 2.5 Flash's max output token limit.
+            max_tokens = max(max_tokens, 65536)
         _log.debug(
             "[req:%s] request mode=%s messages=%d system_len=%d model=%s max_tokens=%d",
-            request_id, mode, len(messages), len(system), self._model, self._max_tokens,
+            request_id, mode, len(messages), len(system), self._model, max_tokens,
         )
         for line in _summarize_contents(messages):
             _log.debug("[req:%s] %s", request_id, line)
@@ -110,7 +115,7 @@ class Client:
             config=types.GenerateContentConfig(
                 system_instruction=system,
                 tools=[tools],
-                max_output_tokens=self._max_tokens,
+                max_output_tokens=max_tokens,
             ),
         )
         return StreamResult(stream, request_id=request_id)

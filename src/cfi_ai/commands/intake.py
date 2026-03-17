@@ -8,7 +8,11 @@ from typing import TYPE_CHECKING
 
 from cfi_ai.clients import list_clients
 from cfi_ai.commands import CommandResult, register
-from cfi_ai.prompts.intake import INTAKE_FILE_WORKFLOW_PROMPT, INTAKE_WORKFLOW_PROMPT
+from cfi_ai.prompts.intake import (
+    INTAKE_FILE_PLAN_PROMPT,
+    INTAKE_FILE_WORKFLOW_PROMPT,
+    INTAKE_WORKFLOW_PROMPT,
+)
 
 if TYPE_CHECKING:
     from cfi_ai.ui import UI
@@ -90,8 +94,13 @@ def handle_intake(args: str | None, ui: UI, workspace: Workspace) -> CommandResu
             date=today,
             existing_clients=existing_clients,
         )
+        plan_prompt = INTAKE_FILE_PLAN_PROMPT.format(
+            file_reference=resolved.raw,
+            date=today,
+            existing_clients=existing_clients,
+        )
         ui.print_info(f"Starting intake workflow for: {resolved.raw} ({today}).")
-        return CommandResult(message=message, workflow_mode=True)
+        return CommandResult(message=message, workflow_mode=True, plan_prompt=plan_prompt)
 
     # Text flow — transcript embedded directly
     message = INTAKE_WORKFLOW_PROMPT.format(

@@ -156,3 +156,22 @@ def test_handle_intake_workflow_mode(tmp_path):
     ui2.prompt_multiline.return_value = "Line one.\nLine two."
     result2 = handle_intake(None, ui2, ws)
     assert result2.workflow_mode is True
+
+
+def test_handle_intake_file_sets_plan_prompt(tmp_path):
+    """File intake sets plan_prompt with file reference and 'Do NOT load'."""
+    ui = MagicMock()
+    ws = Workspace(str(tmp_path))
+    result = handle_intake("recording.m4a", ui, ws)
+    assert result.plan_prompt is not None
+    assert "recording.m4a" in result.plan_prompt
+    assert "Do NOT load" in result.plan_prompt
+
+
+def test_handle_intake_text_no_plan_prompt(tmp_path):
+    """Text intake does NOT set plan_prompt."""
+    ui = MagicMock()
+    ui.prompt_multiline.return_value = "Line one.\nLine two."
+    ws = Workspace(str(tmp_path))
+    result = handle_intake(None, ui, ws)
+    assert result.plan_prompt is None
