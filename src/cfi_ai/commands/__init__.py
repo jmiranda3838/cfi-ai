@@ -79,3 +79,7 @@ def get_command_descriptions() -> dict[str, str]:
 # Import command modules to trigger registration
 from cfi_ai.commands import help as _help_cmd  # noqa: F401, E402
 from cfi_ai.commands import intake as _intake_cmd  # noqa: F401, E402
+from cfi_ai.commands import session as _session_cmd  # noqa: F401, E402
+from cfi_ai.commands import compliance as _compliance_cmd  # noqa: F401, E402
+from cfi_ai.commands import tp_review as _tp_review_cmd  # noqa: F401, E402
+from cfi_ai.commands import wellness_assessment as _wa_cmd  # noqa: F401, E402

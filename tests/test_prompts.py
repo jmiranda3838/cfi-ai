@@ -3,6 +3,14 @@ from unittest.mock import patch
 from cfi_ai.prompts.system import build_system_prompt, build_plan_mode_system_prompt, CLIENTS_SECTION
 from cfi_ai.workspace import Workspace
 
+import re
+
+
+def _assert_no_unreplaced_placeholders(text: str) -> None:
+    """Fail if any {placeholder} remains after .format()."""
+    match = re.search(r'\{[a-z_][a-z0-9_]*\}', text)
+    assert match is None, f"Unreplaced placeholder: {match.group()}"
+
 
 def test_build_system_prompt():
     prompt = build_system_prompt("/home/user/project", "Workspace: /home/user/project\nContents:\n  src/")
@@ -114,16 +122,129 @@ def test_prompts_no_code_centric_language():
     assert "function signatures" not in plan_prompt
 
 
-def test_intake_file_plan_prompt_formats():
-    from cfi_ai.prompts.intake import INTAKE_FILE_PLAN_PROMPT
-    formatted = INTAKE_FILE_PLAN_PROMPT.format(
-        date="2026-03-16",
-        existing_clients="## Existing Clients\nNone.",
-        file_reference="session.m4a",
+def test_intake_workflow_prompt_formats():
+    """INTAKE_WORKFLOW_PROMPT assembles without unreplaced placeholders."""
+    from cfi_ai.prompts.intake import INTAKE_WORKFLOW_PROMPT
+    result = INTAKE_WORKFLOW_PROMPT.format(
+        transcript="Test transcript", date="2026-03-18", existing_clients="None.",
     )
-    assert "session.m4a" in formatted
-    assert "2026-03-16" in formatted
-    assert "Do NOT load" in formatted
-    assert "placeholder client-id" in formatted
-    assert "{date}" not in formatted
-    assert "{file_reference}" not in formatted
+    _assert_no_unreplaced_placeholders(result)
+    assert "Risk Assessment" in result
+    assert "as described above" not in result
+
+
+def test_intake_file_workflow_prompt_formats():
+    from cfi_ai.prompts.intake import INTAKE_FILE_WORKFLOW_PROMPT
+    result = INTAKE_FILE_WORKFLOW_PROMPT.format(
+        file_reference="session.m4a", date="2026-03-18", existing_clients="None.",
+    )
+    _assert_no_unreplaced_placeholders(result)
+    assert "Diagnostic Impressions" in result
+    assert "GD Score" in result
+
+
+def test_intake_file_plan_prompt_formats():
+    """Updated with stronger assertions."""
+    from cfi_ai.prompts.intake import INTAKE_FILE_PLAN_PROMPT
+    result = INTAKE_FILE_PLAN_PROMPT.format(
+        file_reference="session.m4a", date="2026-03-18", existing_clients="None.",
+    )
+    _assert_no_unreplaced_placeholders(result)
+    assert "Initial Assessment" in result
+    assert "current.md" in result
+
+
+def test_session_workflow_prompt_formats():
+    from cfi_ai.prompts.session import SESSION_WORKFLOW_PROMPT, PROGRESS_NOTE_GUIDANCE
+    note_guidance = PROGRESS_NOTE_GUIDANCE.format(date="2026-03-18")
+    result = SESSION_WORKFLOW_PROMPT.format(
+        transcript="Test", date="2026-03-18", client_id="jane-doe",
+        client_context="Context.", progress_note_guidance=note_guidance,
+    )
+    _assert_no_unreplaced_placeholders(result)
+    assert "DAP" in result
+
+
+def test_session_file_workflow_prompt_formats():
+    from cfi_ai.prompts.session import SESSION_FILE_WORKFLOW_PROMPT, PROGRESS_NOTE_GUIDANCE
+    note_guidance = PROGRESS_NOTE_GUIDANCE.format(date="2026-03-18")
+    result = SESSION_FILE_WORKFLOW_PROMPT.format(
+        file_reference="session.m4a", date="2026-03-18", client_id="jane-doe",
+        client_context="Context.", progress_note_guidance=note_guidance,
+    )
+    _assert_no_unreplaced_placeholders(result)
+    assert "transcribe_audio" in result
+
+
+def test_session_file_plan_prompt_formats():
+    from cfi_ai.prompts.session import (
+        SESSION_FILE_PLAN_PROMPT, PROGRESS_NOTE_GUIDANCE, PROGRESS_NOTE_PLAN_CRITERIA,
+    )
+    note_guidance = PROGRESS_NOTE_GUIDANCE.format(date="2026-03-18")
+    result = SESSION_FILE_PLAN_PROMPT.format(
+        file_reference="session.m4a", date="2026-03-18", client_id="jane-doe",
+        client_context="Context.", progress_note_guidance=note_guidance,
+        progress_note_plan_criteria=PROGRESS_NOTE_PLAN_CRITERIA,
+    )
+    _assert_no_unreplaced_placeholders(result)
+
+
+def test_wa_workflow_prompt_formats():
+    from cfi_ai.prompts.wellness_assessment import WA_WORKFLOW_PROMPT
+    result = WA_WORKFLOW_PROMPT.format(
+        date="2026-03-18", client_id="jane-doe", client_context="Context.",
+        wa_history="None.", admin_type="Initial", admin_number=1, wa_input="test data",
+    )
+    _assert_no_unreplaced_placeholders(result)
+    assert "0-45" in result
+
+
+def test_wa_file_workflow_prompt_formats():
+    from cfi_ai.prompts.wellness_assessment import WA_FILE_WORKFLOW_PROMPT
+    result = WA_FILE_WORKFLOW_PROMPT.format(
+        date="2026-03-18", client_id="jane-doe", client_context="Context.",
+        wa_history="None.", admin_type="Re-administration", admin_number=2,
+        file_reference="wa.pdf",
+    )
+    _assert_no_unreplaced_placeholders(result)
+    assert "extract_document" in result
+
+
+def test_shared_constants_importable():
+    """All shared constants exist and are non-empty strings."""
+    from cfi_ai.prompts.shared import (
+        CRITICAL_INSTRUCTIONS,
+        INITIAL_ASSESSMENT_GUIDANCE,
+        INITIAL_ASSESSMENT_GUIDANCE_FILE,
+        TREATMENT_PLAN_GUIDANCE,
+        INTAKE_PROGRESS_NOTE_GUIDANCE,
+        CLIENT_PROFILE_GUIDANCE,
+        WA_SCORING_RULES,
+        WA_OUTPUT_FORMAT,
+    )
+    for const in (
+        CRITICAL_INSTRUCTIONS, INITIAL_ASSESSMENT_GUIDANCE,
+        INITIAL_ASSESSMENT_GUIDANCE_FILE,
+        TREATMENT_PLAN_GUIDANCE, INTAKE_PROGRESS_NOTE_GUIDANCE,
+        CLIENT_PROFILE_GUIDANCE, WA_SCORING_RULES, WA_OUTPUT_FORMAT,
+    ):
+        assert isinstance(const, str) and len(const) > 50
+
+
+def test_critical_instructions_in_all_workflow_prompts():
+    """CRITICAL_INSTRUCTIONS text appears in all 6 workflow prompts."""
+    from cfi_ai.prompts.intake import INTAKE_WORKFLOW_PROMPT, INTAKE_FILE_WORKFLOW_PROMPT
+    from cfi_ai.prompts.session import SESSION_WORKFLOW_PROMPT, SESSION_FILE_WORKFLOW_PROMPT
+    from cfi_ai.prompts.wellness_assessment import WA_WORKFLOW_PROMPT, WA_FILE_WORKFLOW_PROMPT
+    marker = "Do NOT narrate the workflow"
+    for prompt in (INTAKE_WORKFLOW_PROMPT, INTAKE_FILE_WORKFLOW_PROMPT,
+                   SESSION_WORKFLOW_PROMPT, SESSION_FILE_WORKFLOW_PROMPT,
+                   WA_WORKFLOW_PROMPT, WA_FILE_WORKFLOW_PROMPT):
+        assert marker in prompt
+
+
+def test_cage_aid_only_in_file_workflow():
+    """CAGE-AID risk note only in file workflow, not transcript workflow."""
+    from cfi_ai.prompts.intake import INTAKE_WORKFLOW_PROMPT, INTAKE_FILE_WORKFLOW_PROMPT
+    assert "CAGE screen" not in INTAKE_WORKFLOW_PROMPT
+    assert "CAGE screen" in INTAKE_FILE_WORKFLOW_PROMPT

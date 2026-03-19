@@ -19,7 +19,7 @@ def test_from_env_defaults():
         config = Config.from_env()
     assert config.project == "my-project"
     assert config.location == "global"
-    assert config.model == "gemini-2.5-flash"
+    assert config.model == "gemini-3-flash-preview"
     assert config.max_tokens == 8192
 
 
@@ -158,5 +158,5 @@ def test_first_run_setup_defaults(tmp_path):
         data = _run_first_time_setup(path=cfg)
     assert data["project"]["id"] == "my-proj"
     assert data["project"]["location"] == "global"
-    assert data["model"]["name"] == "gemini-2.5-flash"
+    assert data["model"]["name"] == "gemini-3-flash-preview"
     assert data["model"]["max_tokens"] == 8192

@@ -25,5 +25,5 @@ class BaseTool:
     def definition(self) -> ToolDefinition:
         raise NotImplementedError
 
-    def execute(self, workspace, **kwargs) -> str:
+    def execute(self, workspace, client=None, **kwargs) -> str:
         raise NotImplementedError

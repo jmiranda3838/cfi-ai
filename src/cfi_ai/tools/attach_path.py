@@ -45,7 +45,7 @@ class AttachPathTool(BaseTool):
             },
         )
 
-    def execute(self, workspace, **kwargs) -> str | tuple[str, list[types.Part]]:
+    def execute(self, workspace, client=None, **kwargs) -> str | tuple[str, list[types.Part]]:
         raw = kwargs["path"]
         p = Path(raw)
 

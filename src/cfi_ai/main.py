@@ -93,7 +93,7 @@ def main() -> None:
         print("\nEnvironment variable overrides:")
         print("  GOOGLE_CLOUD_PROJECT    GCP project ID")
         print("  GOOGLE_CLOUD_LOCATION   Vertex AI location (default: global)")
-        print("  CFI_AI_MODEL            Model name (default: gemini-2.5-flash)")
+        print("  CFI_AI_MODEL            Model name (default: gemini-3-flash-preview)")
         print("  CFI_AI_MAX_TOKENS       Max tokens (default: 8192)")
         return
     if "--update" in sys.argv:

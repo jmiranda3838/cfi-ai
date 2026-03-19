@@ -48,7 +48,7 @@ class ApplyPatchTool(BaseTool):
             },
         )
 
-    def execute(self, workspace, **kwargs) -> str:
+    def execute(self, workspace, client=None, **kwargs) -> str:
         rel = kwargs["path"]
         edits = kwargs["edits"]
 

@@ -53,7 +53,7 @@ class RunCommandTool(BaseTool):
             },
         )
 
-    def execute(self, workspace, **kwargs) -> str:
+    def execute(self, workspace, client=None, **kwargs) -> str:
         command = kwargs["command"]
 
         # Parse command

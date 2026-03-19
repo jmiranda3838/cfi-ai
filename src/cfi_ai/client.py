@@ -120,6 +120,31 @@ class Client:
         )
         return StreamResult(stream, request_id=request_id)
 
+    def generate_content(
+        self,
+        parts: list[types.Part],
+        *,
+        system: str | None = None,
+        max_output_tokens: int | None = None,
+        model: str | None = None,
+    ) -> str:
+        """Non-streaming API call. Returns the text response.
+
+        If *model* is given it overrides the configured default (used by
+        tools that always target a specific model like Flash).
+        """
+        contents = [types.Content(role="user", parts=parts)]
+        config = types.GenerateContentConfig(
+            system_instruction=system,
+            max_output_tokens=max_output_tokens or self._max_tokens,
+        )
+        response = self._client.models.generate_content(
+            model=model or self._model,
+            contents=contents,
+            config=config,
+        )
+        return response.text
+
 
 class StreamResult:
     """Wraps the Google Gen AI streaming response to separate text streaming from

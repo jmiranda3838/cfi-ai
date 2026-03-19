@@ -3,13 +3,16 @@ from google.genai import types
 from cfi_ai.tools.base import ToolDefinition
 from cfi_ai.tools.apply_patch import ApplyPatchTool
 from cfi_ai.tools.attach_path import AttachPathTool
+from cfi_ai.tools.extract_document import ExtractDocumentTool
 from cfi_ai.tools.run_command import RunCommandTool, is_command_mutating
+from cfi_ai.tools.transcribe_audio import TranscribeAudioTool
 from cfi_ai.tools.write_file import WriteFileTool
 
 MUTATING_TOOLS: set[str] = set()
 
 _ALL_TOOLS: list[type] = [
-    ApplyPatchTool, AttachPathTool, RunCommandTool, WriteFileTool,
+    ApplyPatchTool, AttachPathTool, ExtractDocumentTool,
+    RunCommandTool, TranscribeAudioTool, WriteFileTool,
 ]
 _REGISTRY: dict[str, type] = {}
 
@@ -44,13 +47,13 @@ def get_readonly_api_tools() -> types.Tool:
     return types.Tool(function_declarations=declarations)
 
 
-def execute(name: str, workspace, **kwargs) -> str | tuple[str, list]:
+def execute(name: str, workspace, client=None, **kwargs) -> str | tuple[str, list]:
     """Execute a tool by name. Returns a string or (string, [Part]) tuple."""
     cls = _REGISTRY.get(name)
     if cls is None:
         return f"Error: unknown tool '{name}'"
     try:
-        return cls().execute(workspace, **kwargs)
+        return cls().execute(workspace, client, **kwargs)
     except Exception as e:
         return f"Error: {e}"
 

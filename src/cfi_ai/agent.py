@@ -100,6 +100,14 @@ def _safe_tool_summary(name: str, args: dict) -> str:
             f"write_file ext={ext!r} content_len={len(content)} "
             f"path_len={len(path)}"
         )
+    if name == "transcribe_audio":
+        path = args.get("path", "")
+        ext = os.path.splitext(path)[1] if path else ""
+        return f"transcribe_audio ext={ext!r} path_len={len(path)}"
+    if name == "extract_document":
+        path = args.get("path", "")
+        ext = os.path.splitext(path)[1] if path else ""
+        return f"extract_document ext={ext!r} path_len={len(path)}"
     return f"{name} keys={sorted(args.keys())}"
 
 
@@ -244,7 +252,7 @@ def _run_plan_mode(
                 continue
 
             ui.show_tool_call(fc.name, _summarize_input(fc_args))
-            result = tools.execute(fc.name, workspace, **fc_args)
+            result = tools.execute(fc.name, workspace, client, **fc_args)
             if isinstance(result, tuple):
                 text, inline_parts = result
                 ui.show_tool_result(fc.name, text)
@@ -579,7 +587,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                 fc_args = dict(fc.args)
                 _log.debug("inner_loop tool_call %s", _safe_tool_summary(fc.name, fc_args))
                 ui.show_tool_call(fc.name, _summarize_input(fc_args))
-                result = tools.execute(fc.name, workspace, **fc_args)
+                result = tools.execute(fc.name, workspace, client, **fc_args)
                 if isinstance(result, tuple):
                     text, inline_parts = result
                     ui.show_tool_result(fc.name, text)
@@ -623,7 +631,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                     for i, fc in mutate_ops:
                         fc_args = dict(fc.args)
                         ui.show_tool_call(fc.name, _post_approval_summary(fc.name, fc_args))
-                        result = tools.execute(fc.name, workspace, **fc_args)
+                        result = tools.execute(fc.name, workspace, client, **fc_args)
                         if isinstance(result, tuple):
                             text, inline_parts = result
                             ui.show_tool_result(fc.name, text)

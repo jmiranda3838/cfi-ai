@@ -53,7 +53,7 @@ def _run_first_time_setup(existing: dict | None = None, path: Path = CONFIG_PATH
         sys.exit(1)
 
     location = _prompt("Vertex AI location", proj_section.get("location", "global"))
-    model_name = _prompt("Model", model_section.get("name", "gemini-2.5-flash"))
+    model_name = _prompt("Model", model_section.get("name", "gemini-3-flash-preview"))
     max_tokens_str = _prompt("Max tokens", str(model_section.get("max_tokens", 8192)))
 
     data = {
@@ -81,7 +81,7 @@ class Config:
         return cls(
             project=project,
             location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"),
-            model=os.environ.get("CFI_AI_MODEL", "gemini-2.5-flash"),
+            model=os.environ.get("CFI_AI_MODEL", "gemini-3-flash-preview"),
             max_tokens=int(os.environ.get("CFI_AI_MAX_TOKENS", "8192")),
         )
 
@@ -98,7 +98,7 @@ class Config:
 
         project = os.environ.get("GOOGLE_CLOUD_PROJECT") or proj.get("id", "")
         location = os.environ.get("GOOGLE_CLOUD_LOCATION") or proj.get("location", "global")
-        model_name = os.environ.get("CFI_AI_MODEL") or model.get("name", "gemini-2.5-flash")
+        model_name = os.environ.get("CFI_AI_MODEL") or model.get("name", "gemini-3-flash-preview")
         max_tokens = int(
             os.environ.get("CFI_AI_MAX_TOKENS") or model.get("max_tokens", 8192)
         )

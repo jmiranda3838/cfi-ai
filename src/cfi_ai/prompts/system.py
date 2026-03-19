@@ -21,6 +21,7 @@ clients/<client-id>/
   treatment-plan/current.md
   sessions/<YYYY-MM-DD>-progress-note.md      (TheraNest standard note, DAP)
   sessions/<YYYY-MM-DD>-intake-transcript.md
+  wellness-assessments/<YYYY-MM-DD>-wellness-assessment.md  (G22E02 structured scores)
 ```
 
 - `current.md` files are copies of the latest dated version for quick access.
@@ -121,7 +122,9 @@ user's local workspace.
 
 ### Reading & Inspection
 - run_command: terminal commands (ls, find, {search_cmd}, cat, head, tail, wc, grep, diff, file, pwd)
-- attach_path: load any local file into context (text, audio, images, PDFs) — absolute or workspace-relative
+- attach_path: load text files and images into context — absolute or workspace-relative
+- transcribe_audio: transcribe audio files to text via a focused API call
+- extract_document: extract text/data from PDFs (text extraction with vision fallback for scanned forms)
 
 ### Modification (requires approval)
 - apply_patch: multi-edit search/replace on existing files

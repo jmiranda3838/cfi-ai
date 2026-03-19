@@ -68,7 +68,7 @@ Environment variables take precedence over the config file when set:
 |----------|---------|-------------|
 | `GOOGLE_CLOUD_PROJECT` | from config file | GCP project ID |
 | `GOOGLE_CLOUD_LOCATION` | `global` | Vertex AI location |
-| `CFI_AI_MODEL` | `gemini-2.5-flash` | Model to use |
+| `CFI_AI_MODEL` | `gemini-3-flash-preview` | Model to use |
 | `CFI_AI_MAX_TOKENS` | `8192` | Max response tokens |
 
 ## Slash Commands
@@ -123,7 +123,7 @@ Mutating operations (file writes, destructive commands) require user approval.
 
 ## How It Works
 
-- **4 core tools** — `run_command` (allowlisted shell commands), `attach_path` (file/audio/image ingestion), `apply_patch` (search-and-replace edits), `write_file` (new files only)
+- **6 core tools** — `run_command` (allowlisted shell commands), `attach_path` (file/audio/image ingestion), `apply_patch` (search-and-replace edits), `write_file` (new files only), `extract_document` (structured document extraction), `transcribe_audio` (audio transcription)
 - **Mutation classification** — read-only operations execute immediately; mutating operations (`apply_patch`, `write_file`, destructive commands) require user approval
 - **Slash command autocomplete** — type `/` to see available commands
 - Status indicator shows current mode: chatting, thinking, planning, awaiting approval, executing
