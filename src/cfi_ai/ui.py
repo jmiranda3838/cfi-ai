@@ -32,16 +32,14 @@ class UserInput:
 
 
 class PlanApproval(Enum):
-    CLEAR_BYPASS = auto()   # Y - clear context, bypass permissions
-    BYPASS = auto()         # b - keep context, bypass permissions
-    PERMISSIONS = auto()    # p - clear context, keep permissions
-    REJECT = auto()         # n - reject
+    BYPASS = auto()    # Approve plan, auto-approve all edits
+    APPROVE = auto()   # Approve plan, confirm each edit
+    REJECT = auto()    # Reject, keep iterating
 
 _APPROVAL_OPTIONS: list[tuple[PlanApproval, str]] = [
-    (PlanApproval.CLEAR_BYPASS, "Clear context + bypass permissions"),
-    (PlanApproval.BYPASS,       "Bypass permissions (keep context)"),
-    (PlanApproval.PERMISSIONS,  "Keep permissions (clear context)"),
-    (PlanApproval.REJECT,       "Reject"),
+    (PlanApproval.BYPASS,  "Approve + bypass permissions"),
+    (PlanApproval.APPROVE, "Approve + review each edit"),
+    (PlanApproval.REJECT,  "Reject (keep iterating)"),
 ]
 
 CFI_THEME = Theme({

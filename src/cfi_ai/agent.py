@@ -370,10 +370,9 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
 
             approval = ui.prompt_plan_approval()
             if approval != PlanApproval.REJECT:
-                auto_approve = approval in (PlanApproval.CLEAR_BYPASS, PlanApproval.BYPASS)
-                clear_context = approval in (PlanApproval.CLEAR_BYPASS, PlanApproval.PERMISSIONS)
+                auto_approve = approval == PlanApproval.BYPASS
 
-                mode_desc = "auto-approve" if auto_approve else "with permissions"
+                mode_desc = "auto-approve" if auto_approve else "reviewing each edit"
                 ui.print_info(f"Executing plan ({mode_desc})...")
                 ui.print_separator()
 
@@ -385,13 +384,9 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                             if hasattr(part, "inline_data") and part.inline_data:
                                 binary_parts.append(part)
                 _log.debug(
-                    "plan_approved binary_parts=%d from_messages=%d auto_approve=%s clear_context=%s",
-                    len(binary_parts), len(plan_messages), auto_approve, clear_context,
+                    "plan_approved binary_parts=%d from_messages=%d auto_approve=%s",
+                    len(binary_parts), len(plan_messages), auto_approve,
                 )
-
-                if clear_context:
-                    _log.debug("plan_approved clearing_messages=%d", len(messages))
-                    messages.clear()
 
                 if plan_prompt:
                     # Workflow command: use the original execution prompt + plan as guidance

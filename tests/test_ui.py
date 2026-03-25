@@ -79,20 +79,15 @@ def _make_ui(tmp_path):
 class TestPromptPlanApproval:
     """Test prompt_plan_approval() interactive menu."""
 
-    def test_clear_bypass(self, tmp_path):
-        ui, _ = _make_ui(tmp_path)
-        ui._run_plan_approval_app = lambda: PlanApproval.CLEAR_BYPASS
-        assert ui.prompt_plan_approval() == PlanApproval.CLEAR_BYPASS
-
     def test_bypass(self, tmp_path):
         ui, _ = _make_ui(tmp_path)
         ui._run_plan_approval_app = lambda: PlanApproval.BYPASS
         assert ui.prompt_plan_approval() == PlanApproval.BYPASS
 
-    def test_permissions(self, tmp_path):
+    def test_approve(self, tmp_path):
         ui, _ = _make_ui(tmp_path)
-        ui._run_plan_approval_app = lambda: PlanApproval.PERMISSIONS
-        assert ui.prompt_plan_approval() == PlanApproval.PERMISSIONS
+        ui._run_plan_approval_app = lambda: PlanApproval.APPROVE
+        assert ui.prompt_plan_approval() == PlanApproval.APPROVE
 
     def test_reject(self, tmp_path):
         ui, _ = _make_ui(tmp_path)

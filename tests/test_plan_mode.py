@@ -153,77 +153,36 @@ def test_execution_handoff_generic_without_plan_prompt():
 
 
 def test_plan_approval_enum_members():
-    """PlanApproval enum has exactly 4 members."""
+    """PlanApproval enum has exactly 3 members."""
     members = list(PlanApproval)
-    assert len(members) == 4
-    assert PlanApproval.CLEAR_BYPASS in members
+    assert len(members) == 3
     assert PlanApproval.BYPASS in members
-    assert PlanApproval.PERMISSIONS in members
+    assert PlanApproval.APPROVE in members
     assert PlanApproval.REJECT in members
 
 
 def test_auto_approve_semantics():
-    """CLEAR_BYPASS and BYPASS enable auto_approve; PERMISSIONS does not."""
-    auto_approve_modes = {PlanApproval.CLEAR_BYPASS, PlanApproval.BYPASS}
-    assert PlanApproval.CLEAR_BYPASS in auto_approve_modes
-    assert PlanApproval.BYPASS in auto_approve_modes
-    assert PlanApproval.PERMISSIONS not in auto_approve_modes
-    assert PlanApproval.REJECT not in auto_approve_modes
+    """Only BYPASS enables auto_approve."""
+    assert PlanApproval.BYPASS == PlanApproval.BYPASS  # auto_approve = True
+    assert PlanApproval.APPROVE != PlanApproval.BYPASS  # auto_approve = False
+    assert PlanApproval.REJECT != PlanApproval.BYPASS   # rejected, no execution
 
 
-def test_clear_context_semantics():
-    """CLEAR_BYPASS and PERMISSIONS clear context; BYPASS does not."""
-    clear_modes = {PlanApproval.CLEAR_BYPASS, PlanApproval.PERMISSIONS}
-    assert PlanApproval.CLEAR_BYPASS in clear_modes
-    assert PlanApproval.PERMISSIONS in clear_modes
-    assert PlanApproval.BYPASS not in clear_modes
-
-
-def test_bypass_preserves_messages():
-    """BYPASS keeps existing messages and appends execution prompt."""
+def test_approval_preserves_messages():
+    """Both BYPASS and APPROVE preserve existing messages."""
     from google.genai import types
 
-    messages = [
-        types.Content(role="user", parts=[types.Part.from_text(text="initial context")]),
-        types.Content(role="model", parts=[types.Part.from_text(text="model reply")]),
-    ]
+    for approval in (PlanApproval.BYPASS, PlanApproval.APPROVE):
+        messages = [
+            types.Content(role="user", parts=[types.Part.from_text(text="initial context")]),
+            types.Content(role="model", parts=[types.Part.from_text(text="model reply")]),
+        ]
 
-    approval = PlanApproval.BYPASS
-    clear_context = approval in (PlanApproval.CLEAR_BYPASS, PlanApproval.PERMISSIONS)
+        execution_prompt = "Execute the plan..."
+        messages.append(
+            types.Content(role="user", parts=[types.Part.from_text(text=execution_prompt)])
+        )
 
-    if clear_context:
-        messages.clear()
-
-    execution_prompt = "Execute the plan..."
-    messages.append(
-        types.Content(role="user", parts=[types.Part.from_text(text=execution_prompt)])
-    )
-
-    # BYPASS should preserve the original 2 messages + add 1
-    assert len(messages) == 3
-    assert messages[0].parts[0].text == "initial context"
-
-
-def test_clear_bypass_clears_messages():
-    """CLEAR_BYPASS clears messages, leaving only the execution prompt."""
-    from google.genai import types
-
-    messages = [
-        types.Content(role="user", parts=[types.Part.from_text(text="initial context")]),
-        types.Content(role="model", parts=[types.Part.from_text(text="model reply")]),
-    ]
-
-    approval = PlanApproval.CLEAR_BYPASS
-    clear_context = approval in (PlanApproval.CLEAR_BYPASS, PlanApproval.PERMISSIONS)
-
-    if clear_context:
-        messages.clear()
-
-    execution_prompt = "Execute the plan..."
-    messages.append(
-        types.Content(role="user", parts=[types.Part.from_text(text=execution_prompt)])
-    )
-
-    # CLEAR_BYPASS should clear and leave only 1 message
-    assert len(messages) == 1
-    assert messages[0].parts[0].text == "Execute the plan..."
+        # Both approval modes preserve the original 2 messages + add 1
+        assert len(messages) == 3
+        assert messages[0].parts[0].text == "initial context"
