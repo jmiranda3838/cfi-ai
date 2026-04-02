@@ -305,7 +305,7 @@ def _run_plan_mode(
                     continue
 
                 # Success: look up the plan prompt variant
-                wf_name = fc_args.get("workflow", "")
+                wf_name = fc_args.pop("workflow", "")
                 wf_plan_prompt = _get_plan_prompt(wf_name, workspace, **fc_args)
                 wf_mode = wf_name not in NON_WORKFLOW_MODE
 

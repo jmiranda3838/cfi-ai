@@ -1,6 +1,10 @@
 """Tests for plan mode functionality."""
 
-from cfi_ai.agent import PlanModeResult
+from unittest.mock import MagicMock, patch
+
+from google.genai import types
+
+from cfi_ai.agent import PlanModeResult, _run_plan_mode
 from cfi_ai.ui import UserInput, MODE_DISPLAY, PlanApproval
 from cfi_ai.tools import get_readonly_api_tools
 from cfi_ai.prompts.system import build_plan_mode_system_prompt
@@ -197,4 +201,71 @@ def test_plan_mode_result_with_values():
     assert r.workflow_execution_prompt == "exec prompt"
     assert r.workflow_plan_prompt == "plan prompt"
     assert r.workflow_mode is True
+
+
+def test_plan_mode_activate_workflow_pops_workflow_before_get_plan_prompt():
+    """activate_workflow path removes 'workflow' from fc_args before spreading into _get_plan_prompt.
+
+    Regression test: using .get() instead of .pop() would cause
+    TypeError: got multiple values for argument 'workflow'.
+    """
+    # Build a mock StreamResult whose .function_calls returns one activate_workflow call
+    mock_fc = MagicMock()
+    mock_fc.name = "activate_workflow"
+    mock_fc.args = {"workflow": "intake", "file_reference": "/tmp/test.txt"}
+
+    mock_stream = MagicMock()
+    mock_stream.text_chunks.return_value = iter([])
+    mock_stream.parts = [
+        types.Part.from_function_call(
+            name="activate_workflow",
+            args={"workflow": "intake", "file_reference": "/tmp/test.txt"},
+        )
+    ]
+    mock_stream.function_calls = [mock_fc]
+    mock_stream.repetition_detected = False
+    mock_stream.request_id = "test"
+    mock_stream.log_completion = MagicMock()
+
+    mock_client = MagicMock()
+    mock_client.stream_response.return_value = mock_stream
+
+    mock_ui = MagicMock()
+    mock_ui.stream_markdown.return_value = ""
+
+    mock_workspace = MagicMock()
+
+    execution_prompt = "Workflow activated successfully."
+
+    with (
+        patch("cfi_ai.agent.tools.execute", return_value=execution_prompt) as mock_execute,
+        patch("cfi_ai.agent._get_plan_prompt", return_value="plan prompt") as mock_get_plan,
+    ):
+        result = _run_plan_mode(
+            client=mock_client,
+            ui=mock_ui,
+            workspace=mock_workspace,
+            plan_system_prompt="system",
+            readonly_tools=MagicMock(),
+            messages=[types.Content(role="user", parts=[types.Part.from_text(text="test")])],
+            allow_workflow_activation=True,
+        )
+
+    # tools.execute receives all args including workflow
+    mock_execute.assert_called_once()
+    exec_kwargs = mock_execute.call_args.kwargs
+    assert exec_kwargs["workflow"] == "intake"
+
+    # _get_plan_prompt receives workflow as positional arg, NOT in **kwargs
+    mock_get_plan.assert_called_once()
+    plan_args, plan_kwargs = mock_get_plan.call_args
+    assert plan_args[0] == "intake"  # workflow positional
+    assert plan_args[1] is mock_workspace  # workspace positional
+    assert "workflow" not in plan_kwargs  # must NOT appear as kwarg
+    assert plan_kwargs["file_reference"] == "/tmp/test.txt"
+
+    # Result carries the workflow outputs
+    assert result.workflow_execution_prompt == execution_prompt
+    assert result.workflow_plan_prompt == "plan prompt"
+    assert result.workflow_mode is True
 
