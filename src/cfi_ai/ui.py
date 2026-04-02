@@ -79,6 +79,7 @@ MODE_DISPLAY = {
     "thinking_plan": "researching ..",
     "planning": "planning ..",
     "awaiting_approval": "awaiting approval",
+    "interviewing": "interview ..",
     "executing": "executing ..",
 }
 
@@ -136,6 +137,25 @@ def _multiline_key_bindings() -> KeyBindings:
     @kb.add("enter")
     def _enter(event):
         event.current_buffer.validate_and_handle()
+
+    @kb.add("escape")
+    def _escape(event):
+        event.app.exit(exception=EOFError)
+
+    @kb.add("c-d")
+    def _ctrl_d(event):
+        pass  # disabled
+
+    return kb
+
+
+def _interview_key_bindings() -> KeyBindings:
+    """Key bindings for interview question prompts.
+
+    Escape → cancel (EOFError), Ctrl+D → disabled.
+    Ctrl+C raises KeyboardInterrupt by default.
+    """
+    kb = KeyBindings()
 
     @kb.add("escape")
     def _escape(event):
@@ -346,6 +366,71 @@ class UI:
         )
 
         return app.run()
+
+    def run_interview(self, questions: list[dict]) -> list[dict] | None:
+        """Present interview questions one at a time.
+
+        Returns list of {"id": ..., "answer": ...} dicts, or None if cancelled.
+        Raises KeyboardInterrupt if Ctrl+C is pressed.
+        """
+        self.status.set_mode("interviewing")
+        answers: list[dict] = []
+        total = len(questions)
+
+        for i, q in enumerate(questions, 1):
+            qid = q.get("id", f"q{i}")
+            text = q.get("text", "")
+            options = q.get("options") or []
+            multiline = q.get("multiline", False)
+            default = q.get("default", "")
+
+            # Header and question
+            self.console.print(f"\n  [accent]Question {i} of {total}[/accent]")
+            self.console.print(f"  [bold]{text}[/bold]")
+
+            if options:
+                for j, opt in enumerate(options, 1):
+                    self.console.print(f"    [primary]{j}.[/primary] {opt}")
+                self.console.print(f"  [dim]Enter a number, or type a custom answer.[/dim]")
+
+            while True:
+                try:
+                    if multiline:
+                        self.console.print("[dim]Enter to submit, Escape to cancel.[/dim]")
+                        raw = self.session.prompt(
+                            [("class:prompt", f"  {qid}> ")],
+                            multiline=True,
+                            key_bindings=_multiline_key_bindings(),
+                        )
+                    else:
+                        if default:
+                            prompt_text = f"  {qid} [{default}]> "
+                        else:
+                            prompt_text = f"  {qid}> "
+                        raw = self.session.prompt(
+                            [("class:prompt", prompt_text)],
+                            key_bindings=_interview_key_bindings(),
+                        )
+                except EOFError:
+                    return None  # Escape → cancel entire interview
+
+                if not raw.strip() and default:
+                    raw = default
+                    break
+                if raw.strip():
+                    break
+                # Empty/whitespace input, no default — hint and re-prompt
+                self.console.print("  [dim]Please enter a response, or press Escape to cancel.[/dim]")
+
+            # Resolve numbered option selection
+            if options and raw.strip().isdigit():
+                idx = int(raw.strip()) - 1
+                if 0 <= idx < len(options):
+                    raw = options[idx]
+
+            answers.append({"id": qid, "answer": raw.strip()})
+
+        return answers
 
     def prompt_approval(self) -> bool:
         self.status.set_mode("awaiting_approval")

@@ -41,8 +41,7 @@ Client ID: `{client_id}`
 5. **State** the scores in 1-2 sentences (e.g., "GD = 28/45 (Severe); CAGE-AID = 0/3 \
 (Negative)"), then **immediately proceed to Phase 2 tool calls in the same response**.
 
-If any item responses are ambiguous or unclear, list the specific items and ask the \
-clinician to confirm before proceeding.
+If any item responses are ambiguous or unclear, use the interview tool to ask the clinician about the specific items before proceeding.
 
 ### Phase 2: Write File
 6. Call `write_file` to create:
@@ -102,8 +101,8 @@ Client ID: `{client_id}`
 6. **State** the scores in 1-2 sentences, then **immediately proceed to Phase 2 \
 tool calls in the same response**.
 
-If any item responses are ambiguous or unclear from the extracted data, list the \
-specific items and ask the clinician to confirm before proceeding.
+If any item responses are ambiguous or unclear from the extracted data, \
+use the interview tool to ask the clinician about the specific items before proceeding.
 
 ### Phase 2: Write File
 7. Call `write_file` to create:

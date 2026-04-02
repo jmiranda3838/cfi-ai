@@ -17,10 +17,10 @@ def test_user_input_dataclass():
 
 
 def test_get_readonly_api_tools():
-    """Only run_command and attach_path should be in the readonly tool set."""
+    """run_command, attach_path, and interview should be in the readonly tool set."""
     tool = get_readonly_api_tools()
     names = {fd.name for fd in tool.function_declarations}
-    assert names == {"run_command", "attach_path"}
+    assert names == {"run_command", "attach_path", "interview"}
     assert "apply_patch" not in names
     assert "write_file" not in names
 
@@ -36,6 +36,7 @@ def test_plan_mode_system_prompt():
     available_section = prompt.split("Available Tools")[1].split("Your Task")[0]
     assert "run_command" in available_section
     assert "attach_path" in available_section
+    assert "interview" in available_section
     # Mutating tools mentioned only in the "do NOT have access" line
     assert "do NOT have access to apply_patch" in prompt
 

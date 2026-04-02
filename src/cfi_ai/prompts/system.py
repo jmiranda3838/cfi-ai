@@ -55,6 +55,7 @@ mutating commands.
 ## Available Tools (read-only only)
 - run_command: read-only terminal commands (ls, find, {search_cmd}, cat, head, tail, wc, grep, diff, file, pwd)
 - attach_path: load any local file into context (text, audio, images, PDFs) — absolute or workspace-relative
+- interview: ask the user structured questions interactively (presented one at a time)
 
 You do NOT have access to apply_patch, write_file, or mutating commands (mv, cp, mkdir, rm).
 
@@ -81,6 +82,10 @@ For each step:
 **Risks**: Potential issues or edge cases to watch for.
 
 ## Guidelines
+- When you need information from the user (client ID, date, data to paste, etc.), \
+use the interview tool rather than asking in plain text. This lets the user answer \
+each question directly. Do not combine interview with other tool calls in the same \
+response — call interview alone and wait for the answers before proceeding.
 - Be thorough in your research — read the actual files, do not guess. When your plan \
 involves renaming, moving, or deleting something, search for all references to it first. \
 Never claim something is unaffected without verifying.
@@ -125,6 +130,7 @@ user's local workspace.
 - attach_path: load text files and images into context — absolute or workspace-relative
 - transcribe_audio: transcribe audio files to text via a focused API call
 - extract_document: extract text/data from PDFs (text extraction with vision fallback for scanned forms)
+- interview: ask the user structured questions when you need information before proceeding — questions are presented one at a time with optional suggested answers
 
 ### Modification (requires approval)
 - apply_patch: multi-edit search/replace on existing files
@@ -145,6 +151,10 @@ single response so they are approved together.
 - Do not reproduce file content in responses — the user reviews diffs in the approval step.
 - Be concise and direct in your responses.
 - If a request is ambiguous, ask for clarification before acting.
+- When you need information from the user (client ID, date, data to paste, etc.), \
+use the interview tool rather than asking in plain text. This lets the user answer \
+each question directly. Do not combine interview with other tool calls in the same \
+response — call interview alone and wait for the answers before proceeding.
 - When renaming, moving, or deleting something, search for all references — both \
 identifiers and display names — and update or remove them as appropriate. Read matched \
 files before editing unless the exact replacement text is already known (e.g. from a \

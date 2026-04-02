@@ -4,14 +4,16 @@ from cfi_ai.tools.base import ToolDefinition
 from cfi_ai.tools.apply_patch import ApplyPatchTool
 from cfi_ai.tools.attach_path import AttachPathTool
 from cfi_ai.tools.extract_document import ExtractDocumentTool
+from cfi_ai.tools.interview import InterviewTool
 from cfi_ai.tools.run_command import RunCommandTool, is_command_mutating
 from cfi_ai.tools.transcribe_audio import TranscribeAudioTool
 from cfi_ai.tools.write_file import WriteFileTool
 
 MUTATING_TOOLS: set[str] = set()
+INTERVIEW_TOOL_NAME = "interview"
 
 _ALL_TOOLS: list[type] = [
-    ApplyPatchTool, AttachPathTool, ExtractDocumentTool,
+    ApplyPatchTool, AttachPathTool, ExtractDocumentTool, InterviewTool,
     RunCommandTool, TranscribeAudioTool, WriteFileTool,
 ]
 _REGISTRY: dict[str, type] = {}
@@ -34,7 +36,7 @@ def get_api_tools() -> types.Tool:
     return types.Tool(function_declarations=declarations)
 
 
-_READONLY_TOOL_NAMES = {"run_command", "attach_path"}
+_READONLY_TOOL_NAMES = {"run_command", "attach_path", "interview"}
 
 
 def get_readonly_api_tools() -> types.Tool:
@@ -72,4 +74,5 @@ __all__ = [
     "execute",
     "classify_mutation",
     "MUTATING_TOOLS",
+    "INTERVIEW_TOOL_NAME",
 ]

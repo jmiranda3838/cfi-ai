@@ -16,6 +16,7 @@ from cfi_ai.prompts.system import build_plan_mode_system_prompt
 from cfi_ai.ui import UI, UserInput, PlanApproval
 from cfi_ai.workspace import Workspace
 import cfi_ai.tools as tools
+from cfi_ai.tools import INTERVIEW_TOOL_NAME
 
 _log = logging.getLogger(__name__)
 
@@ -108,6 +109,9 @@ def _safe_tool_summary(name: str, args: dict) -> str:
         path = args.get("path", "")
         ext = os.path.splitext(path)[1] if path else ""
         return f"extract_document ext={ext!r} path_len={len(path)}"
+    if name == "interview":
+        questions = args.get("questions", [])
+        return f"interview questions={len(questions)}"
     return f"{name} keys={sorted(args.keys())}"
 
 
@@ -164,6 +168,27 @@ def _post_approval_summary(name: str, args: dict) -> str:
     if name == "run_command":
         return f"command={args.get('command', '?')}"
     return _summarize_input(args)
+
+
+def _handle_interview(ui: UI, fc_name: str, fc_args: dict) -> types.Part:
+    """Run an interview via UI and return the function response Part."""
+    questions = fc_args.get("questions", [])
+    if not questions:
+        return types.Part.from_function_response(
+            name=fc_name,
+            response={"answers": [], "note": "No questions provided."},
+        )
+    ui.show_tool_call(fc_name, f"{len(questions)} question(s)")
+    answers = ui.run_interview(questions)
+    if answers is None:
+        return types.Part.from_function_response(
+            name=fc_name,
+            response={"error": "User cancelled the interview."},
+        )
+    return types.Part.from_function_response(
+        name=fc_name,
+        response={"answers": answers},
+    )
 
 
 def _run_plan_mode(
@@ -240,6 +265,11 @@ def _run_plan_mode(
         for fc in function_calls:
             fc_args = dict(fc.args)
             _log.debug("plan_mode tool_call %s", _safe_tool_summary(fc.name, fc_args))
+
+            # Interview: handled by UI, not tools.execute()
+            if fc.name == INTERVIEW_TOOL_NAME:
+                tool_result_parts.append(_handle_interview(ui, fc.name, fc_args))
+                continue
 
             # Reject mutations (belt-and-suspenders)
             if tools.classify_mutation(fc.name, fc_args):
@@ -581,6 +611,12 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
             for i, fc in read_ops:
                 fc_args = dict(fc.args)
                 _log.debug("inner_loop tool_call %s", _safe_tool_summary(fc.name, fc_args))
+
+                # Interview: handled by UI, not tools.execute()
+                if fc.name == INTERVIEW_TOOL_NAME:
+                    result_slots[i].append(_handle_interview(ui, fc.name, fc_args))
+                    continue
+
                 ui.show_tool_call(fc.name, _summarize_input(fc_args))
                 result = tools.execute(fc.name, workspace, client, **fc_args)
                 if isinstance(result, tuple):

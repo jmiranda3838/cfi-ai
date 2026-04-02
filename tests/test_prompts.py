@@ -248,3 +248,18 @@ def test_cage_aid_only_in_file_workflow():
     from cfi_ai.prompts.intake import INTAKE_WORKFLOW_PROMPT, INTAKE_FILE_WORKFLOW_PROMPT
     assert "CAGE screen" not in INTAKE_WORKFLOW_PROMPT
     assert "CAGE screen" in INTAKE_FILE_WORKFLOW_PROMPT
+
+
+def test_interview_in_system_prompts():
+    """interview tool is referenced in both normal and plan mode system prompts."""
+    normal = build_system_prompt("/workspace", "summary")
+    plan = build_plan_mode_system_prompt("/workspace", "summary")
+    assert "interview" in normal
+    assert "interview" in plan
+
+
+def test_interview_in_wellness_assessment_prompts():
+    """Wellness assessment prompts reference interview tool for ambiguous items."""
+    from cfi_ai.prompts.wellness_assessment import WA_WORKFLOW_PROMPT, WA_FILE_WORKFLOW_PROMPT
+    for prompt in (WA_WORKFLOW_PROMPT, WA_FILE_WORKFLOW_PROMPT):
+        assert "interview tool" in prompt
