@@ -1,6 +1,7 @@
 from google.genai import types
 
 from cfi_ai.tools.base import ToolDefinition
+from cfi_ai.tools.activate_workflow import ActivateWorkflowTool
 from cfi_ai.tools.apply_patch import ApplyPatchTool
 from cfi_ai.tools.attach_path import AttachPathTool
 from cfi_ai.tools.extract_document import ExtractDocumentTool
@@ -11,10 +12,11 @@ from cfi_ai.tools.write_file import WriteFileTool
 
 MUTATING_TOOLS: set[str] = set()
 INTERVIEW_TOOL_NAME = "interview"
+ACTIVATE_WORKFLOW_TOOL_NAME = "activate_workflow"
 
 _ALL_TOOLS: list[type] = [
-    ApplyPatchTool, AttachPathTool, ExtractDocumentTool, InterviewTool,
-    RunCommandTool, TranscribeAudioTool, WriteFileTool,
+    ActivateWorkflowTool, ApplyPatchTool, AttachPathTool, ExtractDocumentTool,
+    InterviewTool, RunCommandTool, TranscribeAudioTool, WriteFileTool,
 ]
 _REGISTRY: dict[str, type] = {}
 
@@ -75,4 +77,5 @@ __all__ = [
     "classify_mutation",
     "MUTATING_TOOLS",
     "INTERVIEW_TOOL_NAME",
+    "ACTIVATE_WORKFLOW_TOOL_NAME",
 ]

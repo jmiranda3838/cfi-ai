@@ -7,6 +7,34 @@ if TYPE_CHECKING:
     from cfi_ai.workspace import Workspace
 
 
+WORKFLOWS_SECTION = """
+## Available Clinical Workflows
+
+When the user describes a clinical task that matches one of these workflows, call \
+`activate_workflow` to load the specialized prompt and context. Do NOT attempt clinical \
+documentation without activating the appropriate workflow first — the workflow prompts \
+contain critical compliance requirements and formatting rules.
+
+- **intake**: New client intake materials (recordings, transcripts, questionnaire PDFs, \
+wellness assessments). Triggers: "new client," "intake," "first session," "initial \
+assessment," or providing intake materials without specifying a workflow.
+- **session**: Progress note for an ongoing session. Triggers: "session note," "progress \
+note," session audio/transcript for a known client. Requires client_id.
+- **compliance**: Optum audit compliance check. Triggers: "compliance check," "audit," \
+"check records." Requires client_id.
+- **tp-review**: Review and update treatment plan. Triggers: "treatment plan review," \
+"update treatment plan," "TP review." Requires client_id.
+- **wellness-assessment**: Score a G22E02 Wellness Assessment. Triggers: "wellness \
+assessment," "G22E02," "GD score," or providing a WA form/scan. Requires client_id.
+
+**Important:** Call `activate_workflow` alone — do not combine it with other tool calls \
+(e.g. write_file, apply_patch) in the same response. Wait for the workflow prompt before \
+proceeding.
+
+If client_id is needed but unknown, use `interview` first to ask the user.
+"""
+
+
 CLIENTS_SECTION = """
 ## Client File Structure
 
@@ -111,6 +139,7 @@ def build_system_prompt(
     workspace: Workspace | None = None,
 ) -> str:
     clients_section = ""
+    workflows_section = WORKFLOWS_SECTION
     if workspace is not None and (workspace.root / "clients").is_dir():
         clients_section = CLIENTS_SECTION
 
@@ -159,4 +188,5 @@ response — call interview alone and wait for the answers before proceeding.
 identifiers and display names — and update or remove them as appropriate. Read matched \
 files before editing unless the exact replacement text is already known (e.g. from a \
 prior grep). Verify no stale references remain before finishing.
-{clients_section}"""
+{clients_section}\
+{workflows_section}"""

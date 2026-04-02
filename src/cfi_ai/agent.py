@@ -16,7 +16,8 @@ from cfi_ai.prompts.system import build_plan_mode_system_prompt
 from cfi_ai.ui import UI, UserInput, PlanApproval
 from cfi_ai.workspace import Workspace
 import cfi_ai.tools as tools
-from cfi_ai.tools import INTERVIEW_TOOL_NAME
+from cfi_ai.tools import ACTIVATE_WORKFLOW_TOOL_NAME, INTERVIEW_TOOL_NAME
+from cfi_ai.tools.activate_workflow import NON_WORKFLOW_MODE
 
 _log = logging.getLogger(__name__)
 
@@ -603,6 +604,43 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                     )
                     continue
                 break
+
+            # activate_workflow is a turn-boundary tool: process it alone,
+            # discard other tool calls, and restart the inner loop so the
+            # LLM sees the workflow prompt before making further calls.
+            activate_fc = None
+            for fc in function_calls:
+                if fc.name == ACTIVATE_WORKFLOW_TOOL_NAME:
+                    activate_fc = fc
+                    break
+
+            if activate_fc is not None:
+                fc_args = dict(activate_fc.args)
+                _log.debug("activate_workflow call %s", _safe_tool_summary(activate_fc.name, fc_args))
+                ui.show_tool_call(activate_fc.name, _summarize_input(fc_args))
+                result = tools.execute(activate_fc.name, workspace, client, **fc_args)
+                result_text = result if isinstance(result, str) else result[0]
+                ui.show_tool_result(activate_fc.name, result_text[:200] + "..." if len(result_text) > 200 else result_text)
+
+                if not result_text.startswith("Error:"):
+                    wf_name = fc_args.get("workflow", "")
+                    if wf_name not in NON_WORKFLOW_MODE:
+                        workflow_mode = True
+                    _log.debug("activate_workflow %s workflow_mode=%s", wf_name, workflow_mode)
+
+                parts = [types.Part.from_function_response(
+                    name=activate_fc.name, response={"result": result_text}
+                )]
+                # Send cancellation responses for any co-occurring tool calls
+                # (Gemini requires responses for ALL function_calls in a model turn)
+                for fc in function_calls:
+                    if fc.name != ACTIVATE_WORKFLOW_TOOL_NAME:
+                        parts.append(types.Part.from_function_response(
+                            name=fc.name,
+                            response={"error": "Discarded — activate_workflow must run alone."},
+                        ))
+                messages.append(types.Content(role="user", parts=parts))
+                continue  # Restart inner loop — LLM sees workflow prompt next
 
             # Separate read and mutating tool calls, tracking original order
             read_ops, mutate_ops, result_slots = _build_result_slots(function_calls)
