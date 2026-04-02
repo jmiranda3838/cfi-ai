@@ -38,7 +38,7 @@ def get_api_tools() -> types.Tool:
     return types.Tool(function_declarations=declarations)
 
 
-_READONLY_TOOL_NAMES = {"run_command", "attach_path", "extract_document", "interview"}
+_READONLY_TOOL_NAMES = {"run_command", "attach_path", "extract_document", "interview", "activate_workflow"}
 
 
 def get_readonly_api_tools() -> types.Tool:

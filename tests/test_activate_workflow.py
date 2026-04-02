@@ -6,7 +6,7 @@ from pathlib import Path
 import pytest
 
 from cfi_ai.workspace import Workspace
-from cfi_ai.tools.activate_workflow import ActivateWorkflowTool, NON_WORKFLOW_MODE
+from cfi_ai.tools.activate_workflow import ActivateWorkflowTool, NON_WORKFLOW_MODE, get_plan_prompt
 import cfi_ai.tools as tools
 
 
@@ -69,10 +69,10 @@ def test_tool_not_mutating():
     assert tool.mutating is False
 
 
-def test_tool_not_in_readonly_set():
+def test_tool_in_readonly_set():
     readonly = tools.get_readonly_api_tools()
     names = {fd.name for fd in readonly.function_declarations}
-    assert "activate_workflow" not in names
+    assert "activate_workflow" in names
 
 
 # --- Invalid input ---
@@ -339,3 +339,33 @@ def test_session_reminders_tp_review_overdue(tmp_path):
         ws, workflow="session", client_id="eve"
     )
     assert "past due" in result
+
+
+# --- get_plan_prompt ---
+
+def test_get_plan_prompt_intake_with_file(tmp_path):
+    ws = _make_workspace(tmp_path)
+    result = get_plan_prompt("intake", ws, file_reference="recording.m4a", date="2025-06-01")
+    assert result is not None
+    assert "recording.m4a" in result
+
+
+def test_get_plan_prompt_session_with_file(tmp_path):
+    _make_client_with_profile(tmp_path, "bob")
+    ws = _make_workspace(tmp_path)
+    result = get_plan_prompt(
+        "session", ws, file_reference="session.m4a", client_id="bob", date="2025-06-01"
+    )
+    assert result is not None
+    assert "bob" in result
+    assert "session.m4a" in result
+
+
+def test_get_plan_prompt_returns_none(tmp_path):
+    ws = _make_workspace(tmp_path)
+    # intake without file_reference → None
+    assert get_plan_prompt("intake", ws) is None
+    # session without file_reference → None
+    assert get_plan_prompt("session", ws, client_id="bob") is None
+    # unknown workflow → None
+    assert get_plan_prompt("compliance", ws, client_id="bob") is None

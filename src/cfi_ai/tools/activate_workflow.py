@@ -15,9 +15,15 @@ from cfi_ai.clients import (
     load_wa_history,
 )
 from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
-from cfi_ai.prompts.intake import INTAKE_FILE_WORKFLOW_PROMPT, INTAKE_WORKFLOW_PROMPT
+from cfi_ai.prompts.intake import (
+    INTAKE_FILE_PLAN_PROMPT,
+    INTAKE_FILE_WORKFLOW_PROMPT,
+    INTAKE_WORKFLOW_PROMPT,
+)
 from cfi_ai.prompts.session import (
     PROGRESS_NOTE_GUIDANCE,
+    PROGRESS_NOTE_PLAN_CRITERIA,
+    SESSION_FILE_PLAN_PROMPT,
     SESSION_FILE_WORKFLOW_PROMPT,
     SESSION_WORKFLOW_PROMPT,
 )
@@ -125,6 +131,37 @@ def _build_session_reminders(
     if not reminders:
         return ""
     return "## Clinical Reminders\n\n" + "\n".join(reminders) + "\n\n"
+
+
+def get_plan_prompt(
+    workflow: str, workspace: Workspace, **kwargs: str
+) -> str | None:
+    """Return the plan-mode-specific prompt for a workflow, or None if none exists."""
+    today = kwargs.get("date", datetime.date.today().isoformat())
+    file_reference = kwargs.get("file_reference", "")
+    client_id = kwargs.get("client_id", "")
+
+    if workflow == "intake" and file_reference:
+        existing_clients = _build_existing_clients_section(workspace)
+        return INTAKE_FILE_PLAN_PROMPT.format(
+            file_reference=file_reference,
+            date=today,
+            existing_clients=existing_clients,
+        )
+
+    if workflow == "session" and file_reference and client_id:
+        client_context = load_client_context(workspace, client_id)
+        note_guidance = PROGRESS_NOTE_GUIDANCE.format(date=today)
+        return SESSION_FILE_PLAN_PROMPT.format(
+            file_reference=file_reference,
+            date=today,
+            client_id=client_id,
+            client_context=client_context,
+            progress_note_guidance=note_guidance,
+            progress_note_plan_criteria=PROGRESS_NOTE_PLAN_CRITERIA,
+        )
+
+    return None
 
 
 class ActivateWorkflowTool(BaseTool):

@@ -4,6 +4,7 @@ import logging
 import os
 import subprocess
 import time
+from dataclasses import dataclass
 
 from google.auth import exceptions as auth_exceptions
 from google.genai import types
@@ -17,11 +18,21 @@ from cfi_ai.ui import UI, UserInput, PlanApproval
 from cfi_ai.workspace import Workspace
 import cfi_ai.tools as tools
 from cfi_ai.tools import ACTIVATE_WORKFLOW_TOOL_NAME, INTERVIEW_TOOL_NAME
-from cfi_ai.tools.activate_workflow import NON_WORKFLOW_MODE
+from cfi_ai.tools.activate_workflow import NON_WORKFLOW_MODE, get_plan_prompt as _get_plan_prompt
 
 _log = logging.getLogger(__name__)
 
 MAX_TOOL_ITERATIONS = 25
+
+
+@dataclass
+class PlanModeResult:
+    """Result from _run_plan_mode."""
+    plan_text: str | None = None
+    workflow_execution_prompt: str | None = None
+    workflow_plan_prompt: str | None = None
+    workflow_mode: bool = False
+
 
 _NARRATION_THRESHOLD = 800
 
@@ -199,8 +210,9 @@ def _run_plan_mode(
     plan_system_prompt: str,
     readonly_tools: types.Tool,
     messages: list[types.Content],
-) -> str | None:
-    """Run the plan-mode inner loop. Returns the plan text, or None on error/cancel."""
+    allow_workflow_activation: bool = True,
+) -> PlanModeResult:
+    """Run the plan-mode inner loop. Returns a PlanModeResult."""
     _log.debug("plan_mode_enter messages=%d", len(messages))
     repetition_retries = 0
     plan_text = None
@@ -218,18 +230,18 @@ def _run_plan_mode(
             )
         except Exception as e:
             ui.print_error(f"API error: {e}")
-            return None
+            return PlanModeResult()
 
         try:
             full_text = ui.stream_markdown(stream_result.text_chunks())
         except KeyboardInterrupt:
             _log.debug("[req:%s] stream_aborted reason=keyboard_interrupt", stream_result.request_id)
             ui.print_info("Plan cancelled.")
-            return None
+            return PlanModeResult()
         except Exception as e:
             _log.debug("[req:%s] stream_aborted reason=api_error", stream_result.request_id)
             ui.print_error(f"API error: {e}")
-            return None
+            return PlanModeResult()
         finally:
             stream_result.log_completion()
 
@@ -237,7 +249,7 @@ def _run_plan_mode(
             _log.debug("plan_mode repetition_detected retries=%d", repetition_retries)
             if repetition_retries >= 1:
                 ui.print_error("Model output is stuck in a loop.")
-                return None
+                return PlanModeResult()
             repetition_retries += 1
             messages.append(
                 types.Content(
@@ -271,6 +283,57 @@ def _run_plan_mode(
             if fc.name == INTERVIEW_TOOL_NAME:
                 tool_result_parts.append(_handle_interview(ui, fc.name, fc_args))
                 continue
+
+            # activate_workflow: capture and break out of plan mode
+            if fc.name == ACTIVATE_WORKFLOW_TOOL_NAME and allow_workflow_activation:
+                _log.debug("plan_mode activate_workflow %s", _safe_tool_summary(fc.name, fc_args))
+                ui.show_tool_call(fc.name, _summarize_input(fc_args))
+                result = tools.execute(fc.name, workspace, client, **fc_args)
+                result_text = result if isinstance(result, str) else result[0]
+                ui.show_tool_result(
+                    fc.name,
+                    result_text[:200] + "..." if len(result_text) > 200 else result_text,
+                )
+
+                if result_text.startswith("Error:"):
+                    # Feed error back so model can use interview to get missing info
+                    tool_result_parts.append(
+                        types.Part.from_function_response(
+                            name=fc.name, response={"result": result_text},
+                        )
+                    )
+                    continue
+
+                # Success: look up the plan prompt variant
+                wf_name = fc_args.get("workflow", "")
+                wf_plan_prompt = _get_plan_prompt(wf_name, workspace, **fc_args)
+                wf_mode = wf_name not in NON_WORKFLOW_MODE
+
+                # Cancel co-occurring tool calls
+                cancel_parts: list[types.Part] = [
+                    types.Part.from_function_response(
+                        name=fc.name,
+                        response={"result": "Workflow activated. Switching to workflow planning mode."},
+                    )
+                ]
+                for other_fc in function_calls:
+                    if other_fc.name != ACTIVATE_WORKFLOW_TOOL_NAME:
+                        cancel_parts.append(types.Part.from_function_response(
+                            name=other_fc.name,
+                            response={"error": "Discarded — activate_workflow must run alone."},
+                        ))
+                for group in _split_tool_results(cancel_parts):
+                    messages.append(types.Content(role="user", parts=group))
+
+                _log.debug(
+                    "plan_mode activate_workflow returning wf=%s plan_prompt=%s wf_mode=%s",
+                    wf_name, wf_plan_prompt is not None, wf_mode,
+                )
+                return PlanModeResult(
+                    workflow_execution_prompt=result_text,
+                    workflow_plan_prompt=wf_plan_prompt,
+                    workflow_mode=wf_mode,
+                )
 
             # Reject mutations (belt-and-suspenders)
             if tools.classify_mutation(fc.name, fc_args):
@@ -317,7 +380,7 @@ def _run_plan_mode(
     else:
         ui.print_info(f"Reached max iterations ({MAX_TOOL_ITERATIONS}) during planning.")
 
-    return plan_text
+    return PlanModeResult(plan_text=plan_text)
 
 
 def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: str, config: Config) -> None:
@@ -385,70 +448,148 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
             )
 
             t0 = time.monotonic()
-            plan_text = _run_plan_mode(
+            plan_result = _run_plan_mode(
                 client, ui, workspace, plan_system_prompt,
                 readonly_api_tools, plan_messages,
             )
             elapsed = time.monotonic() - t0
 
-            if plan_text is None:
-                ui.print_elapsed(elapsed)
-                continue
-
-            ui.print_separator()
-            ui.show_research_plan(plan_text)
-            ui.print_elapsed(elapsed)
-
-            approval = ui.prompt_plan_approval()
-            if approval != PlanApproval.REJECT:
-                auto_approve = approval == PlanApproval.BYPASS
-
-                mode_desc = "auto-approve" if auto_approve else "reviewing each edit"
-                ui.print_info(f"Executing plan ({mode_desc})...")
-                ui.print_separator()
-
-                # Merge planning context back into main messages so execution
-                # retains all tool results (extracted PDFs, interview answers, etc.)
+            # --- Case A: activate_workflow was called during plan mode ---
+            if plan_result.workflow_execution_prompt is not None:
+                # Merge messages to preserve any research done before the workflow call
                 messages[:] = plan_messages
-                _log.debug(
-                    "plan_approved merged_messages=%d auto_approve=%s",
-                    len(messages), auto_approve,
-                )
 
-                if plan_prompt:
-                    # Workflow command: use the original execution prompt + plan as guidance
-                    execution_prompt = (
-                        f"{user_text}\n\n"
-                        "## Approved Plan\n\n"
-                        "The following plan was reviewed and approved. Follow it as a guide "
-                        "for the order and content of your work:\n\n"
-                        f"{plan_text}"
+                if plan_result.workflow_plan_prompt is not None:
+                    # Dedicated plan prompt exists: re-enter plan mode with it
+                    ui.print_info("Workflow activated. Planning workflow execution...")
+                    wf_plan_messages: list[types.Content] = list(messages)
+                    wf_plan_messages.append(
+                        types.Content(
+                            role="user",
+                            parts=[types.Part.from_text(text=plan_result.workflow_plan_prompt)],
+                        )
                     )
+                    t0_wf = time.monotonic()
+                    wf_plan_result = _run_plan_mode(
+                        client, ui, workspace, plan_system_prompt,
+                        readonly_api_tools, wf_plan_messages,
+                        allow_workflow_activation=False,
+                    )
+                    elapsed += time.monotonic() - t0_wf
+
+                    plan_text = wf_plan_result.plan_text
+                    if plan_text is None:
+                        ui.print_elapsed(elapsed)
+                        continue
+
+                    ui.print_separator()
+                    ui.show_research_plan(plan_text)
+                    ui.print_elapsed(elapsed)
+
+                    approval = ui.prompt_plan_approval()
+                    if approval != PlanApproval.REJECT:
+                        auto_approve = approval == PlanApproval.BYPASS
+                        mode_desc = "auto-approve" if auto_approve else "reviewing each edit"
+                        ui.print_info(f"Executing plan ({mode_desc})...")
+                        ui.print_separator()
+
+                        messages[:] = wf_plan_messages
+                        execution_prompt = (
+                            f"{plan_result.workflow_execution_prompt}\n\n"
+                            "## Approved Plan\n\n"
+                            "The following plan was reviewed and approved. Follow it as a guide "
+                            "for the order and content of your work:\n\n"
+                            f"{plan_text}"
+                        )
+                        messages.append(
+                            types.Content(role="user", parts=[types.Part.from_text(text=execution_prompt)])
+                        )
+                        workflow_mode = True
+                        _log.debug("wf_plan_execution_inject workflow_mode=True auto_approve=%s", auto_approve)
+                    else:
+                        messages.append(
+                            types.Content(role="user", parts=[types.Part.from_text(text=user_text)])
+                        )
+                        messages.append(
+                            types.Content(role="model", parts=[types.Part.from_text(text=plan_text)])
+                        )
+                        ui.print_info("Plan rejected. You can refine your request.")
+                        continue
                 else:
-                    # Standard code task: plan-only execution
-                    execution_prompt = (
-                        "Execute the following implementation plan. Follow each step precisely. "
-                        "Use the tools available to you (run_command, attach_path, apply_patch, "
-                        "write_file) to implement all changes described.\n\n"
-                        f"## Plan\n\n{plan_text}"
+                    # No dedicated plan prompt: execute directly with the workflow prompt
+                    ui.print_info("Workflow activated. Executing...")
+                    ui.print_elapsed(elapsed)
+                    ui.print_separator()
+                    messages.append(
+                        types.Content(
+                            role="user",
+                            parts=[types.Part.from_text(text=plan_result.workflow_execution_prompt)],
+                        )
+                    )
+                    workflow_mode = plan_result.workflow_mode
+                    _log.debug("wf_direct_execution workflow_mode=%s", workflow_mode)
+
+            # --- Case B: Normal plan mode (no workflow activation) ---
+            else:
+                plan_text = plan_result.plan_text
+                if plan_text is None:
+                    ui.print_elapsed(elapsed)
+                    continue
+
+                ui.print_separator()
+                ui.show_research_plan(plan_text)
+                ui.print_elapsed(elapsed)
+
+                approval = ui.prompt_plan_approval()
+                if approval != PlanApproval.REJECT:
+                    auto_approve = approval == PlanApproval.BYPASS
+
+                    mode_desc = "auto-approve" if auto_approve else "reviewing each edit"
+                    ui.print_info(f"Executing plan ({mode_desc})...")
+                    ui.print_separator()
+
+                    # Merge planning context back into main messages so execution
+                    # retains all tool results (extracted PDFs, interview answers, etc.)
+                    messages[:] = plan_messages
+                    _log.debug(
+                        "plan_approved merged_messages=%d auto_approve=%s",
+                        len(messages), auto_approve,
                     )
 
-                messages.append(
-                    types.Content(role="user", parts=[types.Part.from_text(text=execution_prompt)])
-                )
-                # Fall through to the normal inner loop with workflow_mode enabled
-                workflow_mode = True
-                _log.debug("plan_execution_inject workflow_mode=True auto_approve=%s", auto_approve)
-            else:
-                # Rejected: preserve plan exchange in history for refinement
-                messages.append(
-                    types.Content(role="user", parts=[types.Part.from_text(text=user_text)])
-                )
-                messages.append(
-                    types.Content(role="model", parts=[types.Part.from_text(text=plan_text)])
-                )
-                ui.print_info("Plan rejected. You can refine your request.")
-                continue
+                    if plan_prompt:
+                        # Workflow command: use the original execution prompt + plan as guidance
+                        execution_prompt = (
+                            f"{user_text}\n\n"
+                            "## Approved Plan\n\n"
+                            "The following plan was reviewed and approved. Follow it as a guide "
+                            "for the order and content of your work:\n\n"
+                            f"{plan_text}"
+                        )
+                    else:
+                        # Standard code task: plan-only execution
+                        execution_prompt = (
+                            "Execute the following implementation plan. Follow each step precisely. "
+                            "Use the tools available to you (run_command, attach_path, apply_patch, "
+                            "write_file) to implement all changes described.\n\n"
+                            f"## Plan\n\n{plan_text}"
+                        )
+
+                    messages.append(
+                        types.Content(role="user", parts=[types.Part.from_text(text=execution_prompt)])
+                    )
+                    # Fall through to the normal inner loop with workflow_mode enabled
+                    workflow_mode = True
+                    _log.debug("plan_execution_inject workflow_mode=True auto_approve=%s", auto_approve)
+                else:
+                    # Rejected: preserve plan exchange in history for refinement
+                    messages.append(
+                        types.Content(role="user", parts=[types.Part.from_text(text=user_text)])
+                    )
+                    messages.append(
+                        types.Content(role="model", parts=[types.Part.from_text(text=plan_text)])
+                    )
+                    ui.print_info("Plan rejected. You can refine your request.")
+                    continue
         else:
             # --- NORMAL CHAT FLOW ---
             _log.debug("normal_chat_flow")

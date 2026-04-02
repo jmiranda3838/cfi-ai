@@ -67,6 +67,7 @@ def build_plan_mode_system_prompt(
 ) -> str:
     """Build the system prompt for plan mode (read-only research + structured plan)."""
     clients_section = ""
+    workflows_section = WORKFLOWS_SECTION
     if workspace is not None and (workspace.root / "clients").is_dir():
         clients_section = CLIENTS_SECTION
 
@@ -85,6 +86,8 @@ mutating commands.
 - attach_path: load any local file into context (text, audio, images) — absolute or workspace-relative
 - extract_document: extract text/data from PDFs (text extraction with vision fallback for scanned forms)
 - interview: ask the user structured questions interactively (presented one at a time)
+- activate_workflow: activate a clinical workflow when the user describes a clinical task. \
+Call this tool ALONE — do not combine with other tools.
 
 You do NOT have access to apply_patch, write_file, or mutating commands (mv, cp, mkdir, rm).
 
@@ -131,7 +134,8 @@ be added or modified and summarize the data to be integrated. The execution phas
 will read source files and produce the actual content.
 - During execution, emit all file modifications for a given step in a single \
 response to minimize approval prompts for the user.
-{clients_section}"""
+{clients_section}\
+{workflows_section}"""
 
 
 def build_system_prompt(

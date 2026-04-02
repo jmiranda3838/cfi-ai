@@ -1,5 +1,6 @@
 """Tests for plan mode functionality."""
 
+from cfi_ai.agent import PlanModeResult
 from cfi_ai.ui import UserInput, MODE_DISPLAY, PlanApproval
 from cfi_ai.tools import get_readonly_api_tools
 from cfi_ai.prompts.system import build_plan_mode_system_prompt
@@ -17,10 +18,10 @@ def test_user_input_dataclass():
 
 
 def test_get_readonly_api_tools():
-    """Readonly tool set contains run_command, attach_path, extract_document, and interview."""
+    """Readonly tool set contains run_command, attach_path, extract_document, interview, and activate_workflow."""
     tool = get_readonly_api_tools()
     names = {fd.name for fd in tool.function_declarations}
-    assert names == {"run_command", "attach_path", "extract_document", "interview"}
+    assert names == {"run_command", "attach_path", "extract_document", "interview", "activate_workflow"}
     assert "apply_patch" not in names
     assert "write_file" not in names
 
@@ -173,4 +174,27 @@ def test_auto_approve_semantics():
     assert PlanApproval.BYPASS == PlanApproval.BYPASS  # auto_approve = True
     assert PlanApproval.APPROVE != PlanApproval.BYPASS  # auto_approve = False
     assert PlanApproval.REJECT != PlanApproval.BYPASS   # rejected, no execution
+
+
+def test_plan_mode_result_defaults():
+    """PlanModeResult defaults: all fields None/False."""
+    r = PlanModeResult()
+    assert r.plan_text is None
+    assert r.workflow_execution_prompt is None
+    assert r.workflow_plan_prompt is None
+    assert r.workflow_mode is False
+
+
+def test_plan_mode_result_with_values():
+    """PlanModeResult holds provided values."""
+    r = PlanModeResult(
+        plan_text="the plan",
+        workflow_execution_prompt="exec prompt",
+        workflow_plan_prompt="plan prompt",
+        workflow_mode=True,
+    )
+    assert r.plan_text == "the plan"
+    assert r.workflow_execution_prompt == "exec prompt"
+    assert r.workflow_plan_prompt == "plan prompt"
+    assert r.workflow_mode is True
 
