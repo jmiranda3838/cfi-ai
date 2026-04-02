@@ -75,7 +75,7 @@ class ExtractDocumentTool(BaseTool):
         if client is None:
             if text.strip():
                 return f"Extracted from {target.name} ({len(text)} chars):\n\n{text}"
-            return "Error: extract_document requires an API client for scanned PDFs (not available in plan mode)."
+            return "Error: extract_document requires an API client for scanned PDFs."
 
         try:
             data = target.read_bytes()
