@@ -407,16 +407,12 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                 ui.print_info(f"Executing plan ({mode_desc})...")
                 ui.print_separator()
 
-                # Extract binary parts (PDFs, images, audio) from planning phase
-                binary_parts = []
-                for msg in plan_messages:
-                    if msg.role == "user":
-                        for part in (msg.parts or []):
-                            if hasattr(part, "inline_data") and part.inline_data:
-                                binary_parts.append(part)
+                # Merge planning context back into main messages so execution
+                # retains all tool results (extracted PDFs, interview answers, etc.)
+                messages[:] = plan_messages
                 _log.debug(
-                    "plan_approved binary_parts=%d from_messages=%d auto_approve=%s",
-                    len(binary_parts), len(plan_messages), auto_approve,
+                    "plan_approved merged_messages=%d auto_approve=%s",
+                    len(messages), auto_approve,
                 )
 
                 if plan_prompt:
@@ -437,9 +433,8 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                         f"## Plan\n\n{plan_text}"
                     )
 
-                execution_parts = [types.Part.from_text(text=execution_prompt)] + binary_parts
                 messages.append(
-                    types.Content(role="user", parts=execution_parts)
+                    types.Content(role="user", parts=[types.Part.from_text(text=execution_prompt)])
                 )
                 # Fall through to the normal inner loop with workflow_mode enabled
                 workflow_mode = True

@@ -67,41 +67,46 @@ def test_plan_mode_prompt_batch_mutations_guideline():
     assert "minimize approval prompts" in prompt
 
 
-def test_binary_parts_preserved_into_execution():
-    """Binary parts from plan messages are extracted for execution context."""
+def test_plan_context_preserved_into_execution():
+    """Full planning context (function_responses + binary parts) is preserved into execution."""
     from google.genai import types
 
-    # Create a real inline_data part (simulating a PDF attachment)
+    # Simulate planning phase messages with various part types
     binary_part = types.Part.from_bytes(
         data=b"%PDF-fake-content",
         mime_type="application/pdf",
     )
-
-    # Text-only part (no inline_data)
-    text_part = types.Part.from_text(text="some text")
-
-    # Tool response part (no inline_data)
-    tool_part = types.Part.from_function_response(
-        name="attach_path", response={"result": "loaded"}
+    text_part = types.Part.from_text(text="user request")
+    extract_result = types.Part.from_function_response(
+        name="extract_document", response={"result": "Extracted from doc.pdf (500 chars):\n\nDOB: 1990-01-01"}
+    )
+    interview_result = types.Part.from_function_response(
+        name="interview", response={"result": "client_id: NB00941"}
     )
 
     plan_messages = [
         types.Content(role="user", parts=[text_part]),
-        types.Content(role="user", parts=[tool_part, binary_part]),
+        types.Content(role="user", parts=[extract_result, binary_part]),
+        types.Content(role="user", parts=[interview_result]),
         types.Content(role="model", parts=[types.Part.from_text(text="plan output")]),
     ]
 
-    # Extract binary parts using the same logic as agent.py
-    binary_parts = []
-    for msg in plan_messages:
-        if msg.role == "user":
-            for part in (msg.parts or []):
-                if hasattr(part, "inline_data") and part.inline_data:
-                    binary_parts.append(part)
+    # Simulate the merge: messages[:] = plan_messages
+    messages = [
+        types.Content(role="user", parts=[types.Part.from_text(text="old context")]),
+    ]
+    messages[:] = plan_messages
 
-    assert len(binary_parts) == 1
-    assert binary_parts[0].inline_data.mime_type == "application/pdf"
-    assert binary_parts[0].inline_data.data == b"%PDF-fake-content"
+    # All planning messages are preserved
+    assert len(messages) == 4
+    # function_response parts are present (extract_document, interview)
+    assert messages[1].parts[0].function_response.name == "extract_document"
+    assert "DOB: 1990-01-01" in messages[1].parts[0].function_response.response["result"]
+    # binary parts are present
+    assert messages[1].parts[1].inline_data.mime_type == "application/pdf"
+    # interview results are present
+    assert messages[2].parts[0].function_response.name == "interview"
+    assert "NB00941" in messages[2].parts[0].function_response.response["result"]
 
 
 def test_execution_handoff_uses_original_message_when_plan_prompt():
@@ -169,22 +174,3 @@ def test_auto_approve_semantics():
     assert PlanApproval.APPROVE != PlanApproval.BYPASS  # auto_approve = False
     assert PlanApproval.REJECT != PlanApproval.BYPASS   # rejected, no execution
 
-
-def test_approval_preserves_messages():
-    """Both BYPASS and APPROVE preserve existing messages."""
-    from google.genai import types
-
-    for approval in (PlanApproval.BYPASS, PlanApproval.APPROVE):
-        messages = [
-            types.Content(role="user", parts=[types.Part.from_text(text="initial context")]),
-            types.Content(role="model", parts=[types.Part.from_text(text="model reply")]),
-        ]
-
-        execution_prompt = "Execute the plan..."
-        messages.append(
-            types.Content(role="user", parts=[types.Part.from_text(text=execution_prompt)])
-        )
-
-        # Both approval modes preserve the original 2 messages + add 1
-        assert len(messages) == 3
-        assert messages[0].parts[0].text == "initial context"
