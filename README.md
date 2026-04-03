@@ -82,6 +82,8 @@ Environment variables take precedence over the config file when set:
 
 Process intake materials into TheraNest-ready clinical documents. Upload a combination of session audio, intake questionnaire, wellness assessment, and other assessments — the LLM generates output structured to TheraNest's exact field layout for direct copy-paste.
 
+Slash commands use a thin-routing design. If you provide enough structured input up front, the app activates the workflow immediately. If information is missing or ambiguous, the assistant collects it with guided follow-up questions via the `interview` tool before activating the workflow.
+
 ```bash
 # Audio + intake questionnaire + wellness assessment
 ~ /intake /path/to/session.m4a /path/to/intake-questionnaire.pdf /path/to/wellness-assessment.pdf
@@ -92,12 +94,12 @@ Process intake materials into TheraNest-ready clinical documents. Upload a combi
 # From an absolute path
 ~ /intake /Users/you/Downloads/session-recording.m4a
 
-# Paste interactively
+# Start with no args and answer follow-up questions
 ~ /intake
-transcript> [paste text or enter file paths, then Enter to submit]
+[assistant asks for transcript text or file paths]
 ```
 
-File paths are passed to the LLM, which uses `attach_path` to load them — this handles shell escapes, spaces in paths, and other tricky filenames naturally. Audio is sent inline to Gemini for transcription and clinical document generation.
+If you start with `/intake` and no args, the assistant will ask for the missing transcript text or file paths interactively. File paths are passed to the LLM, which uses `attach_path` to load them — this handles shell escapes, spaces in paths, and other tricky filenames naturally. Audio is sent inline to Gemini for transcription and clinical document generation.
 
 The workflow generates 5 documents:
 - **Initial Assessment** — TheraNest "Initial Assessment & Diagnostic Codes" tab fields (diagnostic impressions, presenting problem, observations, history, risk assessment, strengths, goals, etc.)

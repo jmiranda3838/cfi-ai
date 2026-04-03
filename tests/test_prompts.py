@@ -263,3 +263,10 @@ def test_interview_in_wellness_assessment_prompts():
     from cfi_ai.prompts.wellness_assessment import WA_WORKFLOW_PROMPT, WA_FILE_WORKFLOW_PROMPT
     for prompt in (WA_WORKFLOW_PROMPT, WA_FILE_WORKFLOW_PROMPT):
         assert "interview tool" in prompt
+
+
+def test_skill_instruction_in_workflows_section():
+    """WORKFLOWS_SECTION contains the [SKILL: ...] handling instruction."""
+    from cfi_ai.prompts.system import WORKFLOWS_SECTION
+    assert "[SKILL:" in WORKFLOWS_SECTION
+    assert "activate_workflow" in WORKFLOWS_SECTION

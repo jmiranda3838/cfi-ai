@@ -6,9 +6,8 @@ import datetime
 from typing import TYPE_CHECKING
 
 from cfi_ai.clients import (
-    count_session_notes,
     count_wa_files,
-    get_tp_review_date,
+    build_session_reminders,
     list_clients,
     load_client_context,
     load_compliance_context,
@@ -77,62 +76,6 @@ def _build_existing_clients_section(workspace: Workspace) -> str:
         "`clients/<client-id>/profile/current.md` and "
         "`clients/<client-id>/treatment-plan/current.md` for context before writing."
     )
-
-
-def _build_session_reminders(
-    workspace: Workspace, client_id: str
-) -> str:
-    """Compute WA due date and TP review date reminders for a session workflow."""
-    reminders: list[str] = []
-
-    wa_count = count_wa_files(workspace, client_id)
-    note_count = count_session_notes(workspace, client_id)
-
-    if wa_count == 0:
-        reminders.append(
-            "- No Wellness Assessment on file. "
-            "Consider administering G22E02 before or during this session."
-        )
-    elif wa_count == 1 and 3 <= note_count + 1 <= 5:
-        reminders.append(
-            f"- Wellness Assessment re-administration may be due "
-            f"(visit ~{note_count + 1}; 2nd WA recommended at visits 3-5)."
-        )
-    elif wa_count >= 2:
-        wa_dir = workspace.root / "clients" / client_id / "wellness-assessments"
-        wa_files = sorted(wa_dir.glob("*-wellness-assessment.md"))
-        if wa_files:
-            last_wa_date = wa_files[-1].name[:10]
-            sessions_dir = workspace.root / "clients" / client_id / "sessions"
-            notes_since = len([
-                f for f in sessions_dir.glob("*-progress-note.md")
-                if f.name[:10] > last_wa_date
-            ]) if sessions_dir.is_dir() else 0
-            if notes_since >= 5:
-                reminders.append(
-                    f"- Wellness Assessment may be due for re-administration "
-                    f"({notes_since} sessions since last WA)."
-                )
-
-    review_date = get_tp_review_date(workspace, client_id)
-    if review_date:
-        days_until = (review_date - datetime.date.today()).days
-        if days_until < 0:
-            reminders.append(
-                f"- Treatment Plan review is past due "
-                f"(was due {review_date.isoformat()})."
-            )
-        elif days_until <= 14:
-            reminders.append(
-                f"- Treatment Plan review approaching "
-                f"(due {review_date.isoformat()}, {days_until} days away)."
-            )
-
-    if not reminders:
-        return ""
-    return "## Clinical Reminders\n\n" + "\n".join(reminders) + "\n\n"
-
-
 def get_plan_prompt(
     workflow: str, workspace: Workspace, **kwargs: str
 ) -> str | None:
@@ -283,7 +226,7 @@ class ActivateWorkflowTool(BaseTool):
     ) -> str:
         client_context = load_client_context(workspace, client_id)
         note_guidance = PROGRESS_NOTE_GUIDANCE.format(date=today)
-        reminders = _build_session_reminders(workspace, client_id)
+        reminders = build_session_reminders(workspace, client_id)
 
         if file_reference:
             prompt = SESSION_FILE_WORKFLOW_PROMPT.format(

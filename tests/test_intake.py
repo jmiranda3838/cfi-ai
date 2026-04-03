@@ -1,79 +1,8 @@
 import datetime
 from unittest.mock import MagicMock
 
-from cfi_ai.commands.intake import (
-    _FileReference,
-    _TextInput,
-    _resolve_input,
-    handle_intake,
-    _build_existing_clients_section,
-)
+from cfi_ai.commands.intake import handle_intake, _build_existing_clients_section
 from cfi_ai.workspace import Workspace
-
-
-# --- _resolve_input tests ---
-
-def test_resolve_input_file_reference_from_args(tmp_path):
-    """Args are returned as _FileReference for LLM to resolve."""
-    ui = MagicMock()
-    ws = Workspace(str(tmp_path))
-    result = _resolve_input("session.mp3", ui, ws)
-    assert isinstance(result, _FileReference)
-    assert result.raw == "session.mp3"
-
-
-def test_resolve_input_file_reference_absolute(tmp_path):
-    """Absolute path args are returned as _FileReference."""
-    ui = MagicMock()
-    ws = Workspace(str(tmp_path))
-    result = _resolve_input("/Users/me/Downloads/recording.m4a", ui, ws)
-    assert isinstance(result, _FileReference)
-    assert result.raw == "/Users/me/Downloads/recording.m4a"
-
-
-def test_resolve_input_file_reference_escaped(tmp_path):
-    """Escaped paths are passed through as-is for LLM to interpret."""
-    ui = MagicMock()
-    ws = Workspace(str(tmp_path))
-    result = _resolve_input("/Users/me/Downloads/Bristol\\ St\\ 4.m4a", ui, ws)
-    assert isinstance(result, _FileReference)
-    assert "Bristol\\ St\\ 4.m4a" in result.raw
-
-
-def test_resolve_input_interactive_paste(tmp_path):
-    ui = MagicMock()
-    ui.prompt_multiline.return_value = "This is pasted transcript text.\nWith multiple lines."
-    ws = Workspace(str(tmp_path))
-    result = _resolve_input(None, ui, ws)
-    assert isinstance(result, _TextInput)
-    assert result.text == "This is pasted transcript text.\nWith multiple lines."
-
-
-def test_resolve_input_interactive_single_line(tmp_path):
-    """Single-line interactive input is treated as a file reference."""
-    ui = MagicMock()
-    ui.prompt_multiline.return_value = "recording.m4a"
-    ws = Workspace(str(tmp_path))
-    result = _resolve_input(None, ui, ws)
-    assert isinstance(result, _FileReference)
-    assert result.raw == "recording.m4a"
-
-
-def test_resolve_input_cancelled(tmp_path):
-    ui = MagicMock()
-    ui.prompt_multiline.return_value = None
-    ws = Workspace(str(tmp_path))
-    result = _resolve_input(None, ui, ws)
-    assert result is None
-    ui.print_info.assert_called()
-
-
-def test_resolve_input_empty_input(tmp_path):
-    ui = MagicMock()
-    ui.prompt_multiline.return_value = "   "
-    ws = Workspace(str(tmp_path))
-    result = _resolve_input(None, ui, ws)
-    assert result is None
 
 
 # --- _build_existing_clients_section tests ---
@@ -95,7 +24,7 @@ def test_existing_clients_with_data(tmp_path):
     assert "Jane Doe profile" not in section
 
 
-# --- handle_intake integration tests ---
+# --- handle_intake fast path tests ---
 
 def test_handle_intake_file_reference(tmp_path):
     """File args produce a message with INTAKE_FILE_WORKFLOW_PROMPT."""
@@ -106,27 +35,7 @@ def test_handle_intake_file_reference(tmp_path):
     assert "session.mp3" in result.message
     assert "attach_path" in result.message
     assert result.parts is None
-
-
-def test_handle_intake_text_paste(tmp_path):
-    """Pasted multi-line text uses INTAKE_WORKFLOW_PROMPT with transcript embedded."""
-    ui = MagicMock()
-    ui.prompt_multiline.return_value = "Client discussed anxiety.\nTherapist responded."
-    ws = Workspace(str(tmp_path))
-    result = handle_intake(None, ui, ws)
-    assert result.message is not None
-    assert "Client discussed anxiety." in result.message
-    assert "<transcript>" in result.message
-
-
-def test_handle_intake_cancelled(tmp_path):
-    ui = MagicMock()
-    ui.prompt_multiline.return_value = None
-    ws = Workspace(str(tmp_path))
-    result = handle_intake(None, ui, ws)
-    assert result.handled is True
-    assert result.message is None
-    assert result.parts is None
+    assert result.error is None
 
 
 def test_handle_intake_message_contains_date(tmp_path):
@@ -146,16 +55,11 @@ def test_handle_intake_message_contains_existing_clients(tmp_path):
 
 
 def test_handle_intake_workflow_mode(tmp_path):
-    """Both file and text intake flows set workflow_mode=True."""
+    """File intake sets workflow_mode=True."""
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
     result = handle_intake("session.mp3", ui, ws)
     assert result.workflow_mode is True
-
-    ui2 = MagicMock()
-    ui2.prompt_multiline.return_value = "Line one.\nLine two."
-    result2 = handle_intake(None, ui2, ws)
-    assert result2.workflow_mode is True
 
 
 def test_handle_intake_file_sets_plan_prompt(tmp_path):
@@ -168,10 +72,32 @@ def test_handle_intake_file_sets_plan_prompt(tmp_path):
     assert "Do NOT load" in result.plan_prompt
 
 
-def test_handle_intake_text_no_plan_prompt(tmp_path):
-    """Text intake does NOT set plan_prompt."""
+# --- handle_intake skill path tests ---
+
+def test_handle_intake_no_args_skill_path(tmp_path):
+    """No args → skill path message for the LLM, no error."""
     ui = MagicMock()
-    ui.prompt_multiline.return_value = "Line one.\nLine two."
     ws = Workspace(str(tmp_path))
     result = handle_intake(None, ui, ws)
-    assert result.plan_prompt is None
+    assert result.message is not None
+    assert result.error is None
+    assert "[SKILL: intake]" in result.message
+    assert "activate_workflow" in result.message
+
+
+def test_handle_intake_no_args_lists_clients(tmp_path):
+    """Skill path includes available clients."""
+    (tmp_path / "clients" / "bob-jones").mkdir(parents=True)
+    ui = MagicMock()
+    ws = Workspace(str(tmp_path))
+    result = handle_intake(None, ui, ws)
+    assert "bob-jones" in result.message
+
+
+def test_handle_intake_empty_args_skill_path(tmp_path):
+    """Empty/whitespace args → skill path."""
+    ui = MagicMock()
+    ws = Workspace(str(tmp_path))
+    result = handle_intake("   ", ui, ws)
+    assert result.error is None
+    assert "[SKILL: intake]" in result.message

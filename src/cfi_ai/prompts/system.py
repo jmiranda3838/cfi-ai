@@ -32,6 +32,11 @@ assessment," "G22E02," "GD score," or providing a WA form/scan. Requires client_
 proceeding.
 
 If client_id is needed but unknown, use `interview` first to ask the user.
+
+When you receive a message starting with `[SKILL: ...]`, the user invoked a slash command \
+to start a clinical workflow. If the message indicates missing information (client ID, \
+session input, etc.), use `interview` to collect it first, then call `activate_workflow` \
+with the resolved parameters.
 """
 
 
