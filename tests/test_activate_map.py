@@ -1,17 +1,20 @@
-"""Tests for the activate_workflow tool."""
+"""Tests for the activate_map tool."""
 
 import datetime
 from pathlib import Path
 
-import pytest
-
-from cfi_ai.workspace import Workspace
-from cfi_ai.tools.activate_workflow import ActivateWorkflowTool, NON_WORKFLOW_MODE, get_plan_prompt
 import cfi_ai.tools as tools
+from cfi_ai.tools.activate_map import ActivateMapTool, NON_MAP_MODE, get_map_plan_prompt
+from cfi_ai.workspace import Workspace
 
 
 def _make_workspace(tmp_path: Path) -> Workspace:
     return Workspace(str(tmp_path))
+
+
+def _execute_map(ws: Workspace, **kwargs) -> str:
+    kwargs.setdefault("source", "implicit")
+    return ActivateMapTool().execute(ws, **kwargs)
 
 
 def _make_client(tmp_path: Path, client_id: str) -> None:
@@ -56,65 +59,59 @@ def _make_client_with_wa(tmp_path: Path, client_id: str, wa_count: int = 1) -> N
         )
 
 
-# --- Tool registration ---
-
 def test_tool_in_registry():
-    assert "activate_workflow" in {
+    assert "activate_map" in {
         fd.name for fd in tools.get_api_tools().function_declarations
     }
 
 
 def test_tool_not_mutating():
-    tool = ActivateWorkflowTool()
+    tool = ActivateMapTool()
     assert tool.mutating is False
 
 
 def test_tool_in_readonly_set():
     readonly = tools.get_readonly_api_tools()
     names = {fd.name for fd in readonly.function_declarations}
-    assert "activate_workflow" in names
+    assert "activate_map" in names
 
 
-# --- Invalid input ---
-
-def test_unknown_workflow(tmp_path):
+def test_unknown_map(tmp_path):
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(ws, workflow="bogus")
+    result = _execute_map(ws, map="bogus")
     assert result.startswith("Error:")
     assert "bogus" in result
 
 
 def test_missing_client_id_for_session(tmp_path):
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(ws, workflow="session")
+    result = _execute_map(ws, map="session")
     assert result.startswith("Error:")
     assert "client_id" in result
 
 
 def test_missing_client_id_for_compliance(tmp_path):
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(ws, workflow="compliance")
+    result = _execute_map(ws, map="compliance")
     assert result.startswith("Error:")
     assert "client_id" in result
 
 
 def test_missing_client_id_for_tp_review(tmp_path):
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(ws, workflow="tp-review")
+    result = _execute_map(ws, map="tp-review")
     assert result.startswith("Error:")
 
 
 def test_missing_client_id_for_wa(tmp_path):
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(ws, workflow="wellness-assessment")
+    result = _execute_map(ws, map="wellness-assessment")
     assert result.startswith("Error:")
 
 
 def test_nonexistent_client(tmp_path):
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(
-        ws, workflow="session", client_id="nobody"
-    )
+    result = _execute_map(ws, map="session", client_id="nobody")
     assert result.startswith("Error:")
     assert "nobody" in result
     assert "not found" in result
@@ -123,28 +120,21 @@ def test_nonexistent_client(tmp_path):
 def test_missing_client_lists_available(tmp_path):
     _make_client(tmp_path, "alice")
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(
-        ws, workflow="session", client_id="nobody"
-    )
+    result = _execute_map(ws, map="session", client_id="nobody")
     assert "alice" in result
 
 
-# --- Intake workflow ---
-
 def test_intake_no_files(tmp_path):
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(ws, workflow="intake")
+    result = _execute_map(ws, map="intake")
     assert not result.startswith("Error:")
     assert "intake" in result.lower() or "assessment" in result.lower()
-    # Should use text-variant placeholder
     assert "conversation above" in result
 
 
 def test_intake_with_file_reference(tmp_path):
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(
-        ws, workflow="intake", file_reference="recording.m4a"
-    )
+    result = _execute_map(ws, map="intake", file_reference="recording.m4a")
     assert not result.startswith("Error:")
     assert "recording.m4a" in result
 
@@ -152,24 +142,21 @@ def test_intake_with_file_reference(tmp_path):
 def test_intake_shows_existing_clients(tmp_path):
     _make_client(tmp_path, "jane-doe")
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(ws, workflow="intake")
+    result = _execute_map(ws, map="intake")
     assert "jane-doe" in result
 
 
 def test_intake_no_client_id_needed(tmp_path):
-    """Intake should work without client_id."""
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(ws, workflow="intake")
+    result = _execute_map(ws, map="intake")
     assert not result.startswith("Error:")
 
-
-# --- Session workflow ---
 
 def test_session_with_file(tmp_path):
     _make_client_with_profile(tmp_path, "bob")
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(
-        ws, workflow="session", client_id="bob", file_reference="session.m4a"
+    result = _execute_map(
+        ws, map="session", client_id="bob", file_reference="session.m4a"
     )
     assert not result.startswith("Error:")
     assert "session.m4a" in result
@@ -179,9 +166,7 @@ def test_session_with_file(tmp_path):
 def test_session_without_file(tmp_path):
     _make_client_with_profile(tmp_path, "bob")
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(
-        ws, workflow="session", client_id="bob"
-    )
+    result = _execute_map(ws, map="session", client_id="bob")
     assert not result.startswith("Error:")
     assert "conversation above" in result
 
@@ -189,58 +174,42 @@ def test_session_without_file(tmp_path):
 def test_session_includes_client_context(tmp_path):
     _make_client_with_profile(tmp_path, "bob")
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(
-        ws, workflow="session", client_id="bob"
-    )
+    result = _execute_map(ws, map="session", client_id="bob")
     assert "Test client profile" in result
 
 
 def test_session_includes_progress_note_guidance(tmp_path):
     _make_client_with_profile(tmp_path, "bob")
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(
-        ws, workflow="session", client_id="bob"
-    )
+    result = _execute_map(ws, map="session", client_id="bob")
     today = datetime.date.today().isoformat()
     assert today in result
 
 
-# --- Compliance workflow ---
-
 def test_compliance_happy_path(tmp_path):
     _make_client_full(tmp_path, "alice")
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(
-        ws, workflow="compliance", client_id="alice"
-    )
+    result = _execute_map(ws, map="compliance", client_id="alice")
     assert not result.startswith("Error:")
     assert "alice" in result
 
 
 def test_compliance_minimal_client(tmp_path):
-    """Compliance still works with minimal data (LLM will note sparse records)."""
     _make_client(tmp_path, "empty")
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(
-        ws, workflow="compliance", client_id="empty"
-    )
-    # load_compliance_context always returns at least the WA count line
+    result = _execute_map(ws, map="compliance", client_id="empty")
     assert not result.startswith("Error:")
     assert "empty" in result
 
 
-def test_compliance_in_non_workflow_mode():
-    assert "compliance" in NON_WORKFLOW_MODE
+def test_compliance_in_non_map_mode():
+    assert "compliance" in NON_MAP_MODE
 
-
-# --- TP Review workflow ---
 
 def test_tp_review_happy_path(tmp_path):
     _make_client_full(tmp_path, "alice")
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(
-        ws, workflow="tp-review", client_id="alice"
-    )
+    result = _execute_map(ws, map="tp-review", client_id="alice")
     assert not result.startswith("Error:")
     assert "alice" in result
 
@@ -248,9 +217,7 @@ def test_tp_review_happy_path(tmp_path):
 def test_tp_review_no_treatment_plan(tmp_path):
     _make_client(tmp_path, "new-client")
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(
-        ws, workflow="tp-review", client_id="new-client"
-    )
+    result = _execute_map(ws, map="tp-review", client_id="new-client")
     assert result.startswith("Error:")
     assert "No treatment plan" in result
 
@@ -258,21 +225,15 @@ def test_tp_review_no_treatment_plan(tmp_path):
 def test_tp_review_no_progress_notes(tmp_path):
     _make_client_with_profile(tmp_path, "no-notes")
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(
-        ws, workflow="tp-review", client_id="no-notes"
-    )
+    result = _execute_map(ws, map="tp-review", client_id="no-notes")
     assert result.startswith("Error:")
     assert "No progress notes" in result
 
 
-# --- Wellness Assessment workflow ---
-
 def test_wa_initial(tmp_path):
     _make_client_with_profile(tmp_path, "carol")
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(
-        ws, workflow="wellness-assessment", client_id="carol"
-    )
+    result = _execute_map(ws, map="wellness-assessment", client_id="carol")
     assert not result.startswith("Error:")
     assert "initial" in result
 
@@ -280,20 +241,20 @@ def test_wa_initial(tmp_path):
 def test_wa_readministration(tmp_path):
     _make_client_with_wa(tmp_path, "carol", wa_count=2)
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(
-        ws, workflow="wellness-assessment", client_id="carol"
-    )
+    result = _execute_map(ws, map="wellness-assessment", client_id="carol")
     assert not result.startswith("Error:")
     assert "re-administration" in result
-    assert "#3" in result  # admin_number = 2 + 1
+    assert "#3" in result
 
 
 def test_wa_with_file(tmp_path):
     _make_client_with_profile(tmp_path, "carol")
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(
-        ws, workflow="wellness-assessment", client_id="carol",
-        file_reference="wa-scan.pdf"
+    result = _execute_map(
+        ws,
+        map="wellness-assessment",
+        client_id="carol",
+        file_reference="wa-scan.pdf",
     )
     assert not result.startswith("Error:")
     assert "wa-scan.pdf" in result
@@ -302,9 +263,7 @@ def test_wa_with_file(tmp_path):
 def test_wa_without_file(tmp_path):
     _make_client_with_profile(tmp_path, "carol")
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(
-        ws, workflow="wellness-assessment", client_id="carol"
-    )
+    result = _execute_map(ws, map="wellness-assessment", client_id="carol")
     assert not result.startswith("Error:")
     assert "conversation above" in result
 
@@ -312,48 +271,39 @@ def test_wa_without_file(tmp_path):
 def test_wa_includes_history(tmp_path):
     _make_client_with_wa(tmp_path, "carol", wa_count=1)
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(
-        ws, workflow="wellness-assessment", client_id="carol"
-    )
+    result = _execute_map(ws, map="wellness-assessment", client_id="carol")
     assert "WA 1" in result
 
-
-# --- Session reminders ---
 
 def test_session_reminders_no_wa(tmp_path):
     _make_client_with_profile(tmp_path, "dana")
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(
-        ws, workflow="session", client_id="dana"
-    )
+    result = _execute_map(ws, map="session", client_id="dana")
     assert "No Wellness Assessment" in result
 
 
 def test_session_reminders_tp_review_overdue(tmp_path):
     _make_client_with_profile(tmp_path, "eve")
-    # Set initiation date far enough back that review is overdue
     tp = tmp_path / "clients" / "eve" / "treatment-plan" / "current.md"
     tp.write_text("# TP\n**Initiation Date** — 2024-01-01")
     ws = _make_workspace(tmp_path)
-    result = ActivateWorkflowTool().execute(
-        ws, workflow="session", client_id="eve"
-    )
+    result = _execute_map(ws, map="session", client_id="eve")
     assert "past due" in result
 
 
-# --- get_plan_prompt ---
-
-def test_get_plan_prompt_intake_with_file(tmp_path):
+def test_get_map_plan_prompt_intake_with_file(tmp_path):
     ws = _make_workspace(tmp_path)
-    result = get_plan_prompt("intake", ws, file_reference="recording.m4a", date="2025-06-01")
+    result = get_map_plan_prompt(
+        "intake", ws, file_reference="recording.m4a", date="2025-06-01"
+    )
     assert result is not None
     assert "recording.m4a" in result
 
 
-def test_get_plan_prompt_session_with_file(tmp_path):
+def test_get_map_plan_prompt_session_with_file(tmp_path):
     _make_client_with_profile(tmp_path, "bob")
     ws = _make_workspace(tmp_path)
-    result = get_plan_prompt(
+    result = get_map_plan_prompt(
         "session", ws, file_reference="session.m4a", client_id="bob", date="2025-06-01"
     )
     assert result is not None
@@ -361,11 +311,8 @@ def test_get_plan_prompt_session_with_file(tmp_path):
     assert "session.m4a" in result
 
 
-def test_get_plan_prompt_returns_none(tmp_path):
+def test_get_map_plan_prompt_returns_none(tmp_path):
     ws = _make_workspace(tmp_path)
-    # intake without file_reference → None
-    assert get_plan_prompt("intake", ws) is None
-    # session without file_reference → None
-    assert get_plan_prompt("session", ws, client_id="bob") is None
-    # unknown workflow → None
-    assert get_plan_prompt("compliance", ws, client_id="bob") is None
+    assert get_map_plan_prompt("intake", ws) is None
+    assert get_map_plan_prompt("session", ws, client_id="bob") is None
+    assert get_map_plan_prompt("compliance", ws, client_id="bob") is None

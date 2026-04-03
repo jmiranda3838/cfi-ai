@@ -1,4 +1,4 @@
-"""The /tp-review slash command — treatment plan review and update."""
+"""The /tp-review slash map — treatment plan review and update."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import datetime
 from typing import TYPE_CHECKING
 
 from cfi_ai.clients import load_compliance_context
-from cfi_ai.commands import CommandResult, build_skill_message, register
+from cfi_ai.maps import MapResult, build_map_message, register_map
 from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
 
 if TYPE_CHECKING:
@@ -14,8 +14,8 @@ if TYPE_CHECKING:
     from cfi_ai.workspace import Workspace
 
 
-@register("tp-review", description="Review and update a client's treatment plan based on progress notes")
-def handle_tp_review(args: str | None, ui: UI, workspace: "Workspace") -> CommandResult:
+@register_map("tp-review", description="Review and update a client's treatment plan based on progress notes")
+def handle_tp_review(args: str | None, ui: UI, workspace: "Workspace") -> MapResult:
     # Fast path: single-token arg that matches a valid client directory
     if args and args.strip():
         tokens = args.strip().split()
@@ -37,12 +37,12 @@ def handle_tp_review(args: str | None, ui: UI, workspace: "Workspace") -> Comman
                         review_context=review_context,
                     )
                     ui.print_info(f"Running treatment plan review for `{client_id}` ({today}).")
-                    return CommandResult(message=message, workflow_mode=True)
+                    return MapResult(message=message, map_mode=True)
 
-    # Skill path: let the LLM resolve ambiguity
-    return CommandResult(
-        message=build_skill_message(
-            workflow="tp-review",
+    # Map path: let the LLM resolve ambiguity
+    return MapResult(
+        message=build_map_message(
+            map_name="tp-review",
             description="review and update a client's treatment plan based on progress notes",
             user_input=args,
             workspace=workspace,

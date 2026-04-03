@@ -168,21 +168,21 @@ def _interview_key_bindings() -> KeyBindings:
     return kb
 
 
-class SlashCommandCompleter(Completer):
-    """Autocomplete for slash commands."""
+class SlashMapCompleter(Completer):
+    """Autocomplete for slash maps."""
 
     def __init__(self) -> None:
-        self._commands: dict[str, str] = {}
+        self._maps: dict[str, str] = {}
 
-    def set_commands(self, commands: dict[str, str]) -> None:
-        self._commands = commands
+    def set_maps(self, maps: dict[str, str]) -> None:
+        self._maps = maps
 
     def get_completions(self, document, complete_event):
         text = document.text_before_cursor
         if " " in text or not text.startswith("/"):
             return
         prefix = text[1:]
-        for name, desc in sorted(self._commands.items()):
+        for name, desc in sorted(self._maps.items()):
             if name.startswith(prefix):
                 yield Completion(name, start_position=-len(prefix), display_meta=desc)
 
@@ -191,7 +191,7 @@ class UI:
     def __init__(self) -> None:
         self.console = Console(theme=CFI_THEME)
         self.status = StatusManager()
-        self._completer = SlashCommandCompleter()
+        self._completer = SlashMapCompleter()
         self._plan_mode = False
         history_dir = Path.home() / ".cfi-ai"
         history_dir.mkdir(exist_ok=True)
@@ -210,9 +210,9 @@ class UI:
         mode = "chatting_plan" if self._plan_mode else "chatting"
         self.status.set_mode(mode)
 
-    def set_commands(self, commands: dict[str, str]) -> None:
-        """Set the available slash commands for autocomplete."""
-        self._completer.set_commands(commands)
+    def set_maps(self, maps: dict[str, str]) -> None:
+        """Set the available slash maps for autocomplete."""
+        self._completer.set_maps(maps)
 
     def print_welcome(self, workspace_path: str) -> None:
         self.console.print(f"[primary]{MASCOT}[/primary]")

@@ -98,8 +98,8 @@ class Client:
         and provides function calls when done."""
         request_id = uuid.uuid4().hex[:8]
         max_tokens = self._max_tokens
-        if mode == "workflow":
-            # Workflow mode needs higher budget for multi-file writes.
+        if mode == "map":
+            # Map mode needs higher budget for multi-file writes.
             # 65536 is Gemini 2.5 Flash's max output token limit.
             max_tokens = max(max_tokens, 65536)
         _log.debug(

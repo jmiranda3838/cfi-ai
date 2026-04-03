@@ -34,7 +34,7 @@ def test_write_file_rejects_overwrite(tmp_path):
 def test_registry():
     api_tools = tools.get_api_tools()
     names = {fd.name for fd in api_tools.function_declarations}
-    assert names == {"activate_workflow", "apply_patch", "attach_path", "extract_document", "interview", "run_command", "transcribe_audio", "write_file"}
+    assert names == {"activate_map", "apply_patch", "attach_path", "extract_document", "interview", "run_command", "transcribe_audio", "write_file"}
 
 
 def test_classify_mutation_static():

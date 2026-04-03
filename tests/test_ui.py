@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 from prompt_toolkit.document import Document
 
-from cfi_ai.ui import SlashCommandCompleter, PlanApproval, UI
+from cfi_ai.ui import PlanApproval, SlashMapCompleter, UI
 
 
 def _get_completions(completer, text):
@@ -11,8 +11,8 @@ def _get_completions(completer, text):
 
 
 def test_completer_yields_on_slash():
-    c = SlashCommandCompleter()
-    c.set_commands({"help": "Show help", "intake": "Process intake"})
+    c = SlashMapCompleter()
+    c.set_maps({"help": "Show help", "intake": "Process intake"})
     completions = _get_completions(c, "/")
     names = [comp.text for comp in completions]
     assert "help" in names
@@ -20,23 +20,23 @@ def test_completer_yields_on_slash():
 
 
 def test_completer_filters_by_prefix():
-    c = SlashCommandCompleter()
-    c.set_commands({"help": "Show help", "intake": "Process intake"})
+    c = SlashMapCompleter()
+    c.set_maps({"help": "Show help", "intake": "Process intake"})
     completions = _get_completions(c, "/in")
     names = [comp.text for comp in completions]
     assert names == ["intake"]
 
 
 def test_completer_empty_after_space():
-    c = SlashCommandCompleter()
-    c.set_commands({"intake": "Process intake"})
+    c = SlashMapCompleter()
+    c.set_maps({"intake": "Process intake"})
     completions = _get_completions(c, "/intake ")
     assert completions == []
 
 
 def test_completer_no_completions_without_slash():
-    c = SlashCommandCompleter()
-    c.set_commands({"help": "Show help", "intake": "Process intake"})
+    c = SlashMapCompleter()
+    c.set_maps({"help": "Show help", "intake": "Process intake"})
     completions = _get_completions(c, "help")
     assert completions == []
 

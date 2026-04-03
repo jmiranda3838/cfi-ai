@@ -1,4 +1,4 @@
-"""Tool for LLM-initiated workflow activation (skills system)."""
+"""Tool for LLM-initiated map activation."""
 
 from __future__ import annotations
 
@@ -6,6 +6,7 @@ import datetime
 from typing import TYPE_CHECKING
 
 from cfi_ai.clients import (
+    build_existing_clients_section,
     count_wa_files,
     build_session_reminders,
     list_clients,
@@ -16,20 +17,20 @@ from cfi_ai.clients import (
 from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
 from cfi_ai.prompts.intake import (
     INTAKE_FILE_PLAN_PROMPT,
-    INTAKE_FILE_WORKFLOW_PROMPT,
-    INTAKE_WORKFLOW_PROMPT,
+    INTAKE_FILE_MAP_PROMPT,
+    INTAKE_MAP_PROMPT,
 )
 from cfi_ai.prompts.session import (
     PROGRESS_NOTE_GUIDANCE,
     PROGRESS_NOTE_PLAN_CRITERIA,
     SESSION_FILE_PLAN_PROMPT,
-    SESSION_FILE_WORKFLOW_PROMPT,
-    SESSION_WORKFLOW_PROMPT,
+    SESSION_FILE_MAP_PROMPT,
+    SESSION_MAP_PROMPT,
 )
 from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
 from cfi_ai.prompts.wellness_assessment import (
-    WA_FILE_WORKFLOW_PROMPT,
-    WA_WORKFLOW_PROMPT,
+    WA_FILE_MAP_PROMPT,
+    WA_MAP_PROMPT,
 )
 from cfi_ai.tools.base import BaseTool, ToolDefinition
 
@@ -42,7 +43,7 @@ _CONVERSATION_INPUT_PLACEHOLDER = (
     "If the user mentioned files, use attach_path to load them.]"
 )
 
-_VALID_WORKFLOWS = {
+_VALID_MAPS = {
     "intake",
     "session",
     "compliance",
@@ -50,49 +51,34 @@ _VALID_WORKFLOWS = {
     "wellness-assessment",
 }
 
-_REQUIRES_CLIENT_ID = {
+_MAPS_REQUIRING_CLIENT_ID = {
     "session",
     "compliance",
     "tp-review",
     "wellness-assessment",
 }
 
-# Workflows where workflow_mode should NOT be set (read-only analysis)
-NON_WORKFLOW_MODE = {"compliance"}
+# Maps where map_mode should NOT be set (read-only analysis)
+NON_MAP_MODE = {"compliance"}
 
 
-def _build_existing_clients_section(workspace: Workspace) -> str:
-    """Build a section describing existing clients for the prompt."""
-    clients = list_clients(workspace)
-    if not clients:
-        return "## Existing Clients\nNo existing clients found. This will be a new client."
-
-    client_list = "\n".join(f"- `{cid}`" for cid in clients)
-    return (
-        "## Existing Clients\n\n"
-        "The following client IDs already exist:\n"
-        f"{client_list}\n\n"
-        "If the session subject matches an existing client, use `attach_path` to load "
-        "`clients/<client-id>/profile/current.md` and "
-        "`clients/<client-id>/treatment-plan/current.md` for context before writing."
-    )
-def get_plan_prompt(
-    workflow: str, workspace: Workspace, **kwargs: str
+def get_map_plan_prompt(
+    map_name: str, workspace: Workspace, **kwargs: str
 ) -> str | None:
-    """Return the plan-mode-specific prompt for a workflow, or None if none exists."""
+    """Return the plan-mode-specific prompt for a map, or None if none exists."""
     today = kwargs.get("date", datetime.date.today().isoformat())
     file_reference = kwargs.get("file_reference", "")
     client_id = kwargs.get("client_id", "")
 
-    if workflow == "intake" and file_reference:
-        existing_clients = _build_existing_clients_section(workspace)
+    if map_name == "intake" and file_reference:
+        existing_clients = build_existing_clients_section(workspace)
         return INTAKE_FILE_PLAN_PROMPT.format(
             file_reference=file_reference,
             date=today,
             existing_clients=existing_clients,
         )
 
-    if workflow == "session" and file_reference and client_id:
+    if map_name == "session" and file_reference and client_id:
         client_context = load_client_context(workspace, client_id)
         note_guidance = PROGRESS_NOTE_GUIDANCE.format(date=today)
         return SESSION_FILE_PLAN_PROMPT.format(
@@ -107,36 +93,44 @@ def get_plan_prompt(
     return None
 
 
-class ActivateWorkflowTool(BaseTool):
-    name = "activate_workflow"
+class ActivateMapTool(BaseTool):
+    name = "activate_map"
     mutating = False
 
     def definition(self) -> ToolDefinition:
         return ToolDefinition(
             name=self.name,
             description=(
-                "Activate a clinical workflow to load specialized compliance prompts "
+                "Activate a clinical map to load specialized compliance prompts "
                 "and client context. Call this when the user describes a clinical task "
                 "(intake, session note, compliance check, treatment plan review, or "
-                "wellness assessment) without using an explicit slash command. "
+                "wellness assessment) without needing the user to say 'map'. "
                 "Call this tool ALONE — do not combine with other tool calls."
             ),
             input_schema={
                 "type": "object",
                 "properties": {
-                    "workflow": {
+                    "map": {
                         "type": "string",
-                        "enum": list(_VALID_WORKFLOWS),
+                        "enum": list(_VALID_MAPS),
                         "description": (
-                            "The workflow to activate: intake, session, compliance, "
+                            "The map to activate: intake, session, compliance, "
                             "tp-review, or wellness-assessment."
+                        ),
+                    },
+                    "source": {
+                        "type": "string",
+                        "enum": ["slash", "implicit"],
+                        "description": (
+                            "How this map was triggered: 'slash' for an explicit /map "
+                            "invocation, 'implicit' for direct intent-based activation."
                         ),
                     },
                     "client_id": {
                         "type": "string",
                         "description": (
                             "Client identifier slug (e.g. 'jane-doe'). "
-                            "Required for all workflows except intake."
+                            "Required for all maps except intake."
                         ),
                     },
                     "file_reference": {
@@ -148,27 +142,27 @@ class ActivateWorkflowTool(BaseTool):
                         ),
                     },
                 },
-                "required": ["workflow"],
+                "required": ["map", "source"],
             },
         )
 
     def execute(self, workspace: Workspace, client=None, **kwargs) -> str:
-        workflow = kwargs.get("workflow", "")
+        map_name = kwargs.get("map", "")
         client_id = kwargs.get("client_id", "")
         file_reference = kwargs.get("file_reference", "")
 
-        if workflow not in _VALID_WORKFLOWS:
+        if map_name not in _VALID_MAPS:
             return (
-                f"Error: Unknown workflow '{workflow}'. "
-                f"Valid workflows: {', '.join(sorted(_VALID_WORKFLOWS))}"
+                f"Error: Unknown map '{map_name}'. "
+                f"Valid maps: {', '.join(sorted(_VALID_MAPS))}"
             )
 
         # Check client_id requirement
-        if workflow in _REQUIRES_CLIENT_ID and not client_id:
+        if map_name in _MAPS_REQUIRING_CLIENT_ID and not client_id:
             clients = list_clients(workspace)
             client_list = ", ".join(clients) if clients else "none found"
             return (
-                f"Error: The '{workflow}' workflow requires a client_id. "
+                f"Error: The '{map_name}' map requires a client_id. "
                 f"Available clients: {client_list}. "
                 "Use the interview tool to ask the user which client."
             )
@@ -186,32 +180,32 @@ class ActivateWorkflowTool(BaseTool):
 
         today = datetime.date.today().isoformat()
 
-        if workflow == "intake":
+        if map_name == "intake":
             return self._activate_intake(workspace, today, file_reference)
-        elif workflow == "session":
+        if map_name == "session":
             return self._activate_session(workspace, today, client_id, file_reference)
-        elif workflow == "compliance":
+        if map_name == "compliance":
             return self._activate_compliance(workspace, today, client_id)
-        elif workflow == "tp-review":
+        if map_name == "tp-review":
             return self._activate_tp_review(workspace, today, client_id)
-        elif workflow == "wellness-assessment":
+        if map_name == "wellness-assessment":
             return self._activate_wa(workspace, today, client_id, file_reference)
 
-        return f"Error: Unhandled workflow '{workflow}'"
+        return f"Error: Unhandled map '{map_name}'"
 
     def _activate_intake(
         self, workspace: Workspace, today: str, file_reference: str
     ) -> str:
-        existing_clients = _build_existing_clients_section(workspace)
+        existing_clients = build_existing_clients_section(workspace)
 
         if file_reference:
-            return INTAKE_FILE_WORKFLOW_PROMPT.format(
+            return INTAKE_FILE_MAP_PROMPT.format(
                 file_reference=file_reference,
                 date=today,
                 existing_clients=existing_clients,
             )
 
-        return INTAKE_WORKFLOW_PROMPT.format(
+        return INTAKE_MAP_PROMPT.format(
             transcript=_CONVERSATION_INPUT_PLACEHOLDER,
             date=today,
             existing_clients=existing_clients,
@@ -229,7 +223,7 @@ class ActivateWorkflowTool(BaseTool):
         reminders = build_session_reminders(workspace, client_id)
 
         if file_reference:
-            prompt = SESSION_FILE_WORKFLOW_PROMPT.format(
+            prompt = SESSION_FILE_MAP_PROMPT.format(
                 file_reference=file_reference,
                 date=today,
                 client_id=client_id,
@@ -237,7 +231,7 @@ class ActivateWorkflowTool(BaseTool):
                 progress_note_guidance=note_guidance,
             )
         else:
-            prompt = SESSION_WORKFLOW_PROMPT.format(
+            prompt = SESSION_MAP_PROMPT.format(
                 transcript=_CONVERSATION_INPUT_PLACEHOLDER,
                 date=today,
                 client_id=client_id,
@@ -256,7 +250,7 @@ class ActivateWorkflowTool(BaseTool):
         if not compliance_context:
             return (
                 f"Error: No clinical files found for client '{client_id}'. "
-                "Run the intake workflow first."
+                "Run the Intake Map first."
             )
 
         return COMPLIANCE_PROMPT.format(
@@ -275,7 +269,7 @@ class ActivateWorkflowTool(BaseTool):
         if not tp_file.is_file():
             return (
                 f"Error: No treatment plan found for client '{client_id}'. "
-                "Run the intake workflow first to create the initial treatment plan."
+                "Run the Intake Map first to create the initial treatment plan."
             )
 
         # Validate at least one progress note exists
@@ -312,7 +306,7 @@ class ActivateWorkflowTool(BaseTool):
         wa_history = load_wa_history(workspace, client_id)
 
         if file_reference:
-            return WA_FILE_WORKFLOW_PROMPT.format(
+            return WA_FILE_MAP_PROMPT.format(
                 date=today,
                 client_id=client_id,
                 client_context=client_context,
@@ -322,7 +316,7 @@ class ActivateWorkflowTool(BaseTool):
                 file_reference=file_reference,
             )
 
-        return WA_WORKFLOW_PROMPT.format(
+        return WA_MAP_PROMPT.format(
             date=today,
             client_id=client_id,
             client_context=client_context,

@@ -1,8 +1,8 @@
-"""Clinical prompt templates for the /session workflow (ongoing progress notes)."""
+"""Clinical prompt templates for the /session map (ongoing progress notes)."""
 
 from cfi_ai.prompts.shared import CRITICAL_INSTRUCTIONS
 
-SESSION_WORKFLOW_PROMPT = (
+SESSION_MAP_PROMPT = (
     """\
 You are generating an Optum-compliant progress note for an ongoing therapy session. \
 Today's date is {date}.
@@ -20,7 +20,7 @@ Client ID: `{client_id}`
 
 {client_context}
 
-## Workflow
+## Map
 
 ### Phase 1: Process & Summarize
 1. Review the transcript and client context (profile + treatment plan).
@@ -53,7 +53,7 @@ Save the transcript verbatim with a brief header noting the date and session typ
 """
 )
 
-SESSION_FILE_WORKFLOW_PROMPT = (
+SESSION_FILE_MAP_PROMPT = (
     """\
 You are generating an Optum-compliant progress note for an ongoing therapy session \
 based on one or more files provided by the user. Today's date is {date}.
@@ -82,7 +82,7 @@ Client ID: `{client_id}`
 
 {client_context}
 
-## Workflow
+## Map
 
 ### Phase 1: Process Input Files & Summarize
 1. **Process files** step by step using the appropriate tool for each:
@@ -128,7 +128,7 @@ it was transcribed from audio in its header.
 )
 
 SESSION_FILE_PLAN_PROMPT = """\
-You are planning a progress note workflow. Today's date is {date}.
+You are planning the Session Map. Today's date is {date}.
 
 The user has provided one or more files for session processing: \
 `{file_reference}`
@@ -139,7 +139,7 @@ Client ID: `{client_id}`
 
 ## Instructions
 
-Create a structured execution plan for the session note workflow. \
+Create a structured execution plan for the Session Map. \
 Do NOT load or process the files — the execution agent will do that.
 
 1. **List all files** to create with their full paths and quality criteria:

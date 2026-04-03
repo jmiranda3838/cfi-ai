@@ -1,8 +1,8 @@
-"""Clinical prompt templates for the /wellness-assessment workflow (G22E02)."""
+"""Clinical prompt templates for the /wellness-assessment map (G22E02)."""
 
 from cfi_ai.prompts.shared import CRITICAL_INSTRUCTIONS, WA_SCORING_RULES, WA_OUTPUT_FORMAT
 
-WA_WORKFLOW_PROMPT = (
+WA_MAP_PROMPT = (
     """\
 You are processing a Wellness Assessment (Optum Form G22E02) and calculating \
 structured scores. Today's date is {date}.
@@ -31,7 +31,7 @@ Client ID: `{client_id}`
 """
     + WA_SCORING_RULES
     + """
-## Workflow
+## Map
 
 ### Phase 1: Score & Summarize
 1. Extract all item responses from the input data.
@@ -54,7 +54,7 @@ Save the file under `clients/{client_id}/`.
     + "\n"
 )
 
-WA_FILE_WORKFLOW_PROMPT = (
+WA_FILE_MAP_PROMPT = (
     """\
 You are processing a Wellness Assessment (Optum Form G22E02) and calculating \
 structured scores. Today's date is {date}.
@@ -90,7 +90,7 @@ Client ID: `{client_id}`
 """
     + WA_SCORING_RULES
     + """
-## Workflow
+## Map
 
 ### Phase 1: Process File, Score & Summarize
 1. Load the file using the appropriate tool.

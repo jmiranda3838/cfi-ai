@@ -1,4 +1,4 @@
-"""The /compliance slash command — Optum audit compliance check."""
+"""The /compliance slash map — Optum audit compliance check."""
 
 from __future__ import annotations
 
@@ -6,7 +6,7 @@ import datetime
 from typing import TYPE_CHECKING
 
 from cfi_ai.clients import load_compliance_context
-from cfi_ai.commands import CommandResult, build_skill_message, register
+from cfi_ai.maps import MapResult, build_map_message, register_map
 from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
 
 if TYPE_CHECKING:
@@ -14,8 +14,8 @@ if TYPE_CHECKING:
     from cfi_ai.workspace import Workspace
 
 
-@register("compliance", description="Run Optum compliance check on a client's records")
-def handle_compliance(args: str | None, ui: UI, workspace: "Workspace") -> CommandResult:
+@register_map("compliance", description="Run Optum compliance check on a client's records")
+def handle_compliance(args: str | None, ui: UI, workspace: "Workspace") -> MapResult:
     # Fast path: single-token arg that matches a valid client directory
     if args and args.strip():
         tokens = args.strip().split()
@@ -38,12 +38,12 @@ def handle_compliance(args: str | None, ui: UI, workspace: "Workspace") -> Comma
                         compliance_context=compliance_context,
                     )
                     ui.print_info(f"Running Optum compliance check for `{client_id}` ({today}).")
-                    return CommandResult(message=message, workflow_mode=False)
+                    return MapResult(message=message, map_mode=False)
 
-    # Skill path: let the LLM resolve ambiguity
-    return CommandResult(
-        message=build_skill_message(
-            workflow="compliance",
+    # Map path: let the LLM resolve ambiguity
+    return MapResult(
+        message=build_map_message(
+            map_name="compliance",
             description="run an Optum Treatment Record Audit compliance check",
             user_input=args,
             workspace=workspace,

@@ -1,15 +1,16 @@
 import datetime
 from unittest.mock import MagicMock
 
-from cfi_ai.commands.intake import handle_intake, _build_existing_clients_section
+from cfi_ai.clients import build_existing_clients_section
+from cfi_ai.maps.intake import handle_intake
 from cfi_ai.workspace import Workspace
 
 
-# --- _build_existing_clients_section tests ---
+# --- build_existing_clients_section tests ---
 
 def test_existing_clients_none(tmp_path):
     ws = Workspace(str(tmp_path))
-    section = _build_existing_clients_section(ws)
+    section = build_existing_clients_section(ws)
     assert "No existing clients" in section
 
 
@@ -18,7 +19,7 @@ def test_existing_clients_with_data(tmp_path):
     (client_dir / "profile").mkdir(parents=True)
     (client_dir / "profile" / "current.md").write_text("# Jane Doe profile")
     ws = Workspace(str(tmp_path))
-    section = _build_existing_clients_section(ws)
+    section = build_existing_clients_section(ws)
     assert "jane-doe" in section
     # Should only list slugs, not load full profile content
     assert "Jane Doe profile" not in section
@@ -27,7 +28,7 @@ def test_existing_clients_with_data(tmp_path):
 # --- handle_intake fast path tests ---
 
 def test_handle_intake_file_reference(tmp_path):
-    """File args produce a message with INTAKE_FILE_WORKFLOW_PROMPT."""
+    """File args produce a message with INTAKE_FILE_MAP_PROMPT."""
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
     result = handle_intake("session.mp3", ui, ws)
@@ -54,12 +55,12 @@ def test_handle_intake_message_contains_existing_clients(tmp_path):
     assert "existing-client" in result.message
 
 
-def test_handle_intake_workflow_mode(tmp_path):
-    """File intake sets workflow_mode=True."""
+def test_handle_intake_map_mode(tmp_path):
+    """File intake sets map_mode=True."""
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
     result = handle_intake("session.mp3", ui, ws)
-    assert result.workflow_mode is True
+    assert result.map_mode is True
 
 
 def test_handle_intake_file_sets_plan_prompt(tmp_path):
@@ -74,19 +75,19 @@ def test_handle_intake_file_sets_plan_prompt(tmp_path):
 
 # --- handle_intake skill path tests ---
 
-def test_handle_intake_no_args_skill_path(tmp_path):
-    """No args → skill path message for the LLM, no error."""
+def test_handle_intake_no_args_map_path(tmp_path):
+    """No args → map path message for the LLM, no error."""
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
     result = handle_intake(None, ui, ws)
     assert result.message is not None
     assert result.error is None
-    assert "[SKILL: intake]" in result.message
-    assert "activate_workflow" in result.message
+    assert "[MAP: intake]" in result.message
+    assert "activate_map" in result.message
 
 
 def test_handle_intake_no_args_lists_clients(tmp_path):
-    """Skill path includes available clients."""
+    """Map path includes available clients."""
     (tmp_path / "clients" / "bob-jones").mkdir(parents=True)
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
@@ -94,10 +95,10 @@ def test_handle_intake_no_args_lists_clients(tmp_path):
     assert "bob-jones" in result.message
 
 
-def test_handle_intake_empty_args_skill_path(tmp_path):
-    """Empty/whitespace args → skill path."""
+def test_handle_intake_empty_args_map_path(tmp_path):
+    """Empty/whitespace args → map path."""
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
     result = handle_intake("   ", ui, ws)
     assert result.error is None
-    assert "[SKILL: intake]" in result.message
+    assert "[MAP: intake]" in result.message

@@ -7,17 +7,18 @@ if TYPE_CHECKING:
     from cfi_ai.workspace import Workspace
 
 
-WORKFLOWS_SECTION = """
-## Available Clinical Workflows
+MAPS_SECTION = """
+## Available Clinical Maps
 
-When the user describes a clinical task that matches one of these workflows, call \
-`activate_workflow` to load the specialized prompt and context. Do NOT attempt clinical \
-documentation without activating the appropriate workflow first — the workflow prompts \
-contain critical compliance requirements and formatting rules.
+Maps are reusable clinical routes. The user does not need to say "map" to invoke one. \
+If the user's request clearly matches one of these maps, call `activate_map` to load the \
+specialized prompt and context. Do NOT attempt clinical documentation without activating \
+the appropriate map first — the map prompts contain critical compliance requirements and \
+formatting rules.
 
 - **intake**: New client intake materials (recordings, transcripts, questionnaire PDFs, \
 wellness assessments). Triggers: "new client," "intake," "first session," "initial \
-assessment," or providing intake materials without specifying a workflow.
+assessment," or providing intake materials without specifying a map.
 - **session**: Progress note for an ongoing session. Triggers: "session note," "progress \
 note," session audio/transcript for a known client. Requires client_id.
 - **compliance**: Optum audit compliance check. Triggers: "compliance check," "audit," \
@@ -27,16 +28,14 @@ note," session audio/transcript for a known client. Requires client_id.
 - **wellness-assessment**: Score a G22E02 Wellness Assessment. Triggers: "wellness \
 assessment," "G22E02," "GD score," or providing a WA form/scan. Requires client_id.
 
-**Important:** Call `activate_workflow` alone — do not combine it with other tool calls \
-(e.g. write_file, apply_patch) in the same response. Wait for the workflow prompt before \
-proceeding.
+Call `activate_map` alone — do not combine it with other tool calls in the same response. \
+Use `source="implicit"` when activating a map directly from user intent. Use \
+`source="slash"` when the conversation includes a `[MAP: ...]` marker from an explicit \
+slash invocation. If client_id is needed but unknown, use `interview` first to ask the user.
 
-If client_id is needed but unknown, use `interview` first to ask the user.
-
-When you receive a message starting with `[SKILL: ...]`, the user invoked a slash command \
-to start a clinical workflow. If the message indicates missing information (client ID, \
-session input, etc.), use `interview` to collect it first, then call `activate_workflow` \
-with the resolved parameters.
+When you receive a message starting with `[MAP: ...]`, the user invoked a slash map. \
+If the message indicates missing information (client ID, session input, etc.), use \
+`interview` to collect it first, then call `activate_map` with the resolved parameters.
 """
 
 
@@ -58,7 +57,7 @@ clients/<client-id>/
 ```
 
 - `current.md` files are copies of the latest dated version for quick access.
-- Use the `/intake` command to process intake materials into TheraNest-ready clinical documents.
+- Use the `/intake` map to process intake materials into TheraNest-ready clinical documents.
 - When asked to "integrate" new data into existing documents, rewrite the document \
 content to incorporate the new information seamlessly — do not just link or attach \
 the source file.
@@ -72,7 +71,7 @@ def build_plan_mode_system_prompt(
 ) -> str:
     """Build the system prompt for plan mode (read-only research + structured plan)."""
     clients_section = ""
-    workflows_section = WORKFLOWS_SECTION
+    maps_section = MAPS_SECTION
     if workspace is not None and (workspace.root / "clients").is_dir():
         clients_section = CLIENTS_SECTION
 
@@ -91,7 +90,7 @@ mutating commands.
 - attach_path: load any local file into context (text, audio, images) — absolute or workspace-relative
 - extract_document: extract text/data from PDFs (text extraction with vision fallback for scanned forms)
 - interview: ask the user structured questions interactively (presented one at a time)
-- activate_workflow: activate a clinical workflow when the user describes a clinical task. \
+- activate_map: activate a clinical map when the user describes a clinical task. \
 Call this tool ALONE — do not combine with other tools.
 
 You do NOT have access to apply_patch, write_file, or mutating commands (mv, cp, mkdir, rm).
@@ -140,7 +139,7 @@ will read source files and produce the actual content.
 - During execution, emit all file modifications for a given step in a single \
 response to minimize approval prompts for the user.
 {clients_section}\
-{workflows_section}"""
+{maps_section}"""
 
 
 def build_system_prompt(
@@ -149,7 +148,7 @@ def build_system_prompt(
     workspace: Workspace | None = None,
 ) -> str:
     clients_section = ""
-    workflows_section = WORKFLOWS_SECTION
+    maps_section = MAPS_SECTION
     if workspace is not None and (workspace.root / "clients").is_dir():
         clients_section = CLIENTS_SECTION
 
@@ -199,4 +198,4 @@ identifiers and display names — and update or remove them as appropriate. Read
 files before editing unless the exact replacement text is already known (e.g. from a \
 prior grep). Verify no stale references remain before finishing.
 {clients_section}\
-{workflows_section}"""
+{maps_section}"""

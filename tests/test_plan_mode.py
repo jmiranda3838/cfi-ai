@@ -22,10 +22,10 @@ def test_user_input_dataclass():
 
 
 def test_get_readonly_api_tools():
-    """Readonly tool set contains run_command, attach_path, extract_document, interview, and activate_workflow."""
+    """Readonly tool set contains run_command, attach_path, extract_document, interview, and activate_map."""
     tool = get_readonly_api_tools()
     names = {fd.name for fd in tool.function_declarations}
-    assert names == {"run_command", "attach_path", "extract_document", "interview", "activate_workflow"}
+    assert names == {"run_command", "attach_path", "extract_document", "interview", "activate_map"}
     assert "apply_patch" not in names
     assert "write_file" not in names
 
@@ -117,7 +117,7 @@ def test_plan_context_preserved_into_execution():
 def test_execution_handoff_uses_original_message_when_plan_prompt():
     """When plan_prompt is set, execution handoff uses the original message (user_text)
     plus the approved plan, not the generic 'Execute the following' preamble."""
-    user_text = "Original intake workflow prompt with file reference"
+    user_text = "Original intake map prompt with file reference"
     plan_prompt = "Plan prompt for the planner"
     plan_text = "Step 1: load audio\nStep 2: write files"
 
@@ -184,42 +184,42 @@ def test_plan_mode_result_defaults():
     """PlanModeResult defaults: all fields None/False."""
     r = PlanModeResult()
     assert r.plan_text is None
-    assert r.workflow_execution_prompt is None
-    assert r.workflow_plan_prompt is None
-    assert r.workflow_mode is False
+    assert r.map_execution_prompt is None
+    assert r.map_plan_prompt is None
+    assert r.map_mode is False
 
 
 def test_plan_mode_result_with_values():
     """PlanModeResult holds provided values."""
     r = PlanModeResult(
         plan_text="the plan",
-        workflow_execution_prompt="exec prompt",
-        workflow_plan_prompt="plan prompt",
-        workflow_mode=True,
+        map_execution_prompt="exec prompt",
+        map_plan_prompt="plan prompt",
+        map_mode=True,
     )
     assert r.plan_text == "the plan"
-    assert r.workflow_execution_prompt == "exec prompt"
-    assert r.workflow_plan_prompt == "plan prompt"
-    assert r.workflow_mode is True
+    assert r.map_execution_prompt == "exec prompt"
+    assert r.map_plan_prompt == "plan prompt"
+    assert r.map_mode is True
 
 
-def test_plan_mode_activate_workflow_pops_workflow_before_get_plan_prompt():
-    """activate_workflow path removes 'workflow' from fc_args before spreading into _get_plan_prompt.
+def test_plan_mode_activate_map_pops_map_before_get_map_plan_prompt():
+    """activate_map path removes 'map' from fc_args before spreading into _get_map_plan_prompt.
 
     Regression test: using .get() instead of .pop() would cause
-    TypeError: got multiple values for argument 'workflow'.
+    TypeError: got multiple values for argument 'map_name'.
     """
-    # Build a mock StreamResult whose .function_calls returns one activate_workflow call
+    # Build a mock StreamResult whose .function_calls returns one activate_map call
     mock_fc = MagicMock()
-    mock_fc.name = "activate_workflow"
-    mock_fc.args = {"workflow": "intake", "file_reference": "/tmp/test.txt"}
+    mock_fc.name = "activate_map"
+    mock_fc.args = {"map": "intake", "source": "implicit", "file_reference": "/tmp/test.txt"}
 
     mock_stream = MagicMock()
     mock_stream.text_chunks.return_value = iter([])
     mock_stream.parts = [
         types.Part.from_function_call(
-            name="activate_workflow",
-            args={"workflow": "intake", "file_reference": "/tmp/test.txt"},
+            name="activate_map",
+            args={"map": "intake", "source": "implicit", "file_reference": "/tmp/test.txt"},
         )
     ]
     mock_stream.function_calls = [mock_fc]
@@ -235,11 +235,11 @@ def test_plan_mode_activate_workflow_pops_workflow_before_get_plan_prompt():
 
     mock_workspace = MagicMock()
 
-    execution_prompt = "Workflow activated successfully."
+    execution_prompt = "Map activated successfully."
 
     with (
         patch("cfi_ai.agent.tools.execute", return_value=execution_prompt) as mock_execute,
-        patch("cfi_ai.agent._get_plan_prompt", return_value="plan prompt") as mock_get_plan,
+        patch("cfi_ai.agent._get_map_plan_prompt", return_value="plan prompt") as mock_get_plan,
     ):
         result = _run_plan_mode(
             client=mock_client,
@@ -248,24 +248,108 @@ def test_plan_mode_activate_workflow_pops_workflow_before_get_plan_prompt():
             plan_system_prompt="system",
             readonly_tools=MagicMock(),
             messages=[types.Content(role="user", parts=[types.Part.from_text(text="test")])],
-            allow_workflow_activation=True,
+            allow_map_activation=True,
         )
 
-    # tools.execute receives all args including workflow
+    # tools.execute receives all args including map
     mock_execute.assert_called_once()
     exec_kwargs = mock_execute.call_args.kwargs
-    assert exec_kwargs["workflow"] == "intake"
+    assert exec_kwargs["map"] == "intake"
 
-    # _get_plan_prompt receives workflow as positional arg, NOT in **kwargs
+    # _get_map_plan_prompt receives map as positional arg, NOT in **kwargs
     mock_get_plan.assert_called_once()
     plan_args, plan_kwargs = mock_get_plan.call_args
-    assert plan_args[0] == "intake"  # workflow positional
+    assert plan_args[0] == "intake"  # map positional
     assert plan_args[1] is mock_workspace  # workspace positional
-    assert "workflow" not in plan_kwargs  # must NOT appear as kwarg
+    assert "map" not in plan_kwargs  # must NOT appear as kwarg
+    assert plan_kwargs["source"] == "implicit"
     assert plan_kwargs["file_reference"] == "/tmp/test.txt"
 
-    # Result carries the workflow outputs
-    assert result.workflow_execution_prompt == execution_prompt
-    assert result.workflow_plan_prompt == "plan prompt"
-    assert result.workflow_mode is True
+    # Result carries the map outputs
+    assert result.map_execution_prompt == execution_prompt
+    assert result.map_plan_prompt == "plan prompt"
+    assert result.map_mode is True
 
+
+def test_plan_mode_implicit_map_activation_announces_map():
+    mock_fc = MagicMock()
+    mock_fc.name = "activate_map"
+    mock_fc.args = {"map": "intake", "source": "implicit", "file_reference": "/tmp/test.txt"}
+
+    mock_stream = MagicMock()
+    mock_stream.text_chunks.return_value = iter([])
+    mock_stream.parts = [
+        types.Part.from_function_call(
+            name="activate_map",
+            args={"map": "intake", "source": "implicit", "file_reference": "/tmp/test.txt"},
+        )
+    ]
+    mock_stream.function_calls = [mock_fc]
+    mock_stream.repetition_detected = False
+    mock_stream.request_id = "test"
+    mock_stream.log_completion = MagicMock()
+
+    mock_client = MagicMock()
+    mock_client.stream_response.return_value = mock_stream
+
+    mock_ui = MagicMock()
+    mock_ui.stream_markdown.return_value = ""
+    mock_workspace = MagicMock()
+
+    with (
+        patch("cfi_ai.agent.tools.execute", return_value="Map activated."),
+        patch("cfi_ai.agent._get_map_plan_prompt", return_value=None),
+    ):
+        _run_plan_mode(
+            client=mock_client,
+            ui=mock_ui,
+            workspace=mock_workspace,
+            plan_system_prompt="system",
+            readonly_tools=MagicMock(),
+            messages=[types.Content(role="user", parts=[types.Part.from_text(text="test")])],
+            allow_map_activation=True,
+        )
+
+    mock_ui.print_info.assert_any_call("Starting the Intake Map.")
+
+
+def test_plan_mode_slash_map_activation_skips_announcement():
+    mock_fc = MagicMock()
+    mock_fc.name = "activate_map"
+    mock_fc.args = {"map": "intake", "source": "slash", "file_reference": "/tmp/test.txt"}
+
+    mock_stream = MagicMock()
+    mock_stream.text_chunks.return_value = iter([])
+    mock_stream.parts = [
+        types.Part.from_function_call(
+            name="activate_map",
+            args={"map": "intake", "source": "slash", "file_reference": "/tmp/test.txt"},
+        )
+    ]
+    mock_stream.function_calls = [mock_fc]
+    mock_stream.repetition_detected = False
+    mock_stream.request_id = "test"
+    mock_stream.log_completion = MagicMock()
+
+    mock_client = MagicMock()
+    mock_client.stream_response.return_value = mock_stream
+
+    mock_ui = MagicMock()
+    mock_ui.stream_markdown.return_value = ""
+    mock_workspace = MagicMock()
+
+    with (
+        patch("cfi_ai.agent.tools.execute", return_value="Map activated."),
+        patch("cfi_ai.agent._get_map_plan_prompt", return_value=None),
+    ):
+        _run_plan_mode(
+            client=mock_client,
+            ui=mock_ui,
+            workspace=mock_workspace,
+            plan_system_prompt="system",
+            readonly_tools=MagicMock(),
+            messages=[types.Content(role="user", parts=[types.Part.from_text(text="test")])],
+            allow_map_activation=True,
+        )
+
+    assert "Starting the Intake Map." not in [call.args[0] for call in mock_ui.print_info.call_args_list]

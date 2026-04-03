@@ -1,7 +1,7 @@
 from google.genai import types
 
 from cfi_ai.tools.base import ToolDefinition
-from cfi_ai.tools.activate_workflow import ActivateWorkflowTool
+from cfi_ai.tools.activate_map import ActivateMapTool
 from cfi_ai.tools.apply_patch import ApplyPatchTool
 from cfi_ai.tools.attach_path import AttachPathTool
 from cfi_ai.tools.extract_document import ExtractDocumentTool
@@ -12,10 +12,10 @@ from cfi_ai.tools.write_file import WriteFileTool
 
 MUTATING_TOOLS: set[str] = set()
 INTERVIEW_TOOL_NAME = "interview"
-ACTIVATE_WORKFLOW_TOOL_NAME = "activate_workflow"
+ACTIVATE_MAP_TOOL_NAME = "activate_map"
 
 _ALL_TOOLS: list[type] = [
-    ActivateWorkflowTool, ApplyPatchTool, AttachPathTool, ExtractDocumentTool,
+    ActivateMapTool, ApplyPatchTool, AttachPathTool, ExtractDocumentTool,
     InterviewTool, RunCommandTool, TranscribeAudioTool, WriteFileTool,
 ]
 _REGISTRY: dict[str, type] = {}
@@ -38,7 +38,7 @@ def get_api_tools() -> types.Tool:
     return types.Tool(function_declarations=declarations)
 
 
-_READONLY_TOOL_NAMES = {"run_command", "attach_path", "extract_document", "interview", "activate_workflow"}
+_READONLY_TOOL_NAMES = {"run_command", "attach_path", "extract_document", "interview", "activate_map"}
 
 
 def get_readonly_api_tools() -> types.Tool:
@@ -77,5 +77,5 @@ __all__ = [
     "classify_mutation",
     "MUTATING_TOOLS",
     "INTERVIEW_TOOL_NAME",
-    "ACTIVATE_WORKFLOW_TOOL_NAME",
+    "ACTIVATE_MAP_TOOL_NAME",
 ]

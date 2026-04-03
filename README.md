@@ -71,18 +71,18 @@ Environment variables take precedence over the config file when set:
 | `CFI_AI_MODEL` | `gemini-3-flash-preview` | Model to use |
 | `CFI_AI_MAX_TOKENS` | `8192` | Max response tokens |
 
-## Slash Commands
+## Maps
 
-| Command | Description |
+| Map | Description |
 |---------|-------------|
-| `/help` | Show available commands |
+| `/help` | Show available maps |
 | `/intake` | Process intake materials into TheraNest-ready clinical documents |
 
-### `/intake` — Clinical Intake Workflow
+### `/intake` — Intake Map
 
 Process intake materials into TheraNest-ready clinical documents. Upload a combination of session audio, intake questionnaire, wellness assessment, and other assessments — the LLM generates output structured to TheraNest's exact field layout for direct copy-paste.
 
-Slash commands use a thin-routing design. If you provide enough structured input up front, the app activates the workflow immediately. If information is missing or ambiguous, the assistant collects it with guided follow-up questions via the `interview` tool before activating the workflow.
+Maps use a thin-routing design. If you provide enough structured input up front, the app activates the map immediately. If information is missing or ambiguous, the assistant collects it with guided follow-up questions via the `interview` tool before activating the map. The assistant can also infer the right map from your intent even if you never say the word "map."
 
 ```bash
 # Audio + intake questionnaire + wellness assessment
@@ -101,7 +101,7 @@ Slash commands use a thin-routing design. If you provide enough structured input
 
 If you start with `/intake` and no args, the assistant will ask for the missing transcript text or file paths interactively. File paths are passed to the LLM, which uses `attach_path` to load them — this handles shell escapes, spaces in paths, and other tricky filenames naturally. Audio is sent inline to Gemini for transcription and clinical document generation.
 
-The workflow generates 5 documents:
+The Intake Map generates 5 documents:
 - **Initial Assessment** — TheraNest "Initial Assessment & Diagnostic Codes" tab fields (diagnostic impressions, presenting problem, observations, history, risk assessment, strengths, goals, etc.)
 - **Treatment Plan** — TheraNest Treatment Plan tab fields (behavioral definitions, goals & objectives with interventions, modality, frequency, etc.)
 - **Progress Note** — TheraNest standard note fields in DAP format (data, assessment, plan)
@@ -127,7 +127,7 @@ Mutating operations (file writes, destructive commands) require user approval.
 
 - **6 core tools** — `run_command` (allowlisted shell commands), `attach_path` (file/audio/image ingestion), `apply_patch` (search-and-replace edits), `write_file` (new files only), `extract_document` (structured document extraction), `transcribe_audio` (audio transcription)
 - **Mutation classification** — read-only operations execute immediately; mutating operations (`apply_patch`, `write_file`, destructive commands) require user approval
-- **Slash command autocomplete** — type `/` to see available commands
+- **Slash map autocomplete** — type `/` to see available maps
 - Status indicator shows current mode: chatting, thinking, planning, awaiting approval, executing
 
 ## Keybindings

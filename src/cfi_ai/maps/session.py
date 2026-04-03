@@ -1,4 +1,4 @@
-"""The /session slash command — ongoing session progress notes."""
+"""The /session slash map — ongoing session progress notes."""
 
 from __future__ import annotations
 
@@ -6,12 +6,12 @@ import datetime
 from typing import TYPE_CHECKING
 
 from cfi_ai.clients import build_session_reminders, load_client_context
-from cfi_ai.commands import CommandResult, build_skill_message, register
+from cfi_ai.maps import MapResult, build_map_message, register_map
 from cfi_ai.prompts.session import (
     PROGRESS_NOTE_GUIDANCE,
     PROGRESS_NOTE_PLAN_CRITERIA,
     SESSION_FILE_PLAN_PROMPT,
-    SESSION_FILE_WORKFLOW_PROMPT,
+    SESSION_FILE_MAP_PROMPT,
 )
 
 if TYPE_CHECKING:
@@ -19,8 +19,8 @@ if TYPE_CHECKING:
     from cfi_ai.workspace import Workspace
 
 
-@register("session", description="Generate an Optum-compliant progress note for a session")
-def handle_session(args: str | None, ui: UI, workspace: "Workspace") -> CommandResult:
+@register_map("session", description="Generate an Optum-compliant progress note for a session")
+def handle_session(args: str | None, ui: UI, workspace: "Workspace") -> MapResult:
     # Fast path: first token is a valid client directory AND there's a remainder
     if args and args.strip():
         parts = args.strip().split(maxsplit=1)
@@ -35,7 +35,7 @@ def handle_session(args: str | None, ui: UI, workspace: "Workspace") -> CommandR
             today = datetime.date.today().isoformat()
             note_guidance = PROGRESS_NOTE_GUIDANCE.format(date=today)
 
-            message = SESSION_FILE_WORKFLOW_PROMPT.format(
+            message = SESSION_FILE_MAP_PROMPT.format(
                 file_reference=remainder.strip(),
                 date=today,
                 client_id=client_id,
@@ -55,14 +55,14 @@ def handle_session(args: str | None, ui: UI, workspace: "Workspace") -> CommandR
             ui.print_info(
                 f"Processing session for `{client_id}`: {remainder.strip()} ({today})."
             )
-            return CommandResult(
-                message=message, workflow_mode=True, plan_prompt=plan_prompt
+            return MapResult(
+                message=message, map_mode=True, plan_prompt=plan_prompt
             )
 
-    # Skill path: let the LLM resolve ambiguity
-    return CommandResult(
-        message=build_skill_message(
-            workflow="session",
+    # Map path: let the LLM resolve ambiguity
+    return MapResult(
+        message=build_map_message(
+            map_name="session",
             description="generate an Optum-compliant progress note for a therapy session",
             user_input=args,
             workspace=workspace,

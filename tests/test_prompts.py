@@ -122,10 +122,10 @@ def test_prompts_no_code_centric_language():
     assert "function signatures" not in plan_prompt
 
 
-def test_intake_workflow_prompt_formats():
-    """INTAKE_WORKFLOW_PROMPT assembles without unreplaced placeholders."""
-    from cfi_ai.prompts.intake import INTAKE_WORKFLOW_PROMPT
-    result = INTAKE_WORKFLOW_PROMPT.format(
+def test_intake_map_prompt_formats():
+    """INTAKE_MAP_PROMPT assembles without unreplaced placeholders."""
+    from cfi_ai.prompts.intake import INTAKE_MAP_PROMPT
+    result = INTAKE_MAP_PROMPT.format(
         transcript="Test transcript", date="2026-03-18", existing_clients="None.",
     )
     _assert_no_unreplaced_placeholders(result)
@@ -133,9 +133,9 @@ def test_intake_workflow_prompt_formats():
     assert "as described above" not in result
 
 
-def test_intake_file_workflow_prompt_formats():
-    from cfi_ai.prompts.intake import INTAKE_FILE_WORKFLOW_PROMPT
-    result = INTAKE_FILE_WORKFLOW_PROMPT.format(
+def test_intake_file_map_prompt_formats():
+    from cfi_ai.prompts.intake import INTAKE_FILE_MAP_PROMPT
+    result = INTAKE_FILE_MAP_PROMPT.format(
         file_reference="session.m4a", date="2026-03-18", existing_clients="None.",
     )
     _assert_no_unreplaced_placeholders(result)
@@ -154,10 +154,10 @@ def test_intake_file_plan_prompt_formats():
     assert "current.md" in result
 
 
-def test_session_workflow_prompt_formats():
-    from cfi_ai.prompts.session import SESSION_WORKFLOW_PROMPT, PROGRESS_NOTE_GUIDANCE
+def test_session_map_prompt_formats():
+    from cfi_ai.prompts.session import PROGRESS_NOTE_GUIDANCE, SESSION_MAP_PROMPT
     note_guidance = PROGRESS_NOTE_GUIDANCE.format(date="2026-03-18")
-    result = SESSION_WORKFLOW_PROMPT.format(
+    result = SESSION_MAP_PROMPT.format(
         transcript="Test", date="2026-03-18", client_id="jane-doe",
         client_context="Context.", progress_note_guidance=note_guidance,
     )
@@ -165,10 +165,10 @@ def test_session_workflow_prompt_formats():
     assert "DAP" in result
 
 
-def test_session_file_workflow_prompt_formats():
-    from cfi_ai.prompts.session import SESSION_FILE_WORKFLOW_PROMPT, PROGRESS_NOTE_GUIDANCE
+def test_session_file_map_prompt_formats():
+    from cfi_ai.prompts.session import PROGRESS_NOTE_GUIDANCE, SESSION_FILE_MAP_PROMPT
     note_guidance = PROGRESS_NOTE_GUIDANCE.format(date="2026-03-18")
-    result = SESSION_FILE_WORKFLOW_PROMPT.format(
+    result = SESSION_FILE_MAP_PROMPT.format(
         file_reference="session.m4a", date="2026-03-18", client_id="jane-doe",
         client_context="Context.", progress_note_guidance=note_guidance,
     )
@@ -189,9 +189,9 @@ def test_session_file_plan_prompt_formats():
     _assert_no_unreplaced_placeholders(result)
 
 
-def test_wa_workflow_prompt_formats():
-    from cfi_ai.prompts.wellness_assessment import WA_WORKFLOW_PROMPT
-    result = WA_WORKFLOW_PROMPT.format(
+def test_wa_map_prompt_formats():
+    from cfi_ai.prompts.wellness_assessment import WA_MAP_PROMPT
+    result = WA_MAP_PROMPT.format(
         date="2026-03-18", client_id="jane-doe", client_context="Context.",
         wa_history="None.", admin_type="Initial", admin_number=1, wa_input="test data",
     )
@@ -199,9 +199,9 @@ def test_wa_workflow_prompt_formats():
     assert "0-45" in result
 
 
-def test_wa_file_workflow_prompt_formats():
-    from cfi_ai.prompts.wellness_assessment import WA_FILE_WORKFLOW_PROMPT
-    result = WA_FILE_WORKFLOW_PROMPT.format(
+def test_wa_file_map_prompt_formats():
+    from cfi_ai.prompts.wellness_assessment import WA_FILE_MAP_PROMPT
+    result = WA_FILE_MAP_PROMPT.format(
         date="2026-03-18", client_id="jane-doe", client_context="Context.",
         wa_history="None.", admin_type="Re-administration", admin_number=2,
         file_reference="wa.pdf",
@@ -231,23 +231,23 @@ def test_shared_constants_importable():
         assert isinstance(const, str) and len(const) > 50
 
 
-def test_critical_instructions_in_all_workflow_prompts():
-    """CRITICAL_INSTRUCTIONS text appears in all 6 workflow prompts."""
-    from cfi_ai.prompts.intake import INTAKE_WORKFLOW_PROMPT, INTAKE_FILE_WORKFLOW_PROMPT
-    from cfi_ai.prompts.session import SESSION_WORKFLOW_PROMPT, SESSION_FILE_WORKFLOW_PROMPT
-    from cfi_ai.prompts.wellness_assessment import WA_WORKFLOW_PROMPT, WA_FILE_WORKFLOW_PROMPT
-    marker = "Do NOT narrate the workflow"
-    for prompt in (INTAKE_WORKFLOW_PROMPT, INTAKE_FILE_WORKFLOW_PROMPT,
-                   SESSION_WORKFLOW_PROMPT, SESSION_FILE_WORKFLOW_PROMPT,
-                   WA_WORKFLOW_PROMPT, WA_FILE_WORKFLOW_PROMPT):
+def test_critical_instructions_in_all_map_prompts():
+    """CRITICAL_INSTRUCTIONS text appears in all 6 map prompts."""
+    from cfi_ai.prompts.intake import INTAKE_FILE_MAP_PROMPT, INTAKE_MAP_PROMPT
+    from cfi_ai.prompts.session import SESSION_FILE_MAP_PROMPT, SESSION_MAP_PROMPT
+    from cfi_ai.prompts.wellness_assessment import WA_FILE_MAP_PROMPT, WA_MAP_PROMPT
+    marker = "Do NOT narrate the map"
+    for prompt in (INTAKE_MAP_PROMPT, INTAKE_FILE_MAP_PROMPT,
+                   SESSION_MAP_PROMPT, SESSION_FILE_MAP_PROMPT,
+                   WA_MAP_PROMPT, WA_FILE_MAP_PROMPT):
         assert marker in prompt
 
 
-def test_cage_aid_only_in_file_workflow():
-    """CAGE-AID risk note only in file workflow, not transcript workflow."""
-    from cfi_ai.prompts.intake import INTAKE_WORKFLOW_PROMPT, INTAKE_FILE_WORKFLOW_PROMPT
-    assert "CAGE screen" not in INTAKE_WORKFLOW_PROMPT
-    assert "CAGE screen" in INTAKE_FILE_WORKFLOW_PROMPT
+def test_cage_aid_only_in_file_map():
+    """CAGE-AID risk note only in file map, not transcript map."""
+    from cfi_ai.prompts.intake import INTAKE_FILE_MAP_PROMPT, INTAKE_MAP_PROMPT
+    assert "CAGE screen" not in INTAKE_MAP_PROMPT
+    assert "CAGE screen" in INTAKE_FILE_MAP_PROMPT
 
 
 def test_interview_in_system_prompts():
@@ -260,13 +260,14 @@ def test_interview_in_system_prompts():
 
 def test_interview_in_wellness_assessment_prompts():
     """Wellness assessment prompts reference interview tool for ambiguous items."""
-    from cfi_ai.prompts.wellness_assessment import WA_WORKFLOW_PROMPT, WA_FILE_WORKFLOW_PROMPT
-    for prompt in (WA_WORKFLOW_PROMPT, WA_FILE_WORKFLOW_PROMPT):
+    from cfi_ai.prompts.wellness_assessment import WA_FILE_MAP_PROMPT, WA_MAP_PROMPT
+    for prompt in (WA_MAP_PROMPT, WA_FILE_MAP_PROMPT):
         assert "interview tool" in prompt
 
 
-def test_skill_instruction_in_workflows_section():
-    """WORKFLOWS_SECTION contains the [SKILL: ...] handling instruction."""
-    from cfi_ai.prompts.system import WORKFLOWS_SECTION
-    assert "[SKILL:" in WORKFLOWS_SECTION
-    assert "activate_workflow" in WORKFLOWS_SECTION
+def test_map_instruction_in_maps_section():
+    """MAPS_SECTION contains the [MAP: ...] handling instruction."""
+    from cfi_ai.prompts.system import MAPS_SECTION
+    assert "[MAP:" in MAPS_SECTION
+    assert "activate_map" in MAPS_SECTION
+    assert 'source="implicit"' in MAPS_SECTION

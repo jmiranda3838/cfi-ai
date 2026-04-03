@@ -19,6 +19,23 @@ def list_clients(workspace: Workspace) -> list[str]:
     )
 
 
+def build_existing_clients_section(workspace: Workspace) -> str:
+    """Build a section describing existing clients for the prompt."""
+    clients = list_clients(workspace)
+    if not clients:
+        return "## Existing Clients\nNo existing clients found. This will be a new client."
+
+    client_list = "\n".join(f"- `{cid}`" for cid in clients)
+    return (
+        "## Existing Clients\n\n"
+        "The following client IDs already exist:\n"
+        f"{client_list}\n\n"
+        "If the session subject matches an existing client, use `attach_path` to load "
+        "`clients/<client-id>/profile/current.md` and "
+        "`clients/<client-id>/treatment-plan/current.md` for context before writing."
+    )
+
+
 def load_client_context(workspace: Workspace, client_id: str) -> str:
     """Read profile/current.md and treatment-plan/current.md for a client."""
     base = workspace.root / "clients" / client_id
@@ -135,7 +152,7 @@ def get_tp_review_date(workspace: Workspace, client_id: str) -> datetime.date | 
 
 
 def build_session_reminders(workspace: Workspace, client_id: str) -> str:
-    """Compute WA and treatment-plan reminders for a session workflow."""
+    """Compute WA and treatment-plan reminders for the Session Map."""
     reminders: list[str] = []
 
     wa_count = count_wa_files(workspace, client_id)

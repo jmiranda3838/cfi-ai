@@ -114,11 +114,11 @@ def test_text_chunks_stops_on_degenerate_run():
     assert "this should not appear" not in "".join(collected)
 
 
-# --- Workflow mode max_output_tokens tests ---
+# --- Map mode max_output_tokens tests ---
 
 
-def test_workflow_mode_raises_max_tokens():
-    """Workflow mode should use at least 65536 max_output_tokens."""
+def test_map_mode_raises_max_tokens():
+    """Map mode should use at least 65536 max_output_tokens."""
     from unittest.mock import patch, MagicMock as MM
     from cfi_ai.client import Client
     from cfi_ai.config import Config
@@ -135,7 +135,7 @@ def test_workflow_mode_raises_max_tokens():
         mock_genai.Client.return_value.models.generate_content_stream.return_value = mock_stream
 
         client.stream_response(
-            messages=[], system="test", tools=MM(), mode="workflow"
+            messages=[], system="test", tools=MM(), mode="map"
         )
 
         call_kwargs = mock_genai.Client.return_value.models.generate_content_stream.call_args

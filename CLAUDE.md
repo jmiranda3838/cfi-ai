@@ -20,7 +20,7 @@ cfi-ai is a terminal-first agentic assistant that binds to the user's current wo
 
 ### Agent loop (`agent.py`)
 
-The inner loop handles multi-turn tool-use chains. Messages are `list[types.Content]` with roles `"user"`, `"model"`, and `"user"` (for tool results). End-of-turn is detected by the **absence of function_call parts** — not by finish_reason (Gemini uses `"STOP"` for both). The loop is capped at `MAX_TOOL_ITERATIONS` (25) as a safety net. If `StreamResult.repetition_detected` fires, the garbage turn is discarded, a corrective user message is injected, and the model retries once — a second detection breaks with an error. A **narration guard** (`_NARRATION_THRESHOLD = 800`) catches workflow-mode turns where the model emits long text with no tool calls — the narrating turn is discarded and a corrective message is injected (once).
+The inner loop handles multi-turn tool-use chains. Messages are `list[types.Content]` with roles `"user"`, `"model"`, and `"user"` (for tool results). End-of-turn is detected by the **absence of function_call parts** — not by finish_reason (Gemini uses `"STOP"` for both). The loop is capped at `MAX_TOOL_ITERATIONS` (25) as a safety net. If `StreamResult.repetition_detected` fires, the garbage turn is discarded, a corrective user message is injected, and the model retries once — a second detection breaks with an error. A **narration guard** (`_NARRATION_THRESHOLD = 800`) catches map-mode turns where the model emits long text with no tool calls — the narrating turn is discarded and a corrective message is injected (once).
 
 ### Tool system (`tools/`)
 
@@ -48,14 +48,14 @@ The inner loop handles multi-turn tool-use chains. Messages are `list[types.Cont
 - Streaming chunks may have empty `candidates` — guard with `if not chunk.candidates: continue`.
 - No `tool_use_id` — tool results match by function `name`; order matters.
 
-### Slash commands (`commands/`)
+### Maps (`maps/`)
 
-- `commands/__init__.py` defines `parse_command()`, `dispatch()`, `CommandResult`, and a `@register` decorator.
-- Commands are registered by importing their modules at the bottom of `__init__.py`.
-- `agent.py` intercepts slash commands between input and message append — if `parse_command` matches, `dispatch` runs the handler.
-- `CommandResult.message` set → replaces user input sent to LLM. `CommandResult.parts` set → multipart content (e.g. text + audio) sent directly. `handled=True` + no message/parts → skip to next prompt. `error` → display and skip. `workflow_mode=True` → enables narration guard in the agent loop.
-- `/help` prints available commands. `/intake` processes a session transcript (text file or pasted) or audio recording (.mp3, .wav, .m4a, etc.) into clinical intake documents. File references are passed to the LLM which uses `attach_path` to load them (handling shell escapes, spaces in paths, etc.). Pasted multi-line text is embedded directly in the prompt.
-- Typing `/` in the prompt shows autocomplete for available commands via `SlashCommandCompleter` (prompt-toolkit).
+- `maps/__init__.py` defines `parse_map_invocation()`, `dispatch_map()`, `MapResult`, and a `@register_map` decorator.
+- Maps are registered by importing their modules at the bottom of `__init__.py`.
+- `agent.py` intercepts slash maps between input and message append — if `parse_map_invocation` matches, `dispatch_map` runs the handler.
+- `MapResult.message` set → replaces user input sent to LLM. `MapResult.parts` set → multipart content (e.g. text + audio) sent directly. `handled=True` + no message/parts → skip to next prompt. `error` → display and skip. `map_mode=True` → enables narration guard in the agent loop.
+- `/help` prints available maps. `/intake` processes a session transcript (text file or pasted) or audio recording (.mp3, .wav, .m4a, etc.) into clinical intake documents. File references are passed to the LLM which uses `attach_path` to load them (handling shell escapes, spaces in paths, etc.). Pasted multi-line text is embedded directly in the prompt.
+- Typing `/` in the prompt shows autocomplete for available maps via `SlashMapCompleter` (prompt-toolkit).
 
 ### Client file structure (`clients.py`)
 

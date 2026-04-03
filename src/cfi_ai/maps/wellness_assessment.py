@@ -1,4 +1,4 @@
-"""The /wellness-assessment slash command — process G22E02 and calculate GD score."""
+"""The /wellness-assessment slash map — process G22E02 and calculate GD score."""
 
 from __future__ import annotations
 
@@ -6,16 +6,16 @@ import datetime
 from typing import TYPE_CHECKING
 
 from cfi_ai.clients import count_wa_files, load_client_context, load_wa_history
-from cfi_ai.commands import CommandResult, build_skill_message, register
-from cfi_ai.prompts.wellness_assessment import WA_FILE_WORKFLOW_PROMPT
+from cfi_ai.maps import MapResult, build_map_message, register_map
+from cfi_ai.prompts.wellness_assessment import WA_FILE_MAP_PROMPT
 
 if TYPE_CHECKING:
     from cfi_ai.ui import UI
     from cfi_ai.workspace import Workspace
 
 
-@register("wellness-assessment", description="Process a Wellness Assessment (G22E02) and calculate GD score")
-def handle_wellness_assessment(args: str | None, ui: UI, workspace: "Workspace") -> CommandResult:
+@register_map("wellness-assessment", description="Process a Wellness Assessment (G22E02) and calculate GD score")
+def handle_wellness_assessment(args: str | None, ui: UI, workspace: "Workspace") -> MapResult:
     # Fast path: first token is a valid client directory AND there's a remainder
     if args and args.strip():
         parts = args.strip().split(maxsplit=1)
@@ -33,7 +33,7 @@ def handle_wellness_assessment(args: str | None, ui: UI, workspace: "Workspace")
             wa_history = load_wa_history(workspace, client_id)
             today = datetime.date.today().isoformat()
 
-            message = WA_FILE_WORKFLOW_PROMPT.format(
+            message = WA_FILE_MAP_PROMPT.format(
                 date=today,
                 client_id=client_id,
                 client_context=client_context,
@@ -46,12 +46,12 @@ def handle_wellness_assessment(args: str | None, ui: UI, workspace: "Workspace")
                 f"Processing wellness assessment for `{client_id}`: "
                 f"{remainder.strip()} ({admin_type} #{admin_number}, {today})."
             )
-            return CommandResult(message=message, workflow_mode=True)
+            return MapResult(message=message, map_mode=True)
 
-    # Skill path: let the LLM resolve ambiguity
-    return CommandResult(
-        message=build_skill_message(
-            workflow="wellness-assessment",
+    # Map path: let the LLM resolve ambiguity
+    return MapResult(
+        message=build_map_message(
+            map_name="wellness-assessment",
             description="process a Wellness Assessment (G22E02) and calculate GD score",
             user_input=args,
             workspace=workspace,

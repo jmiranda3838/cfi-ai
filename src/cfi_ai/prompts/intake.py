@@ -1,4 +1,4 @@
-"""Clinical prompt templates for the /intake workflow."""
+"""Clinical prompt templates for the /intake map."""
 
 from cfi_ai.prompts.shared import (
     CRITICAL_INSTRUCTIONS,
@@ -9,7 +9,7 @@ from cfi_ai.prompts.shared import (
     CLIENT_PROFILE_GUIDANCE,
 )
 
-INTAKE_WORKFLOW_PROMPT = (
+INTAKE_MAP_PROMPT = (
     """\
 You are conducting a clinical intake assessment based on a session transcript. \
 Today's date is {date}.
@@ -23,7 +23,7 @@ Today's date is {date}.
 
 {existing_clients}
 
-## Workflow
+## Map
 
 ### Phase 1: Identify & Summarize
 1. **Identify the client**: If the user explicitly provides a client name \
@@ -98,7 +98,7 @@ use them in:
 """
 )
 
-INTAKE_FILE_WORKFLOW_PROMPT = (
+INTAKE_FILE_MAP_PROMPT = (
     """\
 You are conducting a clinical intake assessment based on one or more files \
 provided by the user. Today's date is {date}.
@@ -110,7 +110,7 @@ The user wants to process an intake from one or more files. The input is: \
 `{file_reference}`
 
 ### Expected Inputs
-The intake workflow typically involves some combination of:
+The intake map typically involves some combination of:
 - **Session audio** (.m4a, .mp3, .wav, etc.) — the recorded intake session
 - **Intake questionnaire** (PDF) — client-completed intake form with demographics, \
 history, presenting concerns
@@ -151,7 +151,7 @@ etc.), interpret them as a shell would — e.g. `Bristol\\ St\\ 4.m4a` means \
 
 {existing_clients}
 
-## Workflow
+## Map
 
 ### Phase 1: Process Input Files, Identify & Summarize
 1. **Process files** step by step using the appropriate tool for each:
@@ -233,7 +233,7 @@ it was transcribed from audio in its header.
 )
 
 INTAKE_FILE_PLAN_PROMPT = """\
-You are planning a clinical intake workflow. Today's date is {date}.
+You are planning the clinical Intake Map. Today's date is {date}.
 
 The user has provided one or more files for intake processing: \
 `{file_reference}`
@@ -242,7 +242,7 @@ The user has provided one or more files for intake processing: \
 
 ## Instructions
 
-Create a structured execution plan for the intake workflow. \
+Create a structured execution plan for the Intake Map. \
 Do NOT load or process the files — the execution agent will do that.
 
 1. **Determine the client-id**: If the user explicitly provides a client name \

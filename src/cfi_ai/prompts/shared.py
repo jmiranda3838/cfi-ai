@@ -2,7 +2,7 @@
 
 CRITICAL_INSTRUCTIONS = """\
 ## CRITICAL INSTRUCTIONS
-- Do NOT narrate the workflow or reproduce document content in your response text.
+- Do NOT narrate the map or reproduce document content in your response text.
 - Keep free-text responses to 2-3 sentences maximum. Proceed directly to tool calls.
 - The user reviews all file content in the approval step — do not preview it in chat.
 """

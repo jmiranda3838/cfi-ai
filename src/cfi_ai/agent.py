@@ -10,15 +10,15 @@ from google.auth import exceptions as auth_exceptions
 from google.genai import types
 
 from cfi_ai.client import Client
-from cfi_ai.commands import parse_command, dispatch
 from cfi_ai.config import Config
+from cfi_ai.maps import dispatch_map, parse_map_invocation
 from cfi_ai.planner import ExecutionPlan, format_plan
 from cfi_ai.prompts.system import build_plan_mode_system_prompt
 from cfi_ai.ui import UI, UserInput, PlanApproval
 from cfi_ai.workspace import Workspace
 import cfi_ai.tools as tools
-from cfi_ai.tools import ACTIVATE_WORKFLOW_TOOL_NAME, INTERVIEW_TOOL_NAME
-from cfi_ai.tools.activate_workflow import NON_WORKFLOW_MODE, get_plan_prompt as _get_plan_prompt
+from cfi_ai.tools import ACTIVATE_MAP_TOOL_NAME, INTERVIEW_TOOL_NAME
+from cfi_ai.tools.activate_map import NON_MAP_MODE, get_map_plan_prompt as _get_map_plan_prompt
 
 _log = logging.getLogger(__name__)
 
@@ -29,12 +29,24 @@ MAX_TOOL_ITERATIONS = 25
 class PlanModeResult:
     """Result from _run_plan_mode."""
     plan_text: str | None = None
-    workflow_execution_prompt: str | None = None
-    workflow_plan_prompt: str | None = None
-    workflow_mode: bool = False
+    map_execution_prompt: str | None = None
+    map_plan_prompt: str | None = None
+    map_mode: bool = False
 
 
 _NARRATION_THRESHOLD = 800
+
+_MAP_DISPLAY_NAMES = {
+    "intake": "Intake",
+    "session": "Session",
+    "compliance": "Compliance",
+    "tp-review": "Treatment Plan Review",
+    "wellness-assessment": "Wellness Assessment",
+}
+
+
+def _display_map_name(map_name: str) -> str:
+    return _MAP_DISPLAY_NAMES.get(map_name, map_name.replace("-", " ").title())
 
 
 def _build_result_slots(
@@ -210,7 +222,7 @@ def _run_plan_mode(
     plan_system_prompt: str,
     readonly_tools: types.Tool,
     messages: list[types.Content],
-    allow_workflow_activation: bool = True,
+    allow_map_activation: bool = True,
 ) -> PlanModeResult:
     """Run the plan-mode inner loop. Returns a PlanModeResult."""
     _log.debug("plan_mode_enter messages=%d", len(messages))
@@ -284,9 +296,9 @@ def _run_plan_mode(
                 tool_result_parts.append(_handle_interview(ui, fc.name, fc_args))
                 continue
 
-            # activate_workflow: capture and break out of plan mode
-            if fc.name == ACTIVATE_WORKFLOW_TOOL_NAME and allow_workflow_activation:
-                _log.debug("plan_mode activate_workflow %s", _safe_tool_summary(fc.name, fc_args))
+            # activate_map: capture and break out of plan mode
+            if fc.name == ACTIVATE_MAP_TOOL_NAME and allow_map_activation:
+                _log.debug("plan_mode activate_map %s", _safe_tool_summary(fc.name, fc_args))
                 ui.show_tool_call(fc.name, _summarize_input(fc_args))
                 result = tools.execute(fc.name, workspace, client, **fc_args)
                 result_text = result if isinstance(result, str) else result[0]
@@ -305,34 +317,37 @@ def _run_plan_mode(
                     continue
 
                 # Success: look up the plan prompt variant
-                wf_name = fc_args.pop("workflow", "")
-                wf_plan_prompt = _get_plan_prompt(wf_name, workspace, **fc_args)
-                wf_mode = wf_name not in NON_WORKFLOW_MODE
+                map_name = fc_args.pop("map", "")
+                source = fc_args.get("source", "implicit")
+                map_plan_prompt = _get_map_plan_prompt(map_name, workspace, **fc_args)
+                map_mode = map_name not in NON_MAP_MODE
+                if source == "implicit":
+                    ui.print_info(f"Starting the {_display_map_name(map_name)} Map.")
 
                 # Cancel co-occurring tool calls
                 cancel_parts: list[types.Part] = [
                     types.Part.from_function_response(
                         name=fc.name,
-                        response={"result": "Workflow activated. Switching to workflow planning mode."},
+                        response={"result": "Map activated. Switching to map planning mode."},
                     )
                 ]
                 for other_fc in function_calls:
-                    if other_fc.name != ACTIVATE_WORKFLOW_TOOL_NAME:
+                    if other_fc.name != ACTIVATE_MAP_TOOL_NAME:
                         cancel_parts.append(types.Part.from_function_response(
                             name=other_fc.name,
-                            response={"error": "Discarded — activate_workflow must run alone."},
+                            response={"error": "Discarded — activate_map must run alone."},
                         ))
                 for group in _split_tool_results(cancel_parts):
                     messages.append(types.Content(role="user", parts=group))
 
                 _log.debug(
-                    "plan_mode activate_workflow returning wf=%s plan_prompt=%s wf_mode=%s",
-                    wf_name, wf_plan_prompt is not None, wf_mode,
+                    "plan_mode activate_map returning map=%s plan_prompt=%s map_mode=%s",
+                    map_name, map_plan_prompt is not None, map_mode,
                 )
                 return PlanModeResult(
-                    workflow_execution_prompt=result_text,
-                    workflow_plan_prompt=wf_plan_prompt,
-                    workflow_mode=wf_mode,
+                    map_execution_prompt=result_text,
+                    map_plan_prompt=map_plan_prompt,
+                    map_mode=map_mode,
                 )
 
             # Reject mutations (belt-and-suspenders)
@@ -391,8 +406,8 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
         str(workspace.root), workspace.summary(), workspace=workspace
     )
 
-    from cfi_ai.commands import get_command_descriptions
-    ui.set_commands(get_command_descriptions())
+    from cfi_ai.maps import get_map_descriptions
+    ui.set_maps(get_map_descriptions())
 
     while True:
         # Get user input
@@ -408,31 +423,31 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
         if not user_text.strip():
             continue
 
-        # --- SLASH COMMAND PARSING (before plan/normal mode branch) ---
+        # --- SLASH MAP PARSING (before plan/normal mode branch) ---
         user_parts = None
-        workflow_mode = False
+        map_mode = False
         auto_approve = False
         plan_prompt = None
-        parsed = parse_command(user_text)
+        parsed = parse_map_invocation(user_text)
         if parsed is not None:
-            cmd_name, cmd_args = parsed
-            result = dispatch(cmd_name, cmd_args, ui, workspace)
+            map_name, map_args = parsed
+            result = dispatch_map(map_name, map_args, ui, workspace)
             if result.error:
                 ui.print_error(result.error)
                 continue
             if result.handled and result.message is None and result.parts is None:
                 continue
-            workflow_mode = result.workflow_mode
+            map_mode = result.map_mode
             plan_prompt = result.plan_prompt
-            if workflow_mode:
-                _log.debug("command_set workflow_mode=True")
+            if map_mode:
+                _log.debug("map_set map_mode=True")
             if result.parts is not None:
                 user_parts = result.parts
             elif result.message is not None:
                 user_text = result.message
 
         # --- PLAN MODE FLOW ---
-        if is_plan_mode and (not workflow_mode or plan_prompt):
+        if is_plan_mode and (not map_mode or plan_prompt):
             ui.print_separator()
             ui.print_info("Plan mode: researching and planning (read-only)...")
 
@@ -454,26 +469,26 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
             )
             elapsed = time.monotonic() - t0
 
-            # --- Case A: activate_workflow was called during plan mode ---
-            if plan_result.workflow_execution_prompt is not None:
-                # Merge messages to preserve any research done before the workflow call
+            # --- Case A: activate_map was called during plan mode ---
+            if plan_result.map_execution_prompt is not None:
+                # Merge messages to preserve any research done before the map call
                 messages[:] = plan_messages
 
-                if plan_result.workflow_plan_prompt is not None:
+                if plan_result.map_plan_prompt is not None:
                     # Dedicated plan prompt exists: re-enter plan mode with it
-                    ui.print_info("Workflow activated. Planning workflow execution...")
+                    ui.print_info("Map activated. Planning map execution...")
                     wf_plan_messages: list[types.Content] = list(messages)
                     wf_plan_messages.append(
                         types.Content(
                             role="user",
-                            parts=[types.Part.from_text(text=plan_result.workflow_plan_prompt)],
+                            parts=[types.Part.from_text(text=plan_result.map_plan_prompt)],
                         )
                     )
                     t0_wf = time.monotonic()
                     wf_plan_result = _run_plan_mode(
                         client, ui, workspace, plan_system_prompt,
                         readonly_api_tools, wf_plan_messages,
-                        allow_workflow_activation=False,
+                        allow_map_activation=False,
                     )
                     elapsed += time.monotonic() - t0_wf
 
@@ -495,7 +510,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
 
                         messages[:] = wf_plan_messages
                         execution_prompt = (
-                            f"{plan_result.workflow_execution_prompt}\n\n"
+                            f"{plan_result.map_execution_prompt}\n\n"
                             "## Approved Plan\n\n"
                             "The following plan was reviewed and approved. Follow it as a guide "
                             "for the order and content of your work:\n\n"
@@ -504,8 +519,8 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                         messages.append(
                             types.Content(role="user", parts=[types.Part.from_text(text=execution_prompt)])
                         )
-                        workflow_mode = True
-                        _log.debug("wf_plan_execution_inject workflow_mode=True auto_approve=%s", auto_approve)
+                        map_mode = True
+                        _log.debug("map_plan_execution_inject map_mode=True auto_approve=%s", auto_approve)
                     else:
                         messages.append(
                             types.Content(role="user", parts=[types.Part.from_text(text=user_text)])
@@ -516,20 +531,20 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                         ui.print_info("Plan rejected. You can refine your request.")
                         continue
                 else:
-                    # No dedicated plan prompt: execute directly with the workflow prompt
-                    ui.print_info("Workflow activated. Executing...")
+                    # No dedicated plan prompt: execute directly with the map prompt
+                    ui.print_info("Map activated. Executing...")
                     ui.print_elapsed(elapsed)
                     ui.print_separator()
                     messages.append(
                         types.Content(
                             role="user",
-                            parts=[types.Part.from_text(text=plan_result.workflow_execution_prompt)],
+                            parts=[types.Part.from_text(text=plan_result.map_execution_prompt)],
                         )
                     )
-                    workflow_mode = plan_result.workflow_mode
-                    _log.debug("wf_direct_execution workflow_mode=%s", workflow_mode)
+                    map_mode = plan_result.map_mode
+                    _log.debug("map_direct_execution map_mode=%s", map_mode)
 
-            # --- Case B: Normal plan mode (no workflow activation) ---
+            # --- Case B: Normal plan mode (no map activation) ---
             else:
                 plan_text = plan_result.plan_text
                 if plan_text is None:
@@ -557,7 +572,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                     )
 
                     if plan_prompt:
-                        # Workflow command: use the original execution prompt + plan as guidance
+                        # Slash map: use the original execution prompt + plan as guidance
                         execution_prompt = (
                             f"{user_text}\n\n"
                             "## Approved Plan\n\n"
@@ -577,9 +592,9 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                     messages.append(
                         types.Content(role="user", parts=[types.Part.from_text(text=execution_prompt)])
                     )
-                    # Fall through to the normal inner loop with workflow_mode enabled
-                    workflow_mode = True
-                    _log.debug("plan_execution_inject workflow_mode=True auto_approve=%s", auto_approve)
+                    # Fall through to the normal inner loop with map_mode enabled
+                    map_mode = True
+                    _log.debug("plan_execution_inject map_mode=True auto_approve=%s", auto_approve)
                 else:
                     # Rejected: preserve plan exchange in history for refinement
                     messages.append(
@@ -606,7 +621,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
         narration_retries = 0
         continuation_retries = 0
         reauth_attempted = False
-        _log.debug("inner_loop_start workflow_mode=%s messages=%d", workflow_mode, len(messages))
+        _log.debug("inner_loop_start map_mode=%s messages=%d", map_mode, len(messages))
         for _iteration in range(MAX_TOOL_ITERATIONS):
             _log.debug("inner_loop iteration=%d messages=%d", _iteration, len(messages))
             ui.status.set_mode("thinking")
@@ -616,7 +631,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                     messages=messages,
                     system=system_prompt,
                     tools=api_tools,
-                    mode="workflow" if workflow_mode else "normal",
+                    mode="map" if map_mode else "normal",
                 )
             except Exception as e:
                 if not reauth_attempted and _is_auth_error(e):
@@ -670,14 +685,14 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                 continue
 
             if not stream_result.parts:
-                if workflow_mode and continuation_retries < 2:
+                if map_mode and continuation_retries < 2:
                     continuation_retries += 1
                     _log.debug("inner_loop empty_response_continuation retries=%d", continuation_retries)
                     messages.append(
                         types.Content(
                             role="user",
                             parts=[types.Part.from_text(
-                                text="Continue with the remaining steps of the workflow. "
+                                text="Continue with the remaining steps of the map. "
                                 "If there are more files to write, call write_file now. "
                                 "If all phases are complete, say 'Done.' and nothing else.",
                             )],
@@ -693,10 +708,10 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
             # Check for function calls
             function_calls = stream_result.function_calls
             if not function_calls:
-                # Narration guard: in workflow mode, long text with no tool calls
+                # Narration guard: in map mode, long text with no tool calls
                 # means the model is narrating instead of acting.
                 if (
-                    workflow_mode
+                    map_mode
                     and len(full_text) > _NARRATION_THRESHOLD
                     and narration_retries < 1
                 ):
@@ -711,28 +726,28 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                         types.Content(
                             role="user",
                             parts=[types.Part.from_text(
-                                text="Do not narrate the workflow or reproduce document content. "
+                                text="Do not narrate the map or reproduce document content. "
                                 "Briefly summarize in 1-2 sentences, then proceed directly "
                                 "to tool calls.",
                             )],
                         )
                     )
                     continue
-                # Workflow completion sentinel — model said "Done.", stop looping
-                if workflow_mode and full_text.strip().rstrip(".").lower() == "done":
+                # Map completion sentinel — model said "Done.", stop looping
+                if map_mode and full_text.strip().rstrip(".").lower() == "done":
                     break
-                # Workflow continuation guard: give model a chance to resume mid-workflow
-                if workflow_mode and continuation_retries < 2:
+                # Map continuation guard: give model a chance to resume mid-map
+                if map_mode and continuation_retries < 2:
                     continuation_retries += 1
                     _log.debug(
-                        "inner_loop workflow_continuation retries=%d text_len=%d",
+                        "inner_loop map_continuation retries=%d text_len=%d",
                         continuation_retries, len(full_text),
                     )
                     messages.append(
                         types.Content(
                             role="user",
                             parts=[types.Part.from_text(
-                                text="Continue with the remaining steps of the workflow. "
+                                text="Continue with the remaining steps of the map. "
                                 "If there are more files to write, call write_file now. "
                                 "If all phases are complete, say 'Done.' and nothing else.",
                             )],
@@ -741,28 +756,30 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                     continue
                 break
 
-            # activate_workflow is a turn-boundary tool: process it alone,
+            # activate_map is a turn-boundary tool: process it alone,
             # discard other tool calls, and restart the inner loop so the
-            # LLM sees the workflow prompt before making further calls.
+            # LLM sees the map prompt before making further calls.
             activate_fc = None
             for fc in function_calls:
-                if fc.name == ACTIVATE_WORKFLOW_TOOL_NAME:
+                if fc.name == ACTIVATE_MAP_TOOL_NAME:
                     activate_fc = fc
                     break
 
             if activate_fc is not None:
                 fc_args = dict(activate_fc.args)
-                _log.debug("activate_workflow call %s", _safe_tool_summary(activate_fc.name, fc_args))
+                _log.debug("activate_map call %s", _safe_tool_summary(activate_fc.name, fc_args))
                 ui.show_tool_call(activate_fc.name, _summarize_input(fc_args))
                 result = tools.execute(activate_fc.name, workspace, client, **fc_args)
                 result_text = result if isinstance(result, str) else result[0]
                 ui.show_tool_result(activate_fc.name, result_text[:200] + "..." if len(result_text) > 200 else result_text)
 
                 if not result_text.startswith("Error:"):
-                    wf_name = fc_args.get("workflow", "")
-                    if wf_name not in NON_WORKFLOW_MODE:
-                        workflow_mode = True
-                    _log.debug("activate_workflow %s workflow_mode=%s", wf_name, workflow_mode)
+                    map_name = fc_args.get("map", "")
+                    if map_name not in NON_MAP_MODE:
+                        map_mode = True
+                    if fc_args.get("source") == "implicit":
+                        ui.print_info(f"Starting the {_display_map_name(map_name)} Map.")
+                    _log.debug("activate_map %s map_mode=%s", map_name, map_mode)
 
                 parts = [types.Part.from_function_response(
                     name=activate_fc.name, response={"result": result_text}
@@ -770,13 +787,13 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                 # Send cancellation responses for any co-occurring tool calls
                 # (Gemini requires responses for ALL function_calls in a model turn)
                 for fc in function_calls:
-                    if fc.name != ACTIVATE_WORKFLOW_TOOL_NAME:
+                    if fc.name != ACTIVATE_MAP_TOOL_NAME:
                         parts.append(types.Part.from_function_response(
                             name=fc.name,
-                            response={"error": "Discarded — activate_workflow must run alone."},
+                            response={"error": "Discarded — activate_map must run alone."},
                         ))
                 messages.append(types.Content(role="user", parts=parts))
-                continue  # Restart inner loop — LLM sees workflow prompt next
+                continue  # Restart inner loop — LLM sees map prompt next
 
             # Separate read and mutating tool calls, tracking original order
             read_ops, mutate_ops, result_slots = _build_result_slots(function_calls)
