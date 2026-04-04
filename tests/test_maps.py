@@ -1,7 +1,7 @@
 from unittest.mock import MagicMock
 
 from cfi_ai.maps import MapResult, build_map_message, dispatch_map, parse_map_invocation
-from cfi_ai.prompts.intake import INTAKE_FILE_MAP_PROMPT
+from cfi_ai.prompts.intake import INTAKE_PROMPT
 from cfi_ai.tools.activate_map import ActivateMapTool
 from cfi_ai.workspace import Workspace
 
@@ -65,6 +65,15 @@ def test_dispatch_help_lists_maps():
     assert "/intake" in rendered
 
 
+def test_dispatch_help_shows_missing_record_contracts():
+    ui = MagicMock()
+    ws = Workspace("/tmp")
+    dispatch_map("help", None, ui, ws)
+    rendered = ui.render_markdown.call_args[0][0]
+    assert "missing records may be surfaced as findings" in rendered
+    assert "requires an existing treatment plan and progress notes to generate updates" in rendered
+
+
 # --- MapResult tests ---
 
 def test_map_result_parts_default():
@@ -79,18 +88,16 @@ def test_map_result_parts_default():
 
 # --- File map prompt tests ---
 
-def test_file_prompt_has_placeholders():
-    """INTAKE_FILE_MAP_PROMPT formats without error."""
-    formatted = INTAKE_FILE_MAP_PROMPT.format(
+def test_intake_prompt_has_placeholders():
+    """INTAKE_PROMPT formats without error."""
+    formatted = INTAKE_PROMPT.format(
         date="2026-03-13",
-        existing_clients="## Existing Clients\nNone.",
-        file_reference="session.mp3",
+        intake_input="The user wants to process: `session.mp3`",
     )
     assert "2026-03-13" in formatted
     assert "session.mp3" in formatted
-    assert "{file_reference}" not in formatted
+    assert "{intake_input}" not in formatted
     assert "{date}" not in formatted
-    assert "{existing_clients}" not in formatted
 
 
 # --- build_map_message tests ---
@@ -122,29 +129,27 @@ def test_build_map_message_lists_clients(tmp_path):
 
 def test_build_map_message_no_clients(tmp_path):
     ws = Workspace(str(tmp_path))
-    msg = build_map_message("intake", "process intake", None, ws)
+    msg = build_map_message("compliance", "run a compliance check", None, ws)
     assert "No clients exist" in msg
 
 
 # --- /compliance fast path and map path ---
 
 def test_compliance_fast_path(tmp_path):
-    """Valid single-token client-id → fast path with formatted prompt."""
-    (tmp_path / "clients" / "jane-doe" / "intake").mkdir(parents=True)
-    (tmp_path / "clients" / "jane-doe" / "intake" / "2025-01-01-initial-assessment.md").write_text("# Assessment")
+    """Valid single-token client-id -> fast path with formatted prompt, map_mode=True."""
+    (tmp_path / "clients" / "jane-doe").mkdir(parents=True)
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
     result = dispatch_map("compliance", "jane-doe", ui, ws)
     assert result.error is None
     assert result.message is not None
     assert "jane-doe" in result.message
-    assert result.map_mode is False
-    # Fast path uses COMPLIANCE_PROMPT, not map message
+    assert result.map_mode is True
     assert "[MAP:" not in result.message
 
 
 def test_compliance_no_args_map_path(tmp_path):
-    """No args → map path, no error."""
+    """No args -> map path, no error."""
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
     result = dispatch_map("compliance", None, ui, ws)
@@ -153,7 +158,7 @@ def test_compliance_no_args_map_path(tmp_path):
 
 
 def test_compliance_invalid_client_map_path(tmp_path):
-    """Invalid client → map path, no error."""
+    """Invalid client -> map path, no error."""
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
     result = dispatch_map("compliance", "nonexistent", ui, ws)
@@ -161,18 +166,8 @@ def test_compliance_invalid_client_map_path(tmp_path):
     assert "[MAP: compliance]" in result.message
 
 
-def test_compliance_empty_context_falls_to_map_path(tmp_path):
-    """Client dir exists but has no clinical files → map path."""
-    (tmp_path / "clients" / "jane-doe").mkdir(parents=True)
-    ui = MagicMock()
-    ws = Workspace(str(tmp_path))
-    result = dispatch_map("compliance", "jane-doe", ui, ws)
-    assert result.error is None
-    assert "[MAP: compliance]" in result.message
-
-
 def test_compliance_natural_language_map_path(tmp_path):
-    """Multi-word args → map path with user input preserved."""
+    """Multi-word args -> map path with user input preserved."""
     (tmp_path / "clients" / "jane-doe").mkdir(parents=True)
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
@@ -186,39 +181,15 @@ def test_compliance_natural_language_map_path(tmp_path):
 # --- /tp-review fast path and map path ---
 
 def test_tp_review_fast_path(tmp_path):
-    """Valid client with TP + progress note → fast path."""
-    (tmp_path / "clients" / "bob" / "treatment-plan").mkdir(parents=True)
-    (tmp_path / "clients" / "bob" / "treatment-plan" / "current.md").write_text("# TP")
-    (tmp_path / "clients" / "bob" / "sessions").mkdir(parents=True)
-    (tmp_path / "clients" / "bob" / "sessions" / "2025-01-15-progress-note.md").write_text("# Note")
+    """Valid client -> fast path with prompt, map_mode=True."""
+    (tmp_path / "clients" / "bob").mkdir(parents=True)
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
     result = dispatch_map("tp-review", "bob", ui, ws)
     assert result.error is None
     assert result.map_mode is True
     assert "[MAP:" not in result.message
-
-
-def test_tp_review_no_tp_falls_to_map_path(tmp_path):
-    """Client exists with sessions but no treatment plan → map path."""
-    (tmp_path / "clients" / "bob" / "sessions").mkdir(parents=True)
-    (tmp_path / "clients" / "bob" / "sessions" / "2025-01-15-progress-note.md").write_text("# Note")
-    ui = MagicMock()
-    ws = Workspace(str(tmp_path))
-    result = dispatch_map("tp-review", "bob", ui, ws)
-    assert result.error is None
-    assert "[MAP: tp-review]" in result.message
-
-
-def test_tp_review_no_notes_falls_to_map_path(tmp_path):
-    """Client exists with treatment plan but no progress notes → map path."""
-    (tmp_path / "clients" / "bob" / "treatment-plan").mkdir(parents=True)
-    (tmp_path / "clients" / "bob" / "treatment-plan" / "current.md").write_text("# TP")
-    ui = MagicMock()
-    ws = Workspace(str(tmp_path))
-    result = dispatch_map("tp-review", "bob", ui, ws)
-    assert result.error is None
-    assert "[MAP: tp-review]" in result.message
+    assert "bob" in result.message
 
 
 def test_tp_review_no_args_map_path(tmp_path):
@@ -232,11 +203,8 @@ def test_tp_review_no_args_map_path(tmp_path):
 # --- /session fast path and map path ---
 
 def test_session_fast_path(tmp_path):
-    """Valid client + file remainder → fast path with plan_prompt."""
-    (tmp_path / "clients" / "alice" / "profile").mkdir(parents=True)
-    (tmp_path / "clients" / "alice" / "profile" / "current.md").write_text("# Profile")
-    (tmp_path / "clients" / "alice" / "treatment-plan").mkdir(parents=True)
-    (tmp_path / "clients" / "alice" / "treatment-plan" / "current.md").write_text("# TP")
+    """Valid client + file remainder -> fast path with plan_prompt."""
+    (tmp_path / "clients" / "alice").mkdir(parents=True)
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
     result = dispatch_map("session", "alice recording.m4a", ui, ws)
@@ -248,34 +216,18 @@ def test_session_fast_path(tmp_path):
     assert "[MAP:" not in result.message
 
 
-def test_session_fast_path_includes_reminders(tmp_path):
-    """Fast path preserves clinical reminders in the execution prompt."""
-    (tmp_path / "clients" / "alice" / "profile").mkdir(parents=True)
-    (tmp_path / "clients" / "alice" / "profile" / "current.md").write_text("# Profile")
-    (tmp_path / "clients" / "alice" / "treatment-plan").mkdir(parents=True)
-    (tmp_path / "clients" / "alice" / "treatment-plan" / "current.md").write_text(
-        "# TP\n**Initiation Date** — 2024-01-01"
-    )
+def test_session_fast_path_has_tool_discovery(tmp_path):
+    """Fast path tells LLM to load client context via tools."""
+    (tmp_path / "clients" / "alice").mkdir(parents=True)
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
-
     result = dispatch_map("session", "alice recording.m4a", ui, ws)
-
-    assert "## Clinical Reminders" in result.message
-    assert "No Wellness Assessment" in result.message
-    assert "Treatment Plan review is past due" in result.message
-    assert "recording.m4a" in result.message
-    assert "recording.m4a" in result.plan_prompt
+    assert "run_command ls" in result.message
 
 
 def test_session_fast_path_matches_activate_map_prompt(tmp_path):
     """Slash-map fast path and activate_map share the same execution prompt."""
-    (tmp_path / "clients" / "alice" / "profile").mkdir(parents=True)
-    (tmp_path / "clients" / "alice" / "profile" / "current.md").write_text("# Profile")
-    (tmp_path / "clients" / "alice" / "treatment-plan").mkdir(parents=True)
-    (tmp_path / "clients" / "alice" / "treatment-plan" / "current.md").write_text(
-        "# TP\n**Initiation Date** — 2024-01-01"
-    )
+    (tmp_path / "clients" / "alice").mkdir(parents=True)
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
 
@@ -296,7 +248,7 @@ def test_session_no_args_map_path(tmp_path):
 
 
 def test_session_client_only_map_path(tmp_path):
-    """Client-id but no remainder → map path."""
+    """Client-id but no remainder -> map path."""
     (tmp_path / "clients" / "alice").mkdir(parents=True)
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
@@ -308,11 +260,8 @@ def test_session_client_only_map_path(tmp_path):
 # --- /wellness-assessment fast path and map path ---
 
 def test_wa_fast_path(tmp_path):
-    """Valid client + file remainder → fast path."""
-    (tmp_path / "clients" / "carol" / "profile").mkdir(parents=True)
-    (tmp_path / "clients" / "carol" / "profile" / "current.md").write_text("# Profile")
-    (tmp_path / "clients" / "carol" / "treatment-plan").mkdir(parents=True)
-    (tmp_path / "clients" / "carol" / "treatment-plan" / "current.md").write_text("# TP")
+    """Valid client + file remainder -> fast path."""
+    (tmp_path / "clients" / "carol").mkdir(parents=True)
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
     result = dispatch_map("wellness-assessment", "carol wa-scan.pdf", ui, ws)

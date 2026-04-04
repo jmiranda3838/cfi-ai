@@ -18,12 +18,15 @@ Today's date is {date}.
 
 Client ID: `{client_id}`
 
-{client_context}
+Use `run_command ls clients/{client_id}/profile/` and \
+`run_command ls clients/{client_id}/treatment-plan/` to find the most recent \
+files (latest `YYYY-MM-DD` prefix), then `attach_path` to load them.
 
 ## Map
 
-### Phase 1: Process & Summarize
-1. Review the transcript and client context (profile + treatment plan).
+### Phase 1: Load Context & Summarize
+1. Load the client's most recent profile and treatment plan (see above).
+2. Review the transcript and client context.
 2. **State** a 1-2 sentence clinical summary of this session, then \
 **immediately proceed to Phase 2 tool calls in the same response** — do NOT \
 stop after the summary text.
@@ -80,7 +83,9 @@ etc.), interpret them as a shell would — e.g. `Bristol\\ St\\ 4.m4a` means \
 
 Client ID: `{client_id}`
 
-{client_context}
+Use `run_command ls clients/{client_id}/profile/` and \
+`run_command ls clients/{client_id}/treatment-plan/` to find the most recent \
+files (latest `YYYY-MM-DD` prefix), then `attach_path` to load them.
 
 ## Map
 
@@ -94,13 +99,14 @@ Process one file at a time. After all files are processed, you will have text \
 content for each input. \
 When transcribing audio, transcribe as accurately as possible — do not omit or \
 embellish content.
-2. Review the processed content and client context (profile + treatment plan).
-3. **State** a 1-2 sentence clinical summary of this session, then \
+2. Load the client's most recent profile and treatment plan (see Client Context above).
+3. Review all processed content and client context.
+4. **State** a 1-2 sentence clinical summary of this session, then \
 **immediately proceed to Phase 2 tool calls in the same response** — do NOT \
 stop after the summary text.
 
 ### Phase 2: Write Documents
-4. **Save ALL files in a single response** — call `write_file` once for EACH:
+5. **Save ALL files in a single response** — call `write_file` once for EACH:
    - `sessions/{date}-progress-note.md`
    - `sessions/{date}-session-transcript.md`
 
@@ -135,7 +141,8 @@ The user has provided one or more files for session processing: \
 
 Client ID: `{client_id}`
 
-{client_context}
+The execution agent should use `run_command ls` to find and `attach_path` to load \
+the client's most recent profile and treatment plan for context.
 
 ## Instructions
 
@@ -147,10 +154,11 @@ Do NOT load or process the files — the execution agent will do that.
    - `clients/{client_id}/sessions/{date}-session-transcript.md`
 
 2. **Include execution steps**: The execution agent should:
-   1. Call `transcribe_audio` for each audio file
-   2. Call `extract_document` for each PDF
-   3. Write both documents in a single batch
-   4. User reviews and approves
+   1. Load client's most recent profile and treatment plan
+   2. Call `transcribe_audio` for each audio file
+   3. Call `extract_document` for each PDF
+   4. Write both documents in a single batch
+   5. User reviews and approves
 
 ## Document Criteria
 

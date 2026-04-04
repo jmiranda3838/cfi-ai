@@ -40,32 +40,6 @@ def _summarize_contents(messages: list[types.Content]) -> list[str]:
         )
     return lines
 
-# Repetition detection constants
-_REPEAT_BLOCK_SIZES = (200, 500)
-_REPEAT_MIN_TEXT_LENGTH = 2000
-_REPEAT_CHECK_INTERVAL = 500
-
-# Degenerate run detection: single character repeated this many times
-_DEGENERATE_RUN_LENGTH = 150
-
-
-def _is_degenerate_run(text: str) -> bool:
-    """Return True if the last _DEGENERATE_RUN_LENGTH chars are all the same character."""
-    if len(text) < _DEGENERATE_RUN_LENGTH:
-        return False
-    return len(set(text[-_DEGENERATE_RUN_LENGTH:])) == 1
-
-
-def _is_repeated_suffix(text: str) -> bool:
-    """Return True if the last block of *text* appears consecutively for any
-    of the configured block sizes."""
-    for block_size in _REPEAT_BLOCK_SIZES:
-        if len(text) < block_size * 2:
-            continue
-        if text[-block_size:] == text[-block_size * 2 : -block_size]:
-            return True
-    return False
-
 
 class Client:
     def __init__(self, config: Config) -> None:
@@ -154,14 +128,12 @@ class StreamResult:
         self._stream = stream
         self._parts: list[types.Part] = []
         self._finish_reason: str | None = None
-        self._repetition_detected: bool = False
         self.request_id: str = request_id
 
     def text_chunks(self) -> Generator[str, None, None]:
         """Yield text delta chunks as they arrive."""
         rid = self.request_id
         buf = ""
-        last_check_len = 0
         chunk_idx = 0
         for chunk in self._stream:
             empty_candidates = not chunk.candidates
@@ -193,32 +165,6 @@ class StreamResult:
                     len(part.text) if part.text else 0, len(buf),
                 )
                 if part.text:
-                    # Fast check: degenerate single-char runs
-                    if _is_degenerate_run(buf):
-                        _log.warning(
-                            "[req:%s] Degenerate run detected at %d chars",
-                            rid, len(buf),
-                        )
-                        self._repetition_detected = True
-                        return
-                    # Check for repetition once we have enough text
-                    if (
-                        len(buf) >= _REPEAT_MIN_TEXT_LENGTH
-                        and len(buf) - last_check_len >= _REPEAT_CHECK_INTERVAL
-                    ):
-                        last_check_len = len(buf)
-                        suffix_hit = _is_repeated_suffix(buf)
-                        _log.debug(
-                            "[req:%s] repetition_check buf_len=%d suffix_hit=%s",
-                            rid, len(buf), suffix_hit,
-                        )
-                        if suffix_hit:
-                            _log.warning(
-                                "[req:%s] Repetition detected at %d chars",
-                                rid, len(buf),
-                            )
-                            self._repetition_detected = True
-                            return
                     yield part.text
 
     def log_completion(self) -> None:
@@ -227,14 +173,10 @@ class StreamResult:
         fc_count = len(self.function_calls)
         _log.debug(
             "[req:%s] stream_end total_parts=%d total_text_len=%d function_calls=%d "
-            "finish_reason=%s repetition_detected=%s",
+            "finish_reason=%s",
             self.request_id, len(self._parts), total_text_len, fc_count,
-            self._finish_reason, self._repetition_detected,
+            self._finish_reason,
         )
-
-    @property
-    def repetition_detected(self) -> bool:
-        return self._repetition_detected
 
     @property
     def parts(self) -> list[types.Part]:

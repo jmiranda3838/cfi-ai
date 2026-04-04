@@ -12,19 +12,20 @@ MAPS_SECTION = """
 
 Maps are reusable clinical routes. The user does not need to say "map" to invoke one. \
 If the user's request clearly matches one of these maps, call `activate_map` to load the \
-specialized prompt and context. Do NOT attempt clinical documentation without activating \
-the appropriate map first — the map prompts contain critical compliance requirements and \
-formatting rules.
+specialized compliance prompts and instructions. Do NOT attempt clinical documentation \
+without activating the appropriate map first — the map prompts contain critical compliance \
+requirements and formatting rules.
 
 - **intake**: New client intake materials (recordings, transcripts, questionnaire PDFs, \
 wellness assessments). Triggers: "new client," "intake," "first session," "initial \
 assessment," or providing intake materials without specifying a map.
 - **session**: Progress note for an ongoing session. Triggers: "session note," "progress \
 note," session audio/transcript for a known client. Requires client_id.
-- **compliance**: Optum audit compliance check. Triggers: "compliance check," "audit," \
-"check records." Requires client_id.
-- **tp-review**: Review and update treatment plan. Triggers: "treatment plan review," \
-"update treatment plan," "TP review." Requires client_id.
+- **compliance**: Optum audit compliance check; missing records may be surfaced as \
+findings. Triggers: "compliance check," "audit," "check records." Requires client_id.
+- **tp-review**: Review and update treatment plan; requires an existing treatment plan \
+and progress notes to generate updates. Triggers: "treatment plan review," "update \
+treatment plan," "TP review." Requires client_id.
 - **wellness-assessment**: Score a G22E02 Wellness Assessment. Triggers: "wellness \
 assessment," "G22E02," "GD score," or providing a WA form/scan. Requires client_id.
 
@@ -48,15 +49,13 @@ This workspace contains a `clients/` directory for clinical documentation. Files
 clients/<client-id>/
   intake/<YYYY-MM-DD>-initial-assessment.md   (TheraNest Initial Assessment fields)
   profile/<YYYY-MM-DD>-profile.md             (internal reference)
-  profile/current.md
   treatment-plan/<YYYY-MM-DD>-treatment-plan.md  (TheraNest Treatment Plan fields)
-  treatment-plan/current.md
   sessions/<YYYY-MM-DD>-progress-note.md      (TheraNest standard note, DAP)
   sessions/<YYYY-MM-DD>-intake-transcript.md
   wellness-assessments/<YYYY-MM-DD>-wellness-assessment.md  (G22E02 structured scores)
 ```
 
-- `current.md` files are copies of the latest dated version for quick access.
+- Files use `YYYY-MM-DD` date prefixes. The most recent file has the latest date.
 - Use the `/intake` map to process intake materials into TheraNest-ready clinical documents.
 - When asked to "integrate" new data into existing documents, rewrite the document \
 content to incorporate the new information seamlessly — do not just link or attach \
@@ -130,8 +129,7 @@ Never claim something is unaffected without verifying.
 - Do not attempt to modify any files or run mutating commands.
 - Be specific — include file paths and concrete details about what will change.
 - When the task involves updating client documents, ensure the plan covers ALL \
-affected document types (intake assessment, profile, treatment plan) and the \
-corresponding current.md files for profile and treatment-plan. Do not flag \
+affected document types (intake assessment, profile, treatment plan). Do not flag \
 omissions as "Risks" — include them as steps.
 - Do NOT include full document content in the plan. Describe what sections will \
 be added or modified and summarize the data to be integrated. The execution phase \

@@ -18,7 +18,7 @@ from cfi_ai.ui import UI, UserInput, PlanApproval
 from cfi_ai.workspace import Workspace
 import cfi_ai.tools as tools
 from cfi_ai.tools import ACTIVATE_MAP_TOOL_NAME, INTERVIEW_TOOL_NAME
-from cfi_ai.tools.activate_map import NON_MAP_MODE, get_map_plan_prompt as _get_map_plan_prompt
+from cfi_ai.tools.activate_map import get_map_plan_prompt as _get_map_plan_prompt
 
 _log = logging.getLogger(__name__)
 
@@ -34,8 +34,6 @@ class PlanModeResult:
     map_mode: bool = False
 
 
-_NARRATION_THRESHOLD = 800
-
 _MAP_DISPLAY_NAMES = {
     "intake": "Intake",
     "session": "Session",
@@ -47,6 +45,15 @@ _MAP_DISPLAY_NAMES = {
 
 def _display_map_name(map_name: str) -> str:
     return _MAP_DISPLAY_NAMES.get(map_name, map_name.replace("-", " ").title())
+
+
+def _should_retry_empty_turn(
+    function_calls: list[types.FunctionCall],
+    full_text: str,
+    continuation_retries: int,
+) -> bool:
+    """Retry only when the model produced an empty turn with no tool calls."""
+    return not function_calls and not full_text.strip() and continuation_retries < 2
 
 
 def _build_result_slots(
@@ -226,7 +233,6 @@ def _run_plan_mode(
 ) -> PlanModeResult:
     """Run the plan-mode inner loop. Returns a PlanModeResult."""
     _log.debug("plan_mode_enter messages=%d", len(messages))
-    repetition_retries = 0
     plan_text = None
 
     for _iteration in range(MAX_TOOL_ITERATIONS):
@@ -256,23 +262,6 @@ def _run_plan_mode(
             return PlanModeResult()
         finally:
             stream_result.log_completion()
-
-        if stream_result.repetition_detected:
-            _log.debug("plan_mode repetition_detected retries=%d", repetition_retries)
-            if repetition_retries >= 1:
-                ui.print_error("Model output is stuck in a loop.")
-                return PlanModeResult()
-            repetition_retries += 1
-            messages.append(
-                types.Content(
-                    role="user",
-                    parts=[types.Part.from_text(
-                        text="Your response became repetitive. Be concise and proceed.",
-                    )],
-                )
-            )
-            _log.debug("plan_mode corrective_inject repetition")
-            continue
 
         if not stream_result.parts:
             break
@@ -320,7 +309,7 @@ def _run_plan_mode(
                 map_name = fc_args.pop("map", "")
                 source = fc_args.get("source", "implicit")
                 map_plan_prompt = _get_map_plan_prompt(map_name, workspace, **fc_args)
-                map_mode = map_name not in NON_MAP_MODE
+                map_mode = True
                 if source == "implicit":
                     ui.print_info(f"Starting the {_display_map_name(map_name)} Map.")
 
@@ -451,34 +440,25 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
             ui.print_separator()
             ui.print_info("Plan mode: researching and planning (read-only)...")
 
-            # Copy existing context + new user request
-            plan_messages: list[types.Content] = list(messages)
             plan_user_text = plan_prompt if plan_prompt else user_text
-            plan_messages.append(
+            messages.append(
                 types.Content(role="user", parts=[types.Part.from_text(text=plan_user_text)])
             )
-            _log.debug(
-                "plan_mode_entry cloned_messages=%d total_plan_messages=%d",
-                len(messages), len(plan_messages),
-            )
+            _log.debug("plan_mode_entry messages=%d", len(messages))
 
             t0 = time.monotonic()
             plan_result = _run_plan_mode(
                 client, ui, workspace, plan_system_prompt,
-                readonly_api_tools, plan_messages,
+                readonly_api_tools, messages,
             )
             elapsed = time.monotonic() - t0
 
             # --- Case A: activate_map was called during plan mode ---
             if plan_result.map_execution_prompt is not None:
-                # Merge messages to preserve any research done before the map call
-                messages[:] = plan_messages
-
                 if plan_result.map_plan_prompt is not None:
                     # Dedicated plan prompt exists: re-enter plan mode with it
                     ui.print_info("Map activated. Planning map execution...")
-                    wf_plan_messages: list[types.Content] = list(messages)
-                    wf_plan_messages.append(
+                    messages.append(
                         types.Content(
                             role="user",
                             parts=[types.Part.from_text(text=plan_result.map_plan_prompt)],
@@ -487,7 +467,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                     t0_wf = time.monotonic()
                     wf_plan_result = _run_plan_mode(
                         client, ui, workspace, plan_system_prompt,
-                        readonly_api_tools, wf_plan_messages,
+                        readonly_api_tools, messages,
                         allow_map_activation=False,
                     )
                     elapsed += time.monotonic() - t0_wf
@@ -503,12 +483,12 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
 
                     approval = ui.prompt_plan_approval()
                     if approval != PlanApproval.REJECT:
+                        ui.set_plan_mode(False)
                         auto_approve = approval == PlanApproval.BYPASS
                         mode_desc = "auto-approve" if auto_approve else "reviewing each edit"
                         ui.print_info(f"Executing plan ({mode_desc})...")
                         ui.print_separator()
 
-                        messages[:] = wf_plan_messages
                         execution_prompt = (
                             f"{plan_result.map_execution_prompt}\n\n"
                             "## Approved Plan\n\n"
@@ -522,12 +502,6 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                         map_mode = True
                         _log.debug("map_plan_execution_inject map_mode=True auto_approve=%s", auto_approve)
                     else:
-                        messages.append(
-                            types.Content(role="user", parts=[types.Part.from_text(text=user_text)])
-                        )
-                        messages.append(
-                            types.Content(role="model", parts=[types.Part.from_text(text=plan_text)])
-                        )
                         ui.print_info("Plan rejected. You can refine your request.")
                         continue
                 else:
@@ -557,17 +531,15 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
 
                 approval = ui.prompt_plan_approval()
                 if approval != PlanApproval.REJECT:
+                    ui.set_plan_mode(False)
                     auto_approve = approval == PlanApproval.BYPASS
 
                     mode_desc = "auto-approve" if auto_approve else "reviewing each edit"
                     ui.print_info(f"Executing plan ({mode_desc})...")
                     ui.print_separator()
 
-                    # Merge planning context back into main messages so execution
-                    # retains all tool results (extracted PDFs, interview answers, etc.)
-                    messages[:] = plan_messages
                     _log.debug(
-                        "plan_approved merged_messages=%d auto_approve=%s",
+                        "plan_approved messages=%d auto_approve=%s",
                         len(messages), auto_approve,
                     )
 
@@ -596,13 +568,6 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                     map_mode = True
                     _log.debug("plan_execution_inject map_mode=True auto_approve=%s", auto_approve)
                 else:
-                    # Rejected: preserve plan exchange in history for refinement
-                    messages.append(
-                        types.Content(role="user", parts=[types.Part.from_text(text=user_text)])
-                    )
-                    messages.append(
-                        types.Content(role="model", parts=[types.Part.from_text(text=plan_text)])
-                    )
                     ui.print_info("Plan rejected. You can refine your request.")
                     continue
         else:
@@ -617,8 +582,6 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
         # Inner loop: handle tool use chains
         t0 = time.monotonic()
         approval_wait = 0.0
-        repetition_retries = 0
-        narration_retries = 0
         continuation_retries = 0
         reauth_attempted = False
         _log.debug("inner_loop_start map_mode=%s messages=%d", map_mode, len(messages))
@@ -663,93 +626,27 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
             finally:
                 stream_result.log_completion()
 
-            # Handle repetition detection
-            if stream_result.repetition_detected:
-                _log.debug("inner_loop repetition_detected retries=%d", repetition_retries)
-                if repetition_retries >= 1:
-                    ui.print_error("Model output is stuck in a loop. Please try again.")
-                    break
-                repetition_retries += 1
-                # Do not append the garbage turn — inject corrective message
-                messages.append(
-                    types.Content(
-                        role="user",
-                        parts=[types.Part.from_text(
-                            text="Your previous response became repetitive. "
-                            "Continue from the last useful point without repeating yourself. "
-                            "If tools are needed, call them directly.",
-                        )],
-                    )
-                )
-                _log.debug("inner_loop corrective_inject repetition")
-                continue
+            has_parts = bool(stream_result.parts)
+            if has_parts:
+                messages.append(types.Content(role="model", parts=stream_result.parts))
+                _log.debug("inner_loop model_turn_appended parts=%d", len(stream_result.parts))
 
-            if not stream_result.parts:
-                if map_mode and continuation_retries < 2:
-                    continuation_retries += 1
-                    _log.debug("inner_loop empty_response_continuation retries=%d", continuation_retries)
-                    messages.append(
-                        types.Content(
-                            role="user",
-                            parts=[types.Part.from_text(
-                                text="Continue with the remaining steps of the map. "
-                                "If there are more files to write, call write_file now. "
-                                "If all phases are complete, say 'Done.' and nothing else.",
-                            )],
-                        )
-                    )
-                    continue
-                break
+            function_calls = stream_result.function_calls if has_parts else []
 
-            # Append assistant message to history
-            messages.append(types.Content(role="model", parts=stream_result.parts))
-            _log.debug("inner_loop model_turn_appended parts=%d", len(stream_result.parts))
-
-            # Check for function calls
-            function_calls = stream_result.function_calls
             if not function_calls:
-                # Narration guard: in map mode, long text with no tool calls
-                # means the model is narrating instead of acting.
-                if (
-                    map_mode
-                    and len(full_text) > _NARRATION_THRESHOLD
-                    and narration_retries < 1
-                ):
-                    narration_retries += 1
-                    _log.debug(
-                        "inner_loop narration_guard_discard text_len=%d threshold=%d",
-                        len(full_text), _NARRATION_THRESHOLD,
-                    )
-                    # Discard the narrating model turn
-                    messages.pop()
-                    messages.append(
-                        types.Content(
-                            role="user",
-                            parts=[types.Part.from_text(
-                                text="Do not narrate the map or reproduce document content. "
-                                "Briefly summarize in 1-2 sentences, then proceed directly "
-                                "to tool calls.",
-                            )],
-                        )
-                    )
-                    continue
-                # Map completion sentinel — model said "Done.", stop looping
-                if map_mode and full_text.strip().rstrip(".").lower() == "done":
+                # A text-only response means the model has finished its turn.
+                if full_text.strip():
                     break
-                # Map continuation guard: give model a chance to resume mid-map
-                if map_mode and continuation_retries < 2:
+                # Empty turn: nudge the model to continue and try again.
+                if _should_retry_empty_turn(function_calls, full_text, continuation_retries):
                     continuation_retries += 1
-                    _log.debug(
-                        "inner_loop map_continuation retries=%d text_len=%d",
-                        continuation_retries, len(full_text),
-                    )
+                    _log.debug("inner_loop continuation retries=%d text_len=%d", continuation_retries, len(full_text))
                     messages.append(
                         types.Content(
                             role="user",
                             parts=[types.Part.from_text(
-                                text="Continue with the remaining steps of the map. "
-                                "If there are more files to write, call write_file now. "
-                                "If all phases are complete, say 'Done.' and nothing else.",
+                                text="Your last response was empty. Continue the task. "
+                                "If you need to use tools, call them now. Otherwise provide your final response.",
                             )],
                         )
                     )
@@ -775,8 +672,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
 
                 if not result_text.startswith("Error:"):
                     map_name = fc_args.get("map", "")
-                    if map_name not in NON_MAP_MODE:
-                        map_mode = True
+                    map_mode = True
                     if fc_args.get("source") == "implicit":
                         ui.print_info(f"Starting the {_display_map_name(map_name)} Map.")
                     _log.debug("activate_map %s map_mode=%s", map_name, map_mode)

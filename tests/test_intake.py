@@ -1,34 +1,14 @@
 import datetime
 from unittest.mock import MagicMock
 
-from cfi_ai.clients import build_existing_clients_section
 from cfi_ai.maps.intake import handle_intake
 from cfi_ai.workspace import Workspace
-
-
-# --- build_existing_clients_section tests ---
-
-def test_existing_clients_none(tmp_path):
-    ws = Workspace(str(tmp_path))
-    section = build_existing_clients_section(ws)
-    assert "No existing clients" in section
-
-
-def test_existing_clients_with_data(tmp_path):
-    client_dir = tmp_path / "clients" / "jane-doe"
-    (client_dir / "profile").mkdir(parents=True)
-    (client_dir / "profile" / "current.md").write_text("# Jane Doe profile")
-    ws = Workspace(str(tmp_path))
-    section = build_existing_clients_section(ws)
-    assert "jane-doe" in section
-    # Should only list slugs, not load full profile content
-    assert "Jane Doe profile" not in section
 
 
 # --- handle_intake fast path tests ---
 
 def test_handle_intake_file_reference(tmp_path):
-    """File args produce a message with INTAKE_FILE_MAP_PROMPT."""
+    """File args produce a message with file processing instructions."""
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
     result = handle_intake("session.mp3", ui, ws)
@@ -46,13 +26,12 @@ def test_handle_intake_message_contains_date(tmp_path):
     assert datetime.date.today().isoformat() in result.message
 
 
-def test_handle_intake_message_contains_existing_clients(tmp_path):
-    (tmp_path / "clients" / "existing-client" / "profile").mkdir(parents=True)
-    (tmp_path / "clients" / "existing-client" / "profile" / "current.md").write_text("Profile data")
+def test_handle_intake_message_has_client_discovery(tmp_path):
+    """Prompt tells LLM to discover existing clients via tools."""
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
     result = handle_intake("session.txt", ui, ws)
-    assert "existing-client" in result.message
+    assert "run_command ls clients/" in result.message
 
 
 def test_handle_intake_map_mode(tmp_path):
@@ -75,30 +54,32 @@ def test_handle_intake_file_sets_plan_prompt(tmp_path):
 
 # --- handle_intake skill path tests ---
 
-def test_handle_intake_no_args_map_path(tmp_path):
-    """No args → map path message for the LLM, no error."""
+def test_handle_intake_no_args_direct_prompt(tmp_path):
+    """No args -> full intake prompt with interview instruction, map_mode=True."""
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
     result = handle_intake(None, ui, ws)
     assert result.message is not None
     assert result.error is None
-    assert "[MAP: intake]" in result.message
-    assert "activate_map" in result.message
+    assert result.map_mode is True
+    assert result.plan_prompt is not None
+    assert "interview" in result.message
+    assert "Diagnostic Impressions" in result.message
 
 
-def test_handle_intake_no_args_lists_clients(tmp_path):
-    """Map path includes available clients."""
-    (tmp_path / "clients" / "bob-jones").mkdir(parents=True)
-    ui = MagicMock()
-    ws = Workspace(str(tmp_path))
-    result = handle_intake(None, ui, ws)
-    assert "bob-jones" in result.message
-
-
-def test_handle_intake_empty_args_map_path(tmp_path):
-    """Empty/whitespace args → map path."""
+def test_handle_intake_empty_args_direct_prompt(tmp_path):
+    """Empty/whitespace args -> full intake prompt with interview instruction."""
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
     result = handle_intake("   ", ui, ws)
     assert result.error is None
-    assert "[MAP: intake]" in result.message
+    assert result.map_mode is True
+    assert "interview" in result.message
+
+
+def test_handle_intake_no_current_md_in_prompt(tmp_path):
+    """Prompt should not contain current.md references."""
+    ui = MagicMock()
+    ws = Workspace(str(tmp_path))
+    result = handle_intake("session.mp3", ui, ws)
+    assert "current.md" not in result.message

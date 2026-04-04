@@ -5,21 +5,9 @@ from __future__ import annotations
 import datetime
 from typing import TYPE_CHECKING
 
-from cfi_ai.clients import (
-    build_existing_clients_section,
-    count_wa_files,
-    build_session_reminders,
-    list_clients,
-    load_client_context,
-    load_compliance_context,
-    load_wa_history,
-)
+from cfi_ai.clients import list_clients
 from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
-from cfi_ai.prompts.intake import (
-    INTAKE_FILE_PLAN_PROMPT,
-    INTAKE_FILE_MAP_PROMPT,
-    INTAKE_MAP_PROMPT,
-)
+from cfi_ai.prompts.intake import INTAKE_PLAN_PROMPT, INTAKE_PROMPT
 from cfi_ai.prompts.session import (
     PROGRESS_NOTE_GUIDANCE,
     PROGRESS_NOTE_PLAN_CRITERIA,
@@ -43,6 +31,15 @@ _CONVERSATION_INPUT_PLACEHOLDER = (
     "If the user mentioned files, use attach_path to load them.]"
 )
 
+_FILE_INPUT_TEMPLATE = (
+    "The user wants to process an intake from: `{file_reference}`\n\n"
+    "Extract each file path from the input. Process each file using the "
+    "appropriate tool:\n"
+    "- **Audio files** (.m4a, .mp3, .wav, etc.): `transcribe_audio(path=...)`\n"
+    "- **PDF files** (.pdf): `extract_document(path=...)`\n"
+    "- **Other files**: `attach_path(path=...)`"
+)
+
 _VALID_MAPS = {
     "intake",
     "session",
@@ -58,9 +55,6 @@ _MAPS_REQUIRING_CLIENT_ID = {
     "wellness-assessment",
 }
 
-# Maps where map_mode should NOT be set (read-only analysis)
-NON_MAP_MODE = {"compliance"}
-
 
 def get_map_plan_prompt(
     map_name: str, workspace: Workspace, **kwargs: str
@@ -70,22 +64,25 @@ def get_map_plan_prompt(
     file_reference = kwargs.get("file_reference", "")
     client_id = kwargs.get("client_id", "")
 
-    if map_name == "intake" and file_reference:
-        existing_clients = build_existing_clients_section(workspace)
-        return INTAKE_FILE_PLAN_PROMPT.format(
-            file_reference=file_reference,
+    if map_name == "intake":
+        if file_reference:
+            intake_input = (
+                f"The user has provided one or more files for intake processing: "
+                f"`{file_reference}`"
+            )
+        else:
+            intake_input = _CONVERSATION_INPUT_PLACEHOLDER
+        return INTAKE_PLAN_PROMPT.format(
+            intake_input=intake_input,
             date=today,
-            existing_clients=existing_clients,
         )
 
     if map_name == "session" and file_reference and client_id:
-        client_context = load_client_context(workspace, client_id)
         note_guidance = PROGRESS_NOTE_GUIDANCE.format(date=today)
         return SESSION_FILE_PLAN_PROMPT.format(
             file_reference=file_reference,
             date=today,
             client_id=client_id,
-            client_context=client_context,
             progress_note_guidance=note_guidance,
             progress_note_plan_criteria=PROGRESS_NOTE_PLAN_CRITERIA,
         )
@@ -102,7 +99,7 @@ class ActivateMapTool(BaseTool):
             name=self.name,
             description=(
                 "Activate a clinical map to load specialized compliance prompts "
-                "and client context. Call this when the user describes a clinical task "
+                "and instructions. Call this when the user describes a clinical task "
                 "(intake, session note, compliance check, treatment plan review, or "
                 "wellness assessment) without needing the user to say 'map'. "
                 "Call this tool ALONE — do not combine with other tool calls."
@@ -180,148 +177,49 @@ class ActivateMapTool(BaseTool):
 
         today = datetime.date.today().isoformat()
 
+        # Format the appropriate prompt template
         if map_name == "intake":
-            return self._activate_intake(workspace, today, file_reference)
+            if file_reference:
+                intake_input = _FILE_INPUT_TEMPLATE.format(
+                    file_reference=file_reference
+                )
+            else:
+                intake_input = _CONVERSATION_INPUT_PLACEHOLDER
+            return INTAKE_PROMPT.format(date=today, intake_input=intake_input)
+
         if map_name == "session":
-            return self._activate_session(workspace, today, client_id, file_reference)
-        if map_name == "compliance":
-            return self._activate_compliance(workspace, today, client_id)
-        if map_name == "tp-review":
-            return self._activate_tp_review(workspace, today, client_id)
-        if map_name == "wellness-assessment":
-            return self._activate_wa(workspace, today, client_id, file_reference)
-
-        return f"Error: Unhandled map '{map_name}'"
-
-    def _activate_intake(
-        self, workspace: Workspace, today: str, file_reference: str
-    ) -> str:
-        existing_clients = build_existing_clients_section(workspace)
-
-        if file_reference:
-            return INTAKE_FILE_MAP_PROMPT.format(
-                file_reference=file_reference,
-                date=today,
-                existing_clients=existing_clients,
-            )
-
-        return INTAKE_MAP_PROMPT.format(
-            transcript=_CONVERSATION_INPUT_PLACEHOLDER,
-            date=today,
-            existing_clients=existing_clients,
-        )
-
-    def _activate_session(
-        self,
-        workspace: Workspace,
-        today: str,
-        client_id: str,
-        file_reference: str,
-    ) -> str:
-        client_context = load_client_context(workspace, client_id)
-        note_guidance = PROGRESS_NOTE_GUIDANCE.format(date=today)
-        reminders = build_session_reminders(workspace, client_id)
-
-        if file_reference:
-            prompt = SESSION_FILE_MAP_PROMPT.format(
-                file_reference=file_reference,
-                date=today,
-                client_id=client_id,
-                client_context=client_context,
-                progress_note_guidance=note_guidance,
-            )
-        else:
-            prompt = SESSION_MAP_PROMPT.format(
+            note_guidance = PROGRESS_NOTE_GUIDANCE.format(date=today)
+            if file_reference:
+                return SESSION_FILE_MAP_PROMPT.format(
+                    file_reference=file_reference,
+                    date=today,
+                    client_id=client_id,
+                    progress_note_guidance=note_guidance,
+                )
+            return SESSION_MAP_PROMPT.format(
                 transcript=_CONVERSATION_INPUT_PLACEHOLDER,
                 date=today,
                 client_id=client_id,
-                client_context=client_context,
                 progress_note_guidance=note_guidance,
             )
 
-        if reminders:
-            return reminders + prompt
-        return prompt
+        if map_name == "compliance":
+            return COMPLIANCE_PROMPT.format(date=today, client_id=client_id)
 
-    def _activate_compliance(
-        self, workspace: Workspace, today: str, client_id: str
-    ) -> str:
-        compliance_context = load_compliance_context(workspace, client_id)
-        if not compliance_context:
-            return (
-                f"Error: No clinical files found for client '{client_id}'. "
-                "Run the Intake Map first."
-            )
+        if map_name == "tp-review":
+            return TP_REVIEW_PROMPT.format(date=today, client_id=client_id)
 
-        return COMPLIANCE_PROMPT.format(
-            date=today,
-            client_id=client_id,
-            compliance_context=compliance_context,
-        )
-
-    def _activate_tp_review(
-        self, workspace: Workspace, today: str, client_id: str
-    ) -> str:
-        client_dir = workspace.root / "clients" / client_id
-
-        # Validate treatment plan exists
-        tp_file = client_dir / "treatment-plan" / "current.md"
-        if not tp_file.is_file():
-            return (
-                f"Error: No treatment plan found for client '{client_id}'. "
-                "Run the Intake Map first to create the initial treatment plan."
-            )
-
-        # Validate at least one progress note exists
-        sessions_dir = client_dir / "sessions"
-        has_notes = sessions_dir.is_dir() and any(
-            sessions_dir.glob("*-progress-note.md")
-        )
-        if not has_notes:
-            return (
-                f"Error: No progress notes found for client '{client_id}'. "
-                "At least one session is needed before a treatment plan review."
-            )
-
-        review_context = load_compliance_context(workspace, client_id)
-
-        return TP_REVIEW_PROMPT.format(
-            date=today,
-            client_id=client_id,
-            review_context=review_context,
-        )
-
-    def _activate_wa(
-        self,
-        workspace: Workspace,
-        today: str,
-        client_id: str,
-        file_reference: str,
-    ) -> str:
-        wa_count = count_wa_files(workspace, client_id)
-        admin_type = "initial" if wa_count == 0 else "re-administration"
-        admin_number = wa_count + 1
-
-        client_context = load_client_context(workspace, client_id)
-        wa_history = load_wa_history(workspace, client_id)
-
-        if file_reference:
-            return WA_FILE_MAP_PROMPT.format(
+        if map_name == "wellness-assessment":
+            if file_reference:
+                return WA_FILE_MAP_PROMPT.format(
+                    date=today,
+                    client_id=client_id,
+                    file_reference=file_reference,
+                )
+            return WA_MAP_PROMPT.format(
                 date=today,
                 client_id=client_id,
-                client_context=client_context,
-                wa_history=wa_history,
-                admin_type=admin_type,
-                admin_number=admin_number,
-                file_reference=file_reference,
+                wa_input=_CONVERSATION_INPUT_PLACEHOLDER,
             )
 
-        return WA_MAP_PROMPT.format(
-            date=today,
-            client_id=client_id,
-            client_context=client_context,
-            wa_history=wa_history,
-            admin_type=admin_type,
-            admin_number=admin_number,
-            wa_input=_CONVERSATION_INPUT_PLACEHOLDER,
-        )
+        return f"Error: Unhandled map '{map_name}'"

@@ -20,7 +20,7 @@ cfi-ai is a terminal-first agentic assistant that binds to the user's current wo
 
 ### Agent loop (`agent.py`)
 
-The inner loop handles multi-turn tool-use chains. Messages are `list[types.Content]` with roles `"user"`, `"model"`, and `"user"` (for tool results). End-of-turn is detected by the **absence of function_call parts** — not by finish_reason (Gemini uses `"STOP"` for both). The loop is capped at `MAX_TOOL_ITERATIONS` (25) as a safety net. If `StreamResult.repetition_detected` fires, the garbage turn is discarded, a corrective user message is injected, and the model retries once — a second detection breaks with an error. A **narration guard** (`_NARRATION_THRESHOLD = 800`) catches map-mode turns where the model emits long text with no tool calls — the narrating turn is discarded and a corrective message is injected (once).
+The inner loop handles multi-turn tool-use chains. Messages are `list[types.Content]` with roles `"user"`, `"model"`, and `"user"` (for tool results). End-of-turn is detected by the **absence of function_call parts** — not by finish_reason (Gemini uses `"STOP"` for both). The loop is capped at `MAX_TOOL_ITERATIONS` (25) as a safety net. If the model stops making tool calls and returns non-empty text, the turn is complete. If it stops making tool calls and returns no text, a continuation prompt is injected (up to 2 retries) to recover from an empty or incomplete turn.
 
 ### Tool system (`tools/`)
 
@@ -40,8 +40,6 @@ The inner loop handles multi-turn tool-use chains. Messages are `list[types.Cont
 
 `StreamResult` wraps `generate_content_stream()`. `text_chunks()` yields text for `ui.stream_markdown()` and accumulates all parts. After exhaustion, `.function_calls` and `.parts` are available.
 
-**Repetition detection**: `text_chunks()` monitors accumulated text for consecutive repetition using multiple block sizes (`_REPEAT_BLOCK_SIZES = (200, 500)` — suffix-based check, starting after 2000 chars). If detected, streaming stops early and `repetition_detected` is set. Constants `_REPEAT_BLOCK_SIZES`, `_REPEAT_MIN_TEXT_LENGTH`, `_REPEAT_CHECK_INTERVAL` are module-level and tunable. Debug logging (`CFI_AI_LOG_LEVEL=DEBUG`) shows raw chunk data for diagnosing repetition issues.
-
 ### Key Vertex AI / Gemini gotchas
 
 - `fc.args` is a protobuf Struct — always wrap with `dict(fc.args)` before `**` unpacking.
@@ -53,7 +51,7 @@ The inner loop handles multi-turn tool-use chains. Messages are `list[types.Cont
 - `maps/__init__.py` defines `parse_map_invocation()`, `dispatch_map()`, `MapResult`, and a `@register_map` decorator.
 - Maps are registered by importing their modules at the bottom of `__init__.py`.
 - `agent.py` intercepts slash maps between input and message append — if `parse_map_invocation` matches, `dispatch_map` runs the handler.
-- `MapResult.message` set → replaces user input sent to LLM. `MapResult.parts` set → multipart content (e.g. text + audio) sent directly. `handled=True` + no message/parts → skip to next prompt. `error` → display and skip. `map_mode=True` → enables narration guard in the agent loop.
+- `MapResult.message` set → replaces user input sent to LLM. `MapResult.parts` set → multipart content (e.g. text + audio) sent directly. `handled=True` + no message/parts → skip to next prompt. `error` → display and skip. `map_mode=True` → uses map prompting/model mode, but turn completion still follows the standard tool-call/text rule.
 - `/help` prints available maps. `/intake` processes a session transcript (text file or pasted) or audio recording (.mp3, .wav, .m4a, etc.) into clinical intake documents. File references are passed to the LLM which uses `attach_path` to load them (handling shell escapes, spaces in paths, etc.). Pasted multi-line text is embedded directly in the prompt.
 - Typing `/` in the prompt shows autocomplete for available maps via `SlashMapCompleter` (prompt-toolkit).
 

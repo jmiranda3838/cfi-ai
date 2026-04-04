@@ -12,8 +12,6 @@ structured scores. Today's date is {date}.
     + """
 ## Input Data
 
-Administration type: **{admin_type}** (#{admin_number})
-
 <wa_data>
 {wa_input}
 </wa_data>
@@ -22,11 +20,17 @@ Administration type: **{admin_type}** (#{admin_number})
 
 Client ID: `{client_id}`
 
-{client_context}
-
-## Previous Assessments
-
-{wa_history}
+Load client context and determine administration type:
+1. Use `run_command ls clients/{client_id}/profile/` to find the most recent \
+profile (latest `YYYY-MM-DD` prefix), then `attach_path` to load it.
+2. Use `run_command ls clients/{client_id}/treatment-plan/` to find the most \
+recent treatment plan, then `attach_path` to load it.
+3. Use `run_command ls clients/{client_id}/wellness-assessments/` to list \
+previous assessments.
+   - If no previous assessments exist: this is an **initial** administration.
+   - If previous assessments exist: this is a **re-administration** \
+(#N where N = count + 1). Load all previous assessments with `attach_path` \
+for trend comparison.
 
 """
     + WA_SCORING_RULES
@@ -34,17 +38,18 @@ Client ID: `{client_id}`
 ## Map
 
 ### Phase 1: Score & Summarize
-1. Extract all item responses from the input data.
-2. Calculate the GD score (sum items 1-15).
-3. Determine severity level.
-4. If initial administration: calculate CAGE-AID score (items 22-24).
-5. **State** the scores in 1-2 sentences (e.g., "GD = 28/45 (Severe); CAGE-AID = 0/3 \
+1. Load client context and determine administration type (see above).
+2. Extract all item responses from the input data.
+3. Calculate the GD score (sum items 1-15).
+4. Determine severity level.
+5. If initial administration: calculate CAGE-AID score (items 22-24).
+6. **State** the scores in 1-2 sentences (e.g., "GD = 28/45 (Severe); CAGE-AID = 0/3 \
 (Negative)"), then **immediately proceed to Phase 2 tool calls in the same response**.
 
 If any item responses are ambiguous or unclear, use the interview tool to ask the clinician about the specific items before proceeding.
 
 ### Phase 2: Write File
-6. Call `write_file` to create:
+7. Call `write_file` to create:
    - `wellness-assessments/{date}-wellness-assessment.md`
 
 Save the file under `clients/{client_id}/`.
@@ -64,8 +69,6 @@ structured scores. Today's date is {date}.
     + """
 ## Input
 
-Administration type: **{admin_type}** (#{admin_number})
-
 The user wants to process a Wellness Assessment from a file. The input is: \
 `{file_reference}`
 
@@ -81,11 +84,17 @@ etc.), interpret them as a shell would.
 
 Client ID: `{client_id}`
 
-{client_context}
-
-## Previous Assessments
-
-{wa_history}
+Load client context and determine administration type:
+1. Use `run_command ls clients/{client_id}/profile/` to find the most recent \
+profile (latest `YYYY-MM-DD` prefix), then `attach_path` to load it.
+2. Use `run_command ls clients/{client_id}/treatment-plan/` to find the most \
+recent treatment plan, then `attach_path` to load it.
+3. Use `run_command ls clients/{client_id}/wellness-assessments/` to list \
+previous assessments.
+   - If no previous assessments exist: this is an **initial** administration.
+   - If previous assessments exist: this is a **re-administration** \
+(#N where N = count + 1). Load all previous assessments with `attach_path` \
+for trend comparison.
 
 """
     + WA_SCORING_RULES
@@ -93,19 +102,20 @@ Client ID: `{client_id}`
 ## Map
 
 ### Phase 1: Process File, Score & Summarize
-1. Load the file using the appropriate tool.
-2. Extract all item responses from the form.
-3. Calculate the GD score (sum items 1-15).
-4. Determine severity level.
-5. If initial administration: calculate CAGE-AID score (items 22-24).
-6. **State** the scores in 1-2 sentences, then **immediately proceed to Phase 2 \
+1. Load the WA file using the appropriate tool.
+2. Load client context and determine administration type (see above).
+3. Extract all item responses from the form.
+4. Calculate the GD score (sum items 1-15).
+5. Determine severity level.
+6. If initial administration: calculate CAGE-AID score (items 22-24).
+7. **State** the scores in 1-2 sentences, then **immediately proceed to Phase 2 \
 tool calls in the same response**.
 
 If any item responses are ambiguous or unclear from the extracted data, \
 use the interview tool to ask the clinician about the specific items before proceeding.
 
 ### Phase 2: Write File
-7. Call `write_file` to create:
+8. Call `write_file` to create:
    - `wellness-assessments/{date}-wellness-assessment.md`
 
 Save the file under `clients/{client_id}/`.

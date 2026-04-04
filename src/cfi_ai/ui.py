@@ -68,13 +68,14 @@ PT_STYLE = PTStyle.from_dict({
     "prompt": "#5f8787",
     "prompt-plan": "#af8700",
     "bottom-toolbar": "bg:#1c1c1c #585858",
+    "bottom-toolbar-plan": "bg:#6b5300 #ffffff",
     "approval": "#af8700",
     "muted": "#9e9e9e",
 })
 
 MODE_DISPLAY = {
     "chatting": "ready",
-    "chatting_plan": "plan mode",
+    "chatting_plan": "PLAN MODE",
     "thinking": "thinking ..",
     "thinking_plan": "researching ..",
     "planning": "planning ..",
@@ -206,8 +207,11 @@ class UI:
         return self._plan_mode
 
     def toggle_plan_mode(self) -> None:
-        self._plan_mode = not self._plan_mode
-        mode = "chatting_plan" if self._plan_mode else "chatting"
+        self.set_plan_mode(not self._plan_mode)
+
+    def set_plan_mode(self, active: bool) -> None:
+        self._plan_mode = active
+        mode = "chatting_plan" if active else "chatting"
         self.status.set_mode(mode)
 
     def set_maps(self, maps: dict[str, str]) -> None:
@@ -230,11 +234,18 @@ class UI:
         """Prompt the user for input. Returns UserInput or None on Ctrl+C (exit)."""
         try:
             def _prompt_message():
-                prompt_class = "class:prompt-plan" if self._plan_mode else "class:prompt"
-                prompt_char = "@ " if self._plan_mode else "~ "
-                return [(prompt_class, prompt_char)]
+                if self._plan_mode:
+                    return [("class:prompt-plan bold", "@ ")]
+                return [("class:prompt", "~ ")]
 
             def _toolbar():
+                if self._plan_mode:
+                    self.status.set_mode("chatting_plan")
+                    return [
+                        ("class:bottom-toolbar-plan bold", " [PLAN MODE] "),
+                        ("class:bottom-toolbar-plan", f"cfi-ai | {self.status.display}  "),
+                        ("class:bottom-toolbar-plan italic", "Shift+Tab to exit plan mode "),
+                    ]
                 mode = "chatting_plan" if self._plan_mode else "chatting"
                 self.status.set_mode(mode)
                 display = self.status.display
@@ -249,10 +260,7 @@ class UI:
                 multiline=False,
                 key_bindings=_chat_key_bindings(on_toggle_plan=self.toggle_plan_mode),
             )
-            was_plan_mode = self._plan_mode
-            if was_plan_mode:
-                self._plan_mode = False
-            return UserInput(text=text, plan_mode=was_plan_mode)
+            return UserInput(text=text, plan_mode=self._plan_mode)
         except (EOFError, KeyboardInterrupt):
             return None
 

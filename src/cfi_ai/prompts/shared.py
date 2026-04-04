@@ -35,51 +35,6 @@ relevant developmental/cultural context.
 abuse, sexual abuse, psychotic break, running away, substance abuse, self-harm). \
 For each, indicate present/not present. If any are present, provide explanation \
 and note whether a safety plan was established. Format clearly so the clinician \
-can check the corresponding TheraNest checkboxes and paste the explanation.
-- **Strengths** — Client/family strengths including support systems, coping \
-skills, protective factors, and resources.
-- **Tentative Goals and Plans** — Initial goals discussed in session.
-- **Involvement** — Who will be involved in treatment (e.g., individual client, \
-family members, collateral contacts).
-- **Treatment Length** — Expected duration of treatment (e.g., "6 months," \
-"12 sessions").
-- **Is Client Appropriate for Agency Services?** — Yes or No with explanation. \
-Include referral resources if No.
-- **Cultural Variables?** — Yes or No. If Yes, describe cultural factors relevant \
-to treatment.
-- **Special Needs of Client** — Yes or No. If Yes, describe (e.g., interpreter, \
-religious consultant, accessibility needs).
-- **Educational or Vocational Problems or Needs** — Yes or No. If Yes, describe.
-"""
-
-INITIAL_ASSESSMENT_GUIDANCE_FILE = """\
-## Initial Assessment Guidance (TheraNest Part 6)
-
-Write the initial assessment structured to match TheraNest's "Initial Assessment & \
-Diagnostic Codes" tab. The clinician should be able to copy-paste each section \
-directly into the corresponding TheraNest field. Clearly note when information is \
-absent or was not assessed.
-
-- **Diagnostic Impressions** — ICD-10 codes with descriptions (e.g., \
-`F32.1 — Major depressive disorder, single episode, moderate`). List primary \
-diagnosis first, then any secondary diagnoses.
-- **Presenting Problem** — Client's initial explanation of the problem(s), \
-duration, and precipitant cause. Write as a narrative paragraph suitable for \
-TheraNest's Presenting Problem text area. If Wellness Assessment data is \
-available, reference the GD severity level.
-- **Observations** — Therapist's observations of client's presentation and \
-family interactions. Include affect, appearance, engagement, and relational \
-dynamics observed in session.
-- **Pertinent History** — Any prior therapy (including family, social, \
-psychological, and medical history). Summarize relevant treatment history, \
-hospitalizations, and significant life events.
-- **Family/Psychosocial Assessment** — The family or psychosocial assessment. \
-Cover family structure, key relationships, social supports, stressors, and \
-relevant developmental/cultural context.
-- **Risk Assessment** — Address all 8 risk domains (suicide, violence, physical \
-abuse, sexual abuse, psychotic break, running away, substance abuse, self-harm). \
-For each, indicate present/not present. If any are present, provide explanation \
-and note whether a safety plan was established. Format clearly so the clinician \
 can check the corresponding TheraNest checkboxes and paste the explanation. \
 **Important:** If the wellness assessment Q22-24 (CAGE screen) has any "Yes" \
 answers, flag substance abuse risk here and incorporate those findings.
@@ -98,6 +53,9 @@ to treatment.
 religious consultant, accessibility needs).
 - **Educational or Vocational Problems or Needs** — Yes or No. If Yes, describe.
 """
+
+# Backwards-compat alias (was a separate, near-identical constant before merging)
+INITIAL_ASSESSMENT_GUIDANCE_FILE = INITIAL_ASSESSMENT_GUIDANCE
 
 TREATMENT_PLAN_GUIDANCE = """\
 ## Treatment Plan Guidance (TheraNest Part 7)

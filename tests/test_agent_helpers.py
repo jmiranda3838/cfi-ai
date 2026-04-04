@@ -2,7 +2,7 @@
 
 from google.genai import types
 
-from cfi_ai.agent import _build_result_slots, _split_tool_results
+from cfi_ai.agent import _build_result_slots, _should_retry_empty_turn, _split_tool_results
 
 
 def test_split_no_binary():
@@ -58,83 +58,75 @@ def test_split_single_binary():
     assert groups[1] == [binary]
 
 
-class TestMapContinuationLogic:
-    """Test the continuation and sentinel control flow logic."""
+class TestTurnCompletionLogic:
+    """Test the structural turn-completion logic."""
 
-    def test_empty_parts_map_mode_continues(self):
-        """In map_mode with retries left, empty parts → continuation message."""
+    def test_empty_turn_retries_when_text_is_empty(self):
+        """No tool calls + empty text -> retry while retries remain."""
         from google.genai import types
 
         messages = []
-        map_mode = True
         continuation_retries = 0
+        full_text = ""
+        function_calls: list[types.FunctionCall] = []
 
-        # Simulate the empty-parts path
-        parts_empty = True  # stream_result.parts is empty
         should_continue = False
 
-        if parts_empty:
-            if map_mode and continuation_retries < 2:
-                continuation_retries += 1
-                messages.append(
-                    types.Content(
-                        role="user",
-                        parts=[types.Part.from_text(text="Continue...")],
-                    )
+        if _should_retry_empty_turn(function_calls, full_text, continuation_retries):
+            continuation_retries += 1
+            messages.append(
+                types.Content(
+                    role="user",
+                    parts=[types.Part.from_text(text="Continue...")],
                 )
-                should_continue = True
+            )
+            should_continue = True
 
         assert should_continue is True
         assert len(messages) == 1
         assert continuation_retries == 1
 
-    def test_empty_parts_non_map_breaks(self):
-        """Without map_mode, empty parts → break."""
-        map_mode = False
+    def test_whitespace_only_turn_retries(self):
+        """Whitespace-only text counts as an empty turn."""
+        full_text = " \n\t "
+        continuation_retries = 0
+        function_calls: list[types.FunctionCall] = []
+
+        assert _should_retry_empty_turn(function_calls, full_text, continuation_retries) is True
+
+    def test_empty_turn_retries_capped(self):
+        """After 2 retries, an empty turn breaks instead of retrying."""
+        continuation_retries = 2
+        full_text = ""
+        function_calls: list[types.FunctionCall] = []
+
+        assert _should_retry_empty_turn(function_calls, full_text, continuation_retries) is False
+
+    def test_text_only_turn_finishes(self):
+        """No tool calls + non-empty text finishes the turn."""
+        full_text = "Here is the compliance report."
+        function_calls: list[types.FunctionCall] = []
         continuation_retries = 0
 
-        parts_empty = True
-        should_break = False
+        assert _should_retry_empty_turn(function_calls, full_text, continuation_retries) is False
 
-        if parts_empty:
-            if map_mode and continuation_retries < 2:
-                pass  # would continue
-            else:
-                should_break = True
+    def test_text_only_turn_with_parts_still_finishes(self):
+        """Text-only completion does not depend on parts being absent."""
+        full_text = "Final summary"
+        stream_parts = [types.Part.from_text(text=full_text)]
+        function_calls: list[types.FunctionCall] = []
+        continuation_retries = 0
 
-        assert should_break is True
+        assert stream_parts
+        assert _should_retry_empty_turn(function_calls, full_text, continuation_retries) is False
 
-    def test_done_sentinel_breaks(self):
-        """Model says 'Done.' in map_mode → break."""
-        map_mode = True
-        full_text = "Done."
+    def test_tool_calls_continue_loop_even_without_text(self):
+        """Tool calls keep the loop going without triggering empty-turn retry."""
+        function_calls = [types.FunctionCall(name="run_command", args={"command": "ls"})]
+        full_text = ""
+        continuation_retries = 0
 
-        should_break = False
-        if map_mode and full_text.strip().rstrip(".").lower() == "done":
-            should_break = True
-
-        assert should_break is True
-
-    def test_done_sentinel_case_insensitive(self):
-        """Sentinel handles 'done', 'Done', 'DONE', 'Done.' etc."""
-        for text in ["Done.", "Done", "done.", "done", "DONE", "DONE.", " Done. "]:
-            assert text.strip().rstrip(".").lower() == "done"
-
-    def test_empty_parts_retries_capped(self):
-        """After 2 retries, empty parts → break even in map_mode."""
-        map_mode = True
-        continuation_retries = 2
-
-        parts_empty = True
-        should_break = False
-
-        if parts_empty:
-            if map_mode and continuation_retries < 2:
-                pass  # would continue
-            else:
-                should_break = True
-
-        assert should_break is True
+        assert _should_retry_empty_turn(function_calls, full_text, continuation_retries) is False
 
 
 class TestBuildResultSlots:

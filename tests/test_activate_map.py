@@ -4,7 +4,7 @@ import datetime
 from pathlib import Path
 
 import cfi_ai.tools as tools
-from cfi_ai.tools.activate_map import ActivateMapTool, NON_MAP_MODE, get_map_plan_prompt
+from cfi_ai.tools.activate_map import ActivateMapTool, get_map_plan_prompt
 from cfi_ai.workspace import Workspace
 
 
@@ -21,42 +21,6 @@ def _make_client(tmp_path: Path, client_id: str) -> None:
     """Create a minimal client directory structure."""
     base = tmp_path / "clients" / client_id
     base.mkdir(parents=True)
-
-
-def _make_client_with_profile(tmp_path: Path, client_id: str) -> None:
-    """Create a client with profile and treatment plan."""
-    base = tmp_path / "clients" / client_id
-    (base / "profile").mkdir(parents=True)
-    (base / "profile" / "current.md").write_text("# Profile\nTest client profile")
-    (base / "treatment-plan").mkdir(parents=True)
-    (base / "treatment-plan" / "current.md").write_text(
-        "# Treatment Plan\n**Initiation Date** — 2025-01-01"
-    )
-
-
-def _make_client_full(tmp_path: Path, client_id: str) -> None:
-    """Create a client with all clinical files for compliance/tp-review."""
-    _make_client_with_profile(tmp_path, client_id)
-    base = tmp_path / "clients" / client_id
-
-    (base / "intake").mkdir(parents=True)
-    (base / "intake" / "2025-01-01-initial-assessment.md").write_text("# Assessment")
-
-    (base / "sessions").mkdir(parents=True)
-    (base / "sessions" / "2025-01-15-progress-note.md").write_text("# Note 1")
-    (base / "sessions" / "2025-02-01-progress-note.md").write_text("# Note 2")
-
-
-def _make_client_with_wa(tmp_path: Path, client_id: str, wa_count: int = 1) -> None:
-    """Create a client with wellness assessment files."""
-    _make_client_with_profile(tmp_path, client_id)
-    base = tmp_path / "clients" / client_id
-    (base / "wellness-assessments").mkdir(parents=True)
-    for i in range(wa_count):
-        date = f"2025-0{i + 1}-01"
-        (base / "wellness-assessments" / f"{date}-wellness-assessment.md").write_text(
-            f"# WA {i + 1}"
-        )
 
 
 def test_tool_in_registry():
@@ -139,21 +103,21 @@ def test_intake_with_file_reference(tmp_path):
     assert "recording.m4a" in result
 
 
-def test_intake_shows_existing_clients(tmp_path):
-    _make_client(tmp_path, "jane-doe")
-    ws = _make_workspace(tmp_path)
-    result = _execute_map(ws, map="intake")
-    assert "jane-doe" in result
-
-
 def test_intake_no_client_id_needed(tmp_path):
     ws = _make_workspace(tmp_path)
     result = _execute_map(ws, map="intake")
     assert not result.startswith("Error:")
 
 
+def test_intake_has_client_discovery(tmp_path):
+    """Intake prompt tells LLM to discover clients via tools."""
+    ws = _make_workspace(tmp_path)
+    result = _execute_map(ws, map="intake")
+    assert "run_command ls clients/" in result
+
+
 def test_session_with_file(tmp_path):
-    _make_client_with_profile(tmp_path, "bob")
+    _make_client(tmp_path, "bob")
     ws = _make_workspace(tmp_path)
     result = _execute_map(
         ws, map="session", client_id="bob", file_reference="session.m4a"
@@ -164,22 +128,23 @@ def test_session_with_file(tmp_path):
 
 
 def test_session_without_file(tmp_path):
-    _make_client_with_profile(tmp_path, "bob")
+    _make_client(tmp_path, "bob")
     ws = _make_workspace(tmp_path)
     result = _execute_map(ws, map="session", client_id="bob")
     assert not result.startswith("Error:")
     assert "conversation above" in result
 
 
-def test_session_includes_client_context(tmp_path):
-    _make_client_with_profile(tmp_path, "bob")
+def test_session_has_tool_discovery(tmp_path):
+    """Session prompt tells LLM to load client context via tools."""
+    _make_client(tmp_path, "bob")
     ws = _make_workspace(tmp_path)
     result = _execute_map(ws, map="session", client_id="bob")
-    assert "Test client profile" in result
+    assert "run_command ls" in result
 
 
 def test_session_includes_progress_note_guidance(tmp_path):
-    _make_client_with_profile(tmp_path, "bob")
+    _make_client(tmp_path, "bob")
     ws = _make_workspace(tmp_path)
     result = _execute_map(ws, map="session", client_id="bob")
     today = datetime.date.today().isoformat()
@@ -187,14 +152,16 @@ def test_session_includes_progress_note_guidance(tmp_path):
 
 
 def test_compliance_happy_path(tmp_path):
-    _make_client_full(tmp_path, "alice")
+    _make_client(tmp_path, "alice")
     ws = _make_workspace(tmp_path)
     result = _execute_map(ws, map="compliance", client_id="alice")
     assert not result.startswith("Error:")
     assert "alice" in result
+    assert "run_command ls" in result  # tool discovery instructions
 
 
 def test_compliance_minimal_client(tmp_path):
+    """Empty client dir still returns prompt (LLM discovers missing files)."""
     _make_client(tmp_path, "empty")
     ws = _make_workspace(tmp_path)
     result = _execute_map(ws, map="compliance", client_id="empty")
@@ -202,53 +169,42 @@ def test_compliance_minimal_client(tmp_path):
     assert "empty" in result
 
 
-def test_compliance_in_non_map_mode():
-    assert "compliance" in NON_MAP_MODE
+def test_compliance_prompt_mentions_missing_records_as_findings(tmp_path):
+    _make_client(tmp_path, "alice")
+    ws = _make_workspace(tmp_path)
+    result = _execute_map(ws, map="compliance", client_id="alice")
+    assert "Missing documentation is a valid audit finding" in result
+    assert "Do NOT invent cross-document comparisons" in result
 
 
 def test_tp_review_happy_path(tmp_path):
-    _make_client_full(tmp_path, "alice")
+    _make_client(tmp_path, "alice")
     ws = _make_workspace(tmp_path)
     result = _execute_map(ws, map="tp-review", client_id="alice")
     assert not result.startswith("Error:")
     assert "alice" in result
+    assert "run_command ls" in result  # tool discovery instructions
 
 
-def test_tp_review_no_treatment_plan(tmp_path):
+def test_tp_review_minimal_client(tmp_path):
+    """Client with no files still returns prompt (LLM discovers prerequisites)."""
     _make_client(tmp_path, "new-client")
     ws = _make_workspace(tmp_path)
     result = _execute_map(ws, map="tp-review", client_id="new-client")
-    assert result.startswith("Error:")
-    assert "No treatment plan" in result
-
-
-def test_tp_review_no_progress_notes(tmp_path):
-    _make_client_with_profile(tmp_path, "no-notes")
-    ws = _make_workspace(tmp_path)
-    result = _execute_map(ws, map="tp-review", client_id="no-notes")
-    assert result.startswith("Error:")
-    assert "No progress notes" in result
-
-
-def test_wa_initial(tmp_path):
-    _make_client_with_profile(tmp_path, "carol")
-    ws = _make_workspace(tmp_path)
-    result = _execute_map(ws, map="wellness-assessment", client_id="carol")
     assert not result.startswith("Error:")
-    assert "initial" in result
+    assert "new-client" in result
 
 
-def test_wa_readministration(tmp_path):
-    _make_client_with_wa(tmp_path, "carol", wa_count=2)
+def test_tp_review_prompt_mentions_missing_prereq_stop(tmp_path):
+    _make_client(tmp_path, "alice")
     ws = _make_workspace(tmp_path)
-    result = _execute_map(ws, map="wellness-assessment", client_id="carol")
-    assert not result.startswith("Error:")
-    assert "re-administration" in result
-    assert "#3" in result
+    result = _execute_map(ws, map="tp-review", client_id="alice")
+    assert "You must have the latest treatment plan." in result
+    assert "do not call `write_file`" in result
 
 
 def test_wa_with_file(tmp_path):
-    _make_client_with_profile(tmp_path, "carol")
+    _make_client(tmp_path, "carol")
     ws = _make_workspace(tmp_path)
     result = _execute_map(
         ws,
@@ -261,34 +217,20 @@ def test_wa_with_file(tmp_path):
 
 
 def test_wa_without_file(tmp_path):
-    _make_client_with_profile(tmp_path, "carol")
+    _make_client(tmp_path, "carol")
     ws = _make_workspace(tmp_path)
     result = _execute_map(ws, map="wellness-assessment", client_id="carol")
     assert not result.startswith("Error:")
     assert "conversation above" in result
 
 
-def test_wa_includes_history(tmp_path):
-    _make_client_with_wa(tmp_path, "carol", wa_count=1)
+def test_wa_has_tool_discovery(tmp_path):
+    """WA prompt tells LLM to discover admin type via tools."""
+    _make_client(tmp_path, "carol")
     ws = _make_workspace(tmp_path)
     result = _execute_map(ws, map="wellness-assessment", client_id="carol")
-    assert "WA 1" in result
-
-
-def test_session_reminders_no_wa(tmp_path):
-    _make_client_with_profile(tmp_path, "dana")
-    ws = _make_workspace(tmp_path)
-    result = _execute_map(ws, map="session", client_id="dana")
-    assert "No Wellness Assessment" in result
-
-
-def test_session_reminders_tp_review_overdue(tmp_path):
-    _make_client_with_profile(tmp_path, "eve")
-    tp = tmp_path / "clients" / "eve" / "treatment-plan" / "current.md"
-    tp.write_text("# TP\n**Initiation Date** — 2024-01-01")
-    ws = _make_workspace(tmp_path)
-    result = _execute_map(ws, map="session", client_id="eve")
-    assert "past due" in result
+    assert "run_command ls" in result
+    assert "initial" in result  # prompt mentions initial/re-administration logic
 
 
 def test_get_map_plan_prompt_intake_with_file(tmp_path):
@@ -301,7 +243,7 @@ def test_get_map_plan_prompt_intake_with_file(tmp_path):
 
 
 def test_get_map_plan_prompt_session_with_file(tmp_path):
-    _make_client_with_profile(tmp_path, "bob")
+    _make_client(tmp_path, "bob")
     ws = _make_workspace(tmp_path)
     result = get_map_plan_prompt(
         "session", ws, file_reference="session.m4a", client_id="bob", date="2025-06-01"
@@ -311,8 +253,38 @@ def test_get_map_plan_prompt_session_with_file(tmp_path):
     assert "session.m4a" in result
 
 
-def test_get_map_plan_prompt_returns_none(tmp_path):
+def test_get_map_plan_prompt_intake_always_returns(tmp_path):
+    """Intake always returns a plan prompt, even without file_reference."""
     ws = _make_workspace(tmp_path)
-    assert get_map_plan_prompt("intake", ws) is None
+    result = get_map_plan_prompt("intake", ws)
+    assert result is not None
+    assert "Intake Map" in result
+
+
+def test_get_map_plan_prompt_returns_none_for_others(tmp_path):
+    ws = _make_workspace(tmp_path)
     assert get_map_plan_prompt("session", ws, client_id="bob") is None
     assert get_map_plan_prompt("compliance", ws, client_id="bob") is None
+
+
+def test_no_current_md_in_prompts(tmp_path):
+    """No prompt output should contain current.md references."""
+    _make_client(tmp_path, "test")
+    ws = _make_workspace(tmp_path)
+    for map_name, kwargs in [
+        ("intake", {}),
+        ("session", {"client_id": "test"}),
+        ("compliance", {"client_id": "test"}),
+        ("tp-review", {"client_id": "test"}),
+        ("wellness-assessment", {"client_id": "test"}),
+    ]:
+        result = _execute_map(ws, map=map_name, **kwargs)
+        assert "current.md" not in result, f"{map_name} prompt contains current.md"
+
+
+def test_activate_map_description_no_client_context():
+    """Tool description should say 'instructions' not 'client context'."""
+    tool = ActivateMapTool()
+    defn = tool.definition()
+    assert "client context" not in defn.description
+    assert "instructions" in defn.description

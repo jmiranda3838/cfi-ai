@@ -122,36 +122,28 @@ def test_prompts_no_code_centric_language():
     assert "function signatures" not in plan_prompt
 
 
-def test_intake_map_prompt_formats():
-    """INTAKE_MAP_PROMPT assembles without unreplaced placeholders."""
-    from cfi_ai.prompts.intake import INTAKE_MAP_PROMPT
-    result = INTAKE_MAP_PROMPT.format(
-        transcript="Test transcript", date="2026-03-18", existing_clients="None.",
+def test_intake_prompt_formats():
+    """INTAKE_PROMPT assembles without unreplaced placeholders."""
+    from cfi_ai.prompts.intake import INTAKE_PROMPT
+    result = INTAKE_PROMPT.format(
+        intake_input="Test intake input", date="2026-03-18",
     )
     _assert_no_unreplaced_placeholders(result)
     assert "Risk Assessment" in result
-    assert "as described above" not in result
-
-
-def test_intake_file_map_prompt_formats():
-    from cfi_ai.prompts.intake import INTAKE_FILE_MAP_PROMPT
-    result = INTAKE_FILE_MAP_PROMPT.format(
-        file_reference="session.m4a", date="2026-03-18", existing_clients="None.",
-    )
-    _assert_no_unreplaced_placeholders(result)
     assert "Diagnostic Impressions" in result
     assert "GD Score" in result
+    assert "current.md" not in result
 
 
-def test_intake_file_plan_prompt_formats():
-    """Updated with stronger assertions."""
-    from cfi_ai.prompts.intake import INTAKE_FILE_PLAN_PROMPT
-    result = INTAKE_FILE_PLAN_PROMPT.format(
-        file_reference="session.m4a", date="2026-03-18", existing_clients="None.",
+def test_intake_plan_prompt_formats():
+    """INTAKE_PLAN_PROMPT assembles without unreplaced placeholders."""
+    from cfi_ai.prompts.intake import INTAKE_PLAN_PROMPT
+    result = INTAKE_PLAN_PROMPT.format(
+        intake_input="session.m4a", date="2026-03-18",
     )
     _assert_no_unreplaced_placeholders(result)
     assert "Initial Assessment" in result
-    assert "current.md" in result
+    assert "current.md" not in result
 
 
 def test_session_map_prompt_formats():
@@ -159,10 +151,11 @@ def test_session_map_prompt_formats():
     note_guidance = PROGRESS_NOTE_GUIDANCE.format(date="2026-03-18")
     result = SESSION_MAP_PROMPT.format(
         transcript="Test", date="2026-03-18", client_id="jane-doe",
-        client_context="Context.", progress_note_guidance=note_guidance,
+        progress_note_guidance=note_guidance,
     )
     _assert_no_unreplaced_placeholders(result)
     assert "DAP" in result
+    assert "run_command ls" in result
 
 
 def test_session_file_map_prompt_formats():
@@ -170,10 +163,11 @@ def test_session_file_map_prompt_formats():
     note_guidance = PROGRESS_NOTE_GUIDANCE.format(date="2026-03-18")
     result = SESSION_FILE_MAP_PROMPT.format(
         file_reference="session.m4a", date="2026-03-18", client_id="jane-doe",
-        client_context="Context.", progress_note_guidance=note_guidance,
+        progress_note_guidance=note_guidance,
     )
     _assert_no_unreplaced_placeholders(result)
     assert "transcribe_audio" in result
+    assert "run_command ls" in result
 
 
 def test_session_file_plan_prompt_formats():
@@ -183,31 +177,66 @@ def test_session_file_plan_prompt_formats():
     note_guidance = PROGRESS_NOTE_GUIDANCE.format(date="2026-03-18")
     result = SESSION_FILE_PLAN_PROMPT.format(
         file_reference="session.m4a", date="2026-03-18", client_id="jane-doe",
-        client_context="Context.", progress_note_guidance=note_guidance,
+        progress_note_guidance=note_guidance,
         progress_note_plan_criteria=PROGRESS_NOTE_PLAN_CRITERIA,
     )
     _assert_no_unreplaced_placeholders(result)
 
 
+def test_compliance_prompt_formats():
+    from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
+    result = COMPLIANCE_PROMPT.format(date="2026-03-18", client_id="jane-doe")
+    _assert_no_unreplaced_placeholders(result)
+    assert "run_command ls" in result
+    assert "current.md" not in result
+
+
+def test_compliance_prompt_reports_missing_records_as_findings():
+    from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
+
+    assert "Missing documentation is a valid audit finding" in COMPLIANCE_PROMPT
+    assert "Do NOT invent cross-document comparisons" in COMPLIANCE_PROMPT
+    assert "cannot be assessed" in COMPLIANCE_PROMPT
+    assert "Do not infer missing clinical documentation" in COMPLIANCE_PROMPT
+
+
+def test_tp_review_prompt_formats():
+    from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
+    result = TP_REVIEW_PROMPT.format(date="2026-03-18", client_id="jane-doe")
+    _assert_no_unreplaced_placeholders(result)
+    assert "run_command ls" in result
+    assert "current.md" not in result
+
+
+def test_tp_review_prompt_stops_writes_when_prereqs_missing():
+    from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
+
+    assert "You must have the latest treatment plan." in TP_REVIEW_PROMPT
+    assert "You must have at least one progress note." in TP_REVIEW_PROMPT
+    assert "Do not draft updated treatment plan files" in TP_REVIEW_PROMPT
+    assert "do not call `write_file`" in TP_REVIEW_PROMPT
+    assert "Do NOT fabricate treatment plan structure, missing source content, or prior clinical" in TP_REVIEW_PROMPT
+
+
 def test_wa_map_prompt_formats():
     from cfi_ai.prompts.wellness_assessment import WA_MAP_PROMPT
     result = WA_MAP_PROMPT.format(
-        date="2026-03-18", client_id="jane-doe", client_context="Context.",
-        wa_history="None.", admin_type="Initial", admin_number=1, wa_input="test data",
+        date="2026-03-18", client_id="jane-doe", wa_input="test data",
     )
     _assert_no_unreplaced_placeholders(result)
     assert "0-45" in result
+    assert "run_command ls" in result
 
 
 def test_wa_file_map_prompt_formats():
     from cfi_ai.prompts.wellness_assessment import WA_FILE_MAP_PROMPT
     result = WA_FILE_MAP_PROMPT.format(
-        date="2026-03-18", client_id="jane-doe", client_context="Context.",
-        wa_history="None.", admin_type="Re-administration", admin_number=2,
+        date="2026-03-18", client_id="jane-doe",
         file_reference="wa.pdf",
     )
     _assert_no_unreplaced_placeholders(result)
     assert "extract_document" in result
+    assert "run_command ls" in result
 
 
 def test_shared_constants_importable():
@@ -232,22 +261,28 @@ def test_shared_constants_importable():
 
 
 def test_critical_instructions_in_all_map_prompts():
-    """CRITICAL_INSTRUCTIONS text appears in all 6 map prompts."""
-    from cfi_ai.prompts.intake import INTAKE_FILE_MAP_PROMPT, INTAKE_MAP_PROMPT
+    """CRITICAL_INSTRUCTIONS text appears in all map prompts."""
+    from cfi_ai.prompts.intake import INTAKE_PROMPT
     from cfi_ai.prompts.session import SESSION_FILE_MAP_PROMPT, SESSION_MAP_PROMPT
     from cfi_ai.prompts.wellness_assessment import WA_FILE_MAP_PROMPT, WA_MAP_PROMPT
     marker = "Do NOT narrate the map"
-    for prompt in (INTAKE_MAP_PROMPT, INTAKE_FILE_MAP_PROMPT,
+    for prompt in (INTAKE_PROMPT,
                    SESSION_MAP_PROMPT, SESSION_FILE_MAP_PROMPT,
                    WA_MAP_PROMPT, WA_FILE_MAP_PROMPT):
         assert marker in prompt
 
 
-def test_cage_aid_only_in_file_map():
-    """CAGE-AID risk note only in file map, not transcript map."""
-    from cfi_ai.prompts.intake import INTAKE_FILE_MAP_PROMPT, INTAKE_MAP_PROMPT
-    assert "CAGE screen" not in INTAKE_MAP_PROMPT
-    assert "CAGE screen" in INTAKE_FILE_MAP_PROMPT
+def test_cage_aid_in_unified_intake_prompt():
+    """CAGE-AID risk note is present in the unified intake prompt."""
+    from cfi_ai.prompts.intake import INTAKE_PROMPT
+    assert "CAGE screen" in INTAKE_PROMPT
+
+
+def test_maps_section_describes_missing_record_contract():
+    from cfi_ai.prompts.system import MAPS_SECTION
+
+    assert "missing records may be surfaced as findings" in MAPS_SECTION
+    assert "requires an existing treatment plan and progress notes to generate updates" in MAPS_SECTION
 
 
 def test_interview_in_system_prompts():

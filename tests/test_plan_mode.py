@@ -5,7 +5,7 @@ from unittest.mock import MagicMock, patch
 from google.genai import types
 
 from cfi_ai.agent import PlanModeResult, _run_plan_mode
-from cfi_ai.ui import UserInput, MODE_DISPLAY, PlanApproval
+from cfi_ai.ui import UserInput, MODE_DISPLAY, PlanApproval, PT_STYLE, UI
 from cfi_ai.tools import get_readonly_api_tools
 from cfi_ai.prompts.system import build_plan_mode_system_prompt
 
@@ -60,7 +60,7 @@ def test_plan_mode_system_prompt_with_clients(tmp_path):
 def test_mode_display_plan_modes():
     """MODE_DISPLAY includes plan mode entries."""
     assert "chatting_plan" in MODE_DISPLAY
-    assert MODE_DISPLAY["chatting_plan"] == "plan mode"
+    assert MODE_DISPLAY["chatting_plan"] == "PLAN MODE"
     assert "thinking_plan" in MODE_DISPLAY
     assert MODE_DISPLAY["thinking_plan"] == "researching .."
 
@@ -71,47 +71,6 @@ def test_plan_mode_prompt_batch_mutations_guideline():
     assert "emit all file modifications" in prompt
     assert "minimize approval prompts" in prompt
 
-
-def test_plan_context_preserved_into_execution():
-    """Full planning context (function_responses + binary parts) is preserved into execution."""
-    from google.genai import types
-
-    # Simulate planning phase messages with various part types
-    binary_part = types.Part.from_bytes(
-        data=b"%PDF-fake-content",
-        mime_type="application/pdf",
-    )
-    text_part = types.Part.from_text(text="user request")
-    extract_result = types.Part.from_function_response(
-        name="extract_document", response={"result": "Extracted from doc.pdf (500 chars):\n\nDOB: 1990-01-01"}
-    )
-    interview_result = types.Part.from_function_response(
-        name="interview", response={"result": "client_id: NB00941"}
-    )
-
-    plan_messages = [
-        types.Content(role="user", parts=[text_part]),
-        types.Content(role="user", parts=[extract_result, binary_part]),
-        types.Content(role="user", parts=[interview_result]),
-        types.Content(role="model", parts=[types.Part.from_text(text="plan output")]),
-    ]
-
-    # Simulate the merge: messages[:] = plan_messages
-    messages = [
-        types.Content(role="user", parts=[types.Part.from_text(text="old context")]),
-    ]
-    messages[:] = plan_messages
-
-    # All planning messages are preserved
-    assert len(messages) == 4
-    # function_response parts are present (extract_document, interview)
-    assert messages[1].parts[0].function_response.name == "extract_document"
-    assert "DOB: 1990-01-01" in messages[1].parts[0].function_response.response["result"]
-    # binary parts are present
-    assert messages[1].parts[1].inline_data.mime_type == "application/pdf"
-    # interview results are present
-    assert messages[2].parts[0].function_response.name == "interview"
-    assert "NB00941" in messages[2].parts[0].function_response.response["result"]
 
 
 def test_execution_handoff_uses_original_message_when_plan_prompt():
@@ -223,7 +182,7 @@ def test_plan_mode_activate_map_pops_map_before_get_map_plan_prompt():
         )
     ]
     mock_stream.function_calls = [mock_fc]
-    mock_stream.repetition_detected = False
+
     mock_stream.request_id = "test"
     mock_stream.log_completion = MagicMock()
 
@@ -285,7 +244,7 @@ def test_plan_mode_implicit_map_activation_announces_map():
         )
     ]
     mock_stream.function_calls = [mock_fc]
-    mock_stream.repetition_detected = False
+
     mock_stream.request_id = "test"
     mock_stream.log_completion = MagicMock()
 
@@ -327,7 +286,7 @@ def test_plan_mode_slash_map_activation_skips_announcement():
         )
     ]
     mock_stream.function_calls = [mock_fc]
-    mock_stream.repetition_detected = False
+
     mock_stream.request_id = "test"
     mock_stream.log_completion = MagicMock()
 
@@ -353,3 +312,49 @@ def test_plan_mode_slash_map_activation_skips_announcement():
         )
 
     assert "Starting the Intake Map." not in [call.args[0] for call in mock_ui.print_info.call_args_list]
+
+
+def test_set_plan_mode_method():
+    """set_plan_mode sets _plan_mode and syncs status mode."""
+    ui = UI()
+    assert ui.plan_mode is False
+    assert ui.status.mode == "chatting"
+
+    ui.set_plan_mode(True)
+    assert ui.plan_mode is True
+    assert ui.status.mode == "chatting_plan"
+
+    ui.set_plan_mode(False)
+    assert ui.plan_mode is False
+    assert ui.status.mode == "chatting"
+
+
+def test_toggle_plan_mode_delegates_to_set():
+    """toggle_plan_mode flips state via set_plan_mode."""
+    ui = UI()
+    ui.toggle_plan_mode()
+    assert ui.plan_mode is True
+    assert ui.status.mode == "chatting_plan"
+
+    ui.toggle_plan_mode()
+    assert ui.plan_mode is False
+    assert ui.status.mode == "chatting"
+
+
+def test_plan_mode_toolbar_style_exists():
+    """PT_STYLE includes a bottom-toolbar-plan entry."""
+    style_dict = {s[0]: s[1] for s in PT_STYLE.style_rules}
+    assert "bottom-toolbar-plan" in style_dict
+
+
+def test_plan_mode_persists_across_get_input():
+    """Plan mode stays active after get_input() returns."""
+    ui = UI()
+    ui.set_plan_mode(True)
+
+    with patch.object(ui.session, "prompt", return_value="hello"):
+        result = ui.get_input()
+
+    assert result is not None
+    assert result.plan_mode is True
+    assert ui.plan_mode is True
