@@ -24,7 +24,7 @@ The inner loop handles multi-turn tool-use chains. Messages are `list[types.Cont
 
 ### Tool system (`tools/`)
 
-4 core tools: `run_command`, `attach_path`, `apply_patch`, `write_file`.
+7 tools: `run_command`, `attach_path`, `apply_patch`, `write_file`, `extract_document`, `interview`, `activate_map`.
 
 - Each tool is a `BaseTool` subclass with `definition()` returning a `ToolDefinition` and `execute(workspace, **kwargs)`.
 - `tools/__init__.py` maintains a registry. `get_api_tools()` returns a single `types.Tool` with all `FunctionDeclaration`s.

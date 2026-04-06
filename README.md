@@ -125,7 +125,7 @@ Mutating operations (file writes, destructive commands) require user approval.
 
 ## How It Works
 
-- **6 core tools** — `run_command` (allowlisted shell commands), `attach_path` (file/audio/image ingestion), `apply_patch` (search-and-replace edits), `write_file` (new files only), `extract_document` (structured document extraction), `transcribe_audio` (audio transcription)
+- **5 core tools** — `run_command` (allowlisted shell commands), `attach_path` (file/audio/image ingestion), `apply_patch` (search-and-replace edits), `write_file` (new files only), `extract_document` (structured document extraction)
 - **Mutation classification** — read-only operations execute immediately; mutating operations (`apply_patch`, `write_file`, destructive commands) require user approval
 - **Slash map autocomplete** — type `/` to see available maps
 - Status indicator shows current mode: chatting, thinking, planning, awaiting approval, executing

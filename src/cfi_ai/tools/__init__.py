@@ -7,7 +7,6 @@ from cfi_ai.tools.attach_path import AttachPathTool
 from cfi_ai.tools.extract_document import ExtractDocumentTool
 from cfi_ai.tools.interview import InterviewTool
 from cfi_ai.tools.run_command import RunCommandTool, is_command_mutating
-from cfi_ai.tools.transcribe_audio import TranscribeAudioTool
 from cfi_ai.tools.write_file import WriteFileTool
 
 MUTATING_TOOLS: set[str] = set()
@@ -16,7 +15,7 @@ ACTIVATE_MAP_TOOL_NAME = "activate_map"
 
 _ALL_TOOLS: list[type] = [
     ActivateMapTool, ApplyPatchTool, AttachPathTool, ExtractDocumentTool,
-    InterviewTool, RunCommandTool, TranscribeAudioTool, WriteFileTool,
+    InterviewTool, RunCommandTool, WriteFileTool,
 ]
 _REGISTRY: dict[str, type] = {}
 

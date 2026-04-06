@@ -166,7 +166,7 @@ def test_session_file_map_prompt_formats():
         progress_note_guidance=note_guidance,
     )
     _assert_no_unreplaced_placeholders(result)
-    assert "transcribe_audio" in result
+    assert "attach_path" in result
     assert "run_command ls" in result
 
 

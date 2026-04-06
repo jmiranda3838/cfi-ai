@@ -171,8 +171,7 @@ measured through changes in the client's relationship to the problem.
 
 ### Reading & Inspection
 - run_command: terminal commands (ls, find, {search_cmd}, cat, head, tail, wc, grep, diff, file, pwd)
-- attach_path: load text files and images into context — absolute or workspace-relative
-- transcribe_audio: transcribe audio files to text via a focused API call
+- attach_path: load text files, audio, and images into context — absolute or workspace-relative
 - extract_document: extract text from PDFs via PyMuPDF (text-only; use attach_path for scanned/visual forms)
 - interview: ask the user structured questions when you need information before proceeding — questions are presented one at a time with optional suggested answers
 

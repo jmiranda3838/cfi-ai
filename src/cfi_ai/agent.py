@@ -132,10 +132,6 @@ def _safe_tool_summary(name: str, args: dict) -> str:
             f"write_file ext={ext!r} content_len={len(content)} "
             f"path_len={len(path)}"
         )
-    if name == "transcribe_audio":
-        path = args.get("path", "")
-        ext = os.path.splitext(path)[1] if path else ""
-        return f"transcribe_audio ext={ext!r} path_len={len(path)}"
     if name == "extract_document":
         path = args.get("path", "")
         ext = os.path.splitext(path)[1] if path else ""
