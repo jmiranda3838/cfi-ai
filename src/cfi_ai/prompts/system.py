@@ -91,7 +91,7 @@ mutating commands.
 ## Available Tools (read-only only)
 - run_command: read-only terminal commands (ls, find, {search_cmd}, cat, head, tail, wc, grep, diff, file, pwd)
 - attach_path: load any local file into context (text, audio, images) — absolute or workspace-relative
-- extract_document: extract text/data from PDFs (text extraction with vision fallback for scanned forms)
+- extract_document: extract text from PDFs via PyMuPDF (text-only; use attach_path for scanned/visual forms)
 - interview: ask the user structured questions interactively (presented one at a time)
 - activate_map: activate a clinical map when the user describes a clinical task. \
 Call this tool ALONE — do not combine with other tools.
@@ -100,7 +100,7 @@ You do NOT have access to apply_patch, write_file, or mutating commands (mv, cp,
 
 ## Your Task
 1. Use run_command and attach_path to explore the workspace and understand the relevant \
-files and document structure. Use extract_document to read PDF files.
+files and document structure. Use extract_document to extract text from PDFs, or attach_path to view them visually.
 2. Read any files that are relevant to the user's request.
 3. After researching, produce a structured plan.
 
@@ -173,7 +173,7 @@ measured through changes in the client's relationship to the problem.
 - run_command: terminal commands (ls, find, {search_cmd}, cat, head, tail, wc, grep, diff, file, pwd)
 - attach_path: load text files and images into context — absolute or workspace-relative
 - transcribe_audio: transcribe audio files to text via a focused API call
-- extract_document: extract text/data from PDFs (text extraction with vision fallback for scanned forms)
+- extract_document: extract text from PDFs via PyMuPDF (text-only; use attach_path for scanned/visual forms)
 - interview: ask the user structured questions when you need information before proceeding — questions are presented one at a time with optional suggested answers
 
 ### Modification (requires approval)

@@ -1,18 +1,6 @@
 from pathlib import Path
 
-from google.genai import types
-
 from cfi_ai.tools.base import BaseTool, ToolDefinition
-
-_MIN_TEXT_LENGTH = 50
-
-_EXTRACTION_PROMPT = """\
-Extract all text and data from this document as markdown.
-For forms: indicate checked/unchecked status for checkboxes.
-For handwritten responses: transcribe accurately. Mark illegible text as [illegible].
-Preserve the document's structure and field labels."""
-
-_FLASH_MODEL = "gemini-3.1-flash-lite-preview"
 
 
 class ExtractDocumentTool(BaseTool):
@@ -23,9 +11,9 @@ class ExtractDocumentTool(BaseTool):
         return ToolDefinition(
             name=self.name,
             description=(
-                "Extract text and data from a PDF document. Returns content as markdown. "
-                "Uses text extraction for digital PDFs; falls back to vision for "
-                "scanned/handwritten forms."
+                "Extract text from a PDF using PyMuPDF. Best for digital/typed PDFs. "
+                "If the result is incomplete (e.g., form labels without responses), "
+                "use attach_path instead to load the PDF visually."
             ),
             input_schema={
                 "type": "object",
@@ -57,43 +45,26 @@ class ExtractDocumentTool(BaseTool):
         if target.suffix.lower() != ".pdf":
             return f"Error: '{target.name}' is not a PDF file."
 
-        # Try text extraction with PyMuPDF
         try:
             import pymupdf
             doc = pymupdf.open(str(target))
             text = "\n\n".join(page.get_text() for page in doc)
             doc.close()
         except ImportError:
-            text = ""
-        except Exception:
-            text = ""
-
-        if len(text.strip()) >= _MIN_TEXT_LENGTH:
-            return f"Extracted from {target.name} ({len(text)} chars):\n\n{text}"
-
-        # Fall back to Gemini vision for scanned/handwritten forms
-        if client is None:
-            if text.strip():
-                return f"Extracted from {target.name} ({len(text)} chars):\n\n{text}"
-            return "Error: extract_document requires an API client for scanned PDFs."
-
-        try:
-            data = target.read_bytes()
-        except PermissionError:
-            return f"Error: permission denied reading '{raw}'."
-
-        parts = [
-            types.Part.from_bytes(data=data, mime_type="application/pdf"),
-            types.Part.from_text(text=_EXTRACTION_PROMPT),
-        ]
-
-        try:
-            extracted = client.generate_content(
-                parts,
-                model=_FLASH_MODEL,
-                max_output_tokens=65536,
+            return (
+                f"PyMuPDF is not installed. Use attach_path(path='{raw}') "
+                "to load this PDF visually instead."
             )
-        except Exception as e:
-            return f"Error: document extraction failed: {e}"
+        except Exception:
+            return (
+                f"Text extraction failed for {target.name}. "
+                f"Use attach_path(path='{raw}') to load it visually instead."
+            )
 
-        return f"Extracted from {target.name} ({len(extracted)} chars):\n\n{extracted}"
+        if not text.strip():
+            return (
+                f"No text extracted from {target.name}. This may be a scanned or "
+                f"image-based PDF — use attach_path(path='{raw}') to load it visually."
+            )
+
+        return f"Extracted from {target.name} ({len(text)} chars):\n\n{text}"

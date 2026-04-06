@@ -63,7 +63,9 @@ proceed to Phase 1 until you have materials.
 ### Phase 1: Process Input, Identify & Summarize
 1. **Process files** step by step using the appropriate tool for each:
    - **Audio files** (.m4a, .mp3, .wav, etc.): call `transcribe_audio(path=...)` to get a text transcript
-   - **PDF files** (.pdf): call `extract_document(path=...)` to extract text/data as markdown
+   - **PDF files** (.pdf): call `extract_document(path=...)` to extract text. If the \
+extracted text is incomplete or only contains form labels without response data, use \
+`attach_path(path=...)` to load the PDF visually and read the content directly.
    - **Other files**: call `attach_path(path=...)` to load into context
 Process one file at a time. After all files are processed, you will have text \
 content for each input. Use this text for all subsequent document generation. \
@@ -159,7 +161,7 @@ most recent profile and treatment plan for context.
 
 4. **Include execution steps**: The execution agent should:
    1. Call `transcribe_audio` for each audio file
-   2. Call `extract_document` for each PDF
+   2. Call `extract_document` for each PDF (use `attach_path` if text is incomplete)
    3. Identify the client from the extracted content
    4. Write all documents in a single batch
 

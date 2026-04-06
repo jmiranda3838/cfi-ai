@@ -73,7 +73,10 @@ The user wants to process a Wellness Assessment from a file. The input is: \
 `{file_reference}`
 
 Extract the file path from the input. Use the appropriate tool:
-- **PDF files** (.pdf): call `extract_document(path=...)` to extract text/data
+- **PDF files** (.pdf): call `extract_document(path=...)` to extract text. If the \
+extracted text only contains form labels without actual response data (e.g., shaded \
+circles or handwritten answers are missing), use `attach_path(path=...)` to load the \
+PDF visually and read the responses directly.
 - **Image files** (.jpg, .png, .heic, etc.): call `attach_path(path=...)` to load
 - **Other files**: call `attach_path(path=...)` to load into context
 

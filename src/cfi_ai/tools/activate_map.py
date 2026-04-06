@@ -36,7 +36,7 @@ _FILE_INPUT_TEMPLATE = (
     "Extract each file path from the input. Process each file using the "
     "appropriate tool:\n"
     "- **Audio files** (.m4a, .mp3, .wav, etc.): `transcribe_audio(path=...)`\n"
-    "- **PDF files** (.pdf): `extract_document(path=...)`\n"
+    "- **PDF files** (.pdf): `extract_document(path=...)` (text extraction; use `attach_path` if incomplete)\n"
     "- **Other files**: `attach_path(path=...)`"
 )
 
