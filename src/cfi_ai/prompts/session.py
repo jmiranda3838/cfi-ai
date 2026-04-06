@@ -143,19 +143,19 @@ The user has provided one or more files for session processing: \
 
 Client ID: `{client_id}`
 
-The execution agent should use `run_command ls` to find and `attach_path` to load \
+During execution, use `run_command ls` to find and `attach_path` to load \
 the client's most recent profile and treatment plan for context.
 
 ## Instructions
 
 Create a structured execution plan for the Session Map. \
-Do NOT load or process the files — the execution agent will do that.
+Do NOT load or process the files — you will do that during execution.
 
 1. **List all files** to create with their full paths and quality criteria:
    - `clients/{client_id}/sessions/{date}-progress-note.md`
    - `clients/{client_id}/sessions/{date}-session-transcript.md`
 
-2. **Include execution steps**: The execution agent should:
+2. **Include execution steps**: During execution, you should:
    1. Load client's most recent profile and treatment plan
    2. Call `attach_path` for each audio file to load it into context
    3. Call `extract_document` for each PDF (use `attach_path` if text is incomplete)

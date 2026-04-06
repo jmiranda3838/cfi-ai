@@ -141,7 +141,7 @@ You are planning the clinical Intake Map. Today's date is {date}.
 ## Instructions
 
 Create a structured execution plan for the Intake Map. \
-Do NOT load or process any files — the execution agent will do that.
+Do NOT load or process any files — you will do that during execution.
 
 If materials have not been provided yet, include a first step to collect them \
 from the user via `interview` before any file processing.
@@ -152,14 +152,14 @@ client-id slug (e.g., "james"). Otherwise, derive a placeholder client-id \
 from the filename (e.g., "Bristol St 4.m4a" → "bristol-st-4"). Note that \
 the actual client identity will be confirmed from the source material during execution.
 
-2. **Check existing clients**: The execution agent should use `run_command ls clients/` \
+2. **Check existing clients**: Use `run_command ls clients/` \
 to discover existing clients. If the subject matches an existing client, load their \
 most recent profile and treatment plan for context.
 
 3. **List all 5-6 files** to create with their full paths and quality criteria \
 (6 if WA data present).
 
-4. **Include execution steps**: The execution agent should:
+4. **Include execution steps**: During execution, you should:
    1. Call `attach_path` for each audio file to load it into context
    2. Call `extract_document` for each PDF (use `attach_path` if text is incomplete)
    3. Identify the client from the extracted content
@@ -196,5 +196,5 @@ list files with paths and brief descriptions:
 Use the standard plan format:
 - **Summary**: 1-2 sentence overview
 - **Steps**: numbered, with File path, Action (Create), and Details for each
-- **Note**: remind the execution agent to emit all write_file calls in a single response
+- **Note**: emit all write_file calls in a single response during execution
 """
