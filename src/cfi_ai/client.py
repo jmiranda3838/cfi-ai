@@ -13,6 +13,57 @@ from cfi_ai.config import Config
 _log = logging.getLogger(__name__)
 
 
+class CacheManager:
+    """Manages Gemini explicit context caches for a session."""
+
+    def __init__(self, genai_client: genai.Client, model: str) -> None:
+        self._genai_client = genai_client
+        self._model = model
+        self._caches: dict[str, str] = {}  # key -> cache resource name
+        self._all_cache_names: list[str] = []  # track all for cleanup
+
+    def create_cache(self, key: str, system: str, tools: types.Tool) -> None:
+        """Create a cached content entry. Raises on failure (caller should catch)."""
+        cache = self._genai_client.caches.create(
+            model=self._model,
+            config=types.CreateCachedContentConfig(
+                system_instruction=system,
+                tools=[tools],
+                ttl="3600s",
+                display_name=f"cfi-ai-{key}",
+            ),
+        )
+        self._caches[key] = cache.name
+        self._all_cache_names.append(cache.name)
+        token_count = (
+            cache.usage_metadata.total_token_count if cache.usage_metadata else "?"
+        )
+        _log.info("cache_created key=%s name=%s tokens=%s", key, cache.name, token_count)
+
+    def get_cache_name(self, key: str) -> str | None:
+        return self._caches.get(key)
+
+    def invalidate(self, key: str) -> None:
+        """Remove a single cache key (e.g. after a cached call fails)."""
+        self._caches.pop(key, None)
+
+    def reset(self, new_genai_client: genai.Client) -> None:
+        """Delete all caches, update the client ref, and clear state."""
+        self.delete_all()
+        self._genai_client = new_genai_client
+
+    def delete_all(self) -> None:
+        """Best-effort delete all caches created during this session."""
+        for name in self._all_cache_names:
+            try:
+                self._genai_client.caches.delete(name=name)
+                _log.debug("cache_deleted name=%s", name)
+            except Exception as e:
+                _log.debug("cache_delete_failed name=%s error=%s", name, e)
+        self._all_cache_names.clear()
+        self._caches.clear()
+
+
 def _summarize_contents(messages: list[types.Content]) -> list[str]:
     """Return a PHI-safe per-message summary (index, role, part count, part types).
 
@@ -59,6 +110,18 @@ class Client:
             sys.exit(1)
         self._model = config.model
         self._max_tokens = config.max_tokens
+        self._cache_manager: CacheManager | None = None
+
+    @property
+    def model(self) -> str:
+        return self._model
+
+    @property
+    def genai_client(self) -> genai.Client:
+        return self._client
+
+    def set_cache_manager(self, manager: CacheManager) -> None:
+        self._cache_manager = manager
 
     def stream_response(
         self,
@@ -82,6 +145,33 @@ class Client:
         )
         for line in _summarize_contents(messages):
             _log.debug("[req:%s] %s", request_id, line)
+
+        # Try cached call first if a cache exists for this mode
+        cache_key = "plan" if mode == "plan" else "normal"
+        cache_name = (
+            self._cache_manager.get_cache_name(cache_key)
+            if self._cache_manager
+            else None
+        )
+
+        if cache_name:
+            try:
+                _log.debug("[req:%s] using cached_content key=%s", request_id, cache_key)
+                stream = self._client.models.generate_content_stream(
+                    model=self._model,
+                    contents=messages,
+                    config=types.GenerateContentConfig(
+                        cached_content=cache_name,
+                        max_output_tokens=max_tokens,
+                    ),
+                )
+                return StreamResult(stream, request_id=request_id)
+            except Exception as e:
+                _log.warning(
+                    "[req:%s] cached_call_failed key=%s, falling back: %s",
+                    request_id, cache_key, e,
+                )
+                self._cache_manager.invalidate(cache_key)
 
         stream = self._client.models.generate_content_stream(
             model=self._model,
@@ -128,6 +218,7 @@ class StreamResult:
         self._stream = stream
         self._parts: list[types.Part] = []
         self._finish_reason: str | None = None
+        self._usage_metadata: types.GenerateContentResponseUsageMetadata | None = None
         self.request_id: str = request_id
 
     def text_chunks(self) -> Generator[str, None, None]:
@@ -136,6 +227,8 @@ class StreamResult:
         buf = ""
         chunk_idx = 0
         for chunk in self._stream:
+            if hasattr(chunk, "usage_metadata") and chunk.usage_metadata:
+                self._usage_metadata = chunk.usage_metadata
             empty_candidates = not chunk.candidates
             if empty_candidates:
                 _log.debug("[req:%s] chunk %d empty_candidates=True", rid, chunk_idx)
@@ -171,11 +264,22 @@ class StreamResult:
         """Log a summary of the completed stream."""
         total_text_len = sum(len(p.text) for p in self._parts if p.text)
         fc_count = len(self.function_calls)
+        cache_info = ""
+        usage = self._usage_metadata
+        if usage:
+            cached = getattr(usage, "cached_content_token_count", None) or 0
+            prompt = getattr(usage, "prompt_token_count", None) or 0
+            candidates = getattr(usage, "candidates_token_count", None) or 0
+            total = getattr(usage, "total_token_count", None) or 0
+            cache_info = (
+                f" prompt_tokens={prompt} cached_tokens={cached}"
+                f" response_tokens={candidates} total_tokens={total}"
+            )
         _log.debug(
             "[req:%s] stream_end total_parts=%d total_text_len=%d function_calls=%d "
-            "finish_reason=%s",
+            "finish_reason=%s%s",
             self.request_id, len(self._parts), total_text_len, fc_count,
-            self._finish_reason,
+            self._finish_reason, cache_info,
         )
 
     @property
@@ -187,6 +291,10 @@ class StreamResult:
     def function_calls(self) -> list[types.FunctionCall]:
         """Function call parts from the response."""
         return [p.function_call for p in self._parts if p.function_call]
+
+    @property
+    def usage_metadata(self) -> types.GenerateContentResponseUsageMetadata | None:
+        return self._usage_metadata
 
     @property
     def finish_reason(self) -> str | None:

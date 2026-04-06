@@ -71,6 +71,7 @@ class Config:
     location: str
     model: str
     max_tokens: int
+    context_cache: bool = True
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -83,6 +84,7 @@ class Config:
             location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"),
             model=os.environ.get("CFI_AI_MODEL", "gemini-3-flash-preview"),
             max_tokens=int(os.environ.get("CFI_AI_MAX_TOKENS", "8192")),
+            context_cache=os.environ.get("CFI_AI_CONTEXT_CACHE", "1") not in ("0", "false"),
         )
 
     @classmethod
@@ -108,9 +110,12 @@ class Config:
             print("Run 'cfi-ai --setup' or set GOOGLE_CLOUD_PROJECT.", file=sys.stderr)
             sys.exit(1)
 
+        context_cache = os.environ.get("CFI_AI_CONTEXT_CACHE", "1") not in ("0", "false")
+
         return cls(
             project=project,
             location=location,
             model=model_name,
             max_tokens=max_tokens,
+            context_cache=context_cache,
         )

@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from google.auth import exceptions as auth_exceptions
 from google.genai import types
 
-from cfi_ai.client import Client
+from cfi_ai.client import CacheManager, Client
 from cfi_ai.config import Config
 from cfi_ai.maps import dispatch_map, parse_map_invocation
 from cfi_ai.planner import ExecutionPlan, format_plan
@@ -387,6 +387,44 @@ def _run_plan_mode(
     return PlanModeResult(plan_text=plan_text)
 
 
+def _rebuild_client_after_reauth(
+    config: Config,
+    cache_manager: CacheManager | None,
+    system_prompt: str,
+    api_tools: types.Tool,
+    plan_system_prompt: str,
+    readonly_api_tools: types.Tool,
+) -> Client:
+    """Create a fresh Client after reauthentication and restore caches."""
+    client = Client(config)
+    if cache_manager is not None:
+        cache_manager.reset(client.genai_client)
+        _create_session_caches(
+            cache_manager, system_prompt, api_tools,
+            plan_system_prompt, readonly_api_tools,
+        )
+        client.set_cache_manager(cache_manager)
+    return client
+
+
+def _create_session_caches(
+    cache_manager: CacheManager,
+    system_prompt: str,
+    api_tools: types.Tool,
+    plan_system_prompt: str,
+    readonly_api_tools: types.Tool,
+) -> None:
+    """Create context caches for normal and plan modes. Logs but does not raise on failure."""
+    for key, system, tool_set in [
+        ("normal", system_prompt, api_tools),
+        ("plan", plan_system_prompt, readonly_api_tools),
+    ]:
+        try:
+            cache_manager.create_cache(key, system, tool_set)
+        except Exception as e:
+            _log.warning("cache_create_failed key=%s error=%s", key, e)
+
+
 def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: str, config: Config) -> None:
     messages: list[types.Content] = []
     api_tools = tools.get_api_tools()
@@ -395,9 +433,43 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
         str(workspace.root), workspace.summary(), workspace=workspace
     )
 
+    # Set up context caching
+    cache_manager: CacheManager | None = None
+    if config.context_cache:
+        cache_manager = CacheManager(client.genai_client, config.model)
+        _create_session_caches(
+            cache_manager, system_prompt, api_tools,
+            plan_system_prompt, readonly_api_tools,
+        )
+        client.set_cache_manager(cache_manager)
+
     from cfi_ai.maps import get_map_descriptions
     ui.set_maps(get_map_descriptions())
 
+    try:
+        _run_main_loop(
+            client, ui, workspace, system_prompt, config,
+            messages, api_tools, readonly_api_tools, plan_system_prompt,
+            cache_manager,
+        )
+    finally:
+        if cache_manager is not None:
+            cache_manager.delete_all()
+
+
+def _run_main_loop(
+    client: Client,
+    ui: UI,
+    workspace: Workspace,
+    system_prompt: str,
+    config: Config,
+    messages: list[types.Content],
+    api_tools: types.Tool,
+    readonly_api_tools: types.Tool,
+    plan_system_prompt: str,
+    cache_manager: CacheManager | None,
+) -> None:
+    """Inner main loop, extracted so run_agent_loop can wrap with try/finally for cache cleanup."""
     while True:
         # Get user input
         user_input_result = ui.get_input()
@@ -600,7 +672,10 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                 if not reauth_attempted and _is_auth_error(e):
                     reauth_attempted = True
                     if _run_reauth(ui):
-                        client = Client(config)
+                        client = _rebuild_client_after_reauth(
+                            config, cache_manager, system_prompt, api_tools,
+                            plan_system_prompt, readonly_api_tools,
+                        )
                         continue
                 ui.print_error(f"API error: {e}")
                 # Remove the last user message so they can retry
@@ -619,7 +694,10 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
                 if not reauth_attempted and _is_auth_error(e):
                     reauth_attempted = True
                     if _run_reauth(ui):
-                        client = Client(config)
+                        client = _rebuild_client_after_reauth(
+                            config, cache_manager, system_prompt, api_tools,
+                            plan_system_prompt, readonly_api_tools,
+                        )
                         continue
                 ui.print_error(f"API error: {e}")
                 break

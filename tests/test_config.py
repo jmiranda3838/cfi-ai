@@ -21,6 +21,7 @@ def test_from_env_defaults():
     assert config.location == "global"
     assert config.model == "gemini-3-flash-preview"
     assert config.max_tokens == 8192
+    assert config.context_cache is True
 
 
 def test_from_env_custom():
@@ -42,6 +43,20 @@ def test_from_env_missing_project():
     with patch.dict(os.environ, {}, clear=True):
         with pytest.raises(SystemExit):
             Config.from_env()
+
+
+def test_from_env_context_cache_disabled():
+    env = {"GOOGLE_CLOUD_PROJECT": "my-project", "CFI_AI_CONTEXT_CACHE": "0"}
+    with patch.dict(os.environ, env, clear=False):
+        config = Config.from_env()
+    assert config.context_cache is False
+
+
+def test_from_env_context_cache_disabled_false():
+    env = {"GOOGLE_CLOUD_PROJECT": "my-project", "CFI_AI_CONTEXT_CACHE": "false"}
+    with patch.dict(os.environ, env, clear=False):
+        config = Config.from_env()
+    assert config.context_cache is False
 
 
 def test_frozen():
@@ -103,6 +118,34 @@ def test_load_from_file(tmp_path):
     assert config.location == "eu-west1"
     assert config.model == "gemini-2.5-pro"
     assert config.max_tokens == 2048
+
+
+def test_load_context_cache_default(tmp_path):
+    cfg = tmp_path / "config.toml"
+    _write_toml(
+        cfg,
+        {
+            "project": {"id": "file-proj", "location": "global"},
+            "model": {"name": "gemini-3-flash-preview", "max_tokens": 8192},
+        },
+    )
+    with patch.dict(os.environ, {}, clear=True):
+        config = Config.load(config_path=cfg)
+    assert config.context_cache is True
+
+
+def test_load_context_cache_disabled(tmp_path):
+    cfg = tmp_path / "config.toml"
+    _write_toml(
+        cfg,
+        {
+            "project": {"id": "file-proj", "location": "global"},
+            "model": {"name": "gemini-3-flash-preview", "max_tokens": 8192},
+        },
+    )
+    with patch.dict(os.environ, {"CFI_AI_CONTEXT_CACHE": "0"}, clear=True):
+        config = Config.load(config_path=cfg)
+    assert config.context_cache is False
 
 
 def test_load_env_overrides_file(tmp_path):

@@ -95,6 +95,7 @@ def main() -> None:
         print("  GOOGLE_CLOUD_LOCATION   Vertex AI location (default: global)")
         print("  CFI_AI_MODEL            Model name (default: gemini-3-flash-preview)")
         print("  CFI_AI_MAX_TOKENS       Max tokens (default: 8192)")
+        print("  CFI_AI_CONTEXT_CACHE    Disable context caching (set to 0 or false)")
         return
     if "--update" in sys.argv:
         import shutil
@@ -145,6 +146,7 @@ def main() -> None:
             location=config.location,
             model=model_override,
             max_tokens=config.max_tokens,
+            context_cache=config.context_cache,
         )
 
     warnings.filterwarnings(
