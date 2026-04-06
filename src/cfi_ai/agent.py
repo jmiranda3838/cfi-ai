@@ -17,7 +17,7 @@ from cfi_ai.prompts.system import build_plan_mode_system_prompt
 from cfi_ai.ui import UI, UserInput, PlanApproval
 from cfi_ai.workspace import Workspace
 import cfi_ai.tools as tools
-from cfi_ai.tools import ACTIVATE_MAP_TOOL_NAME, INTERVIEW_TOOL_NAME
+from cfi_ai.tools import ACTIVATE_MAP_TOOL_NAME, END_TURN_TOOL_NAME, INTERVIEW_TOOL_NAME
 from cfi_ai.tools.activate_map import get_map_plan_prompt as _get_map_plan_prompt
 
 _log = logging.getLogger(__name__)
@@ -230,6 +230,8 @@ def _run_plan_mode(
     """Run the plan-mode inner loop. Returns a PlanModeResult."""
     _log.debug("plan_mode_enter messages=%d", len(messages))
     plan_text = None
+    saw_tool_calls = False
+    preamble_retries = 0
 
     for _iteration in range(MAX_TOOL_ITERATIONS):
         _log.debug("plan_mode iteration=%d messages=%d", _iteration, len(messages))
@@ -266,9 +268,41 @@ def _run_plan_mode(
         _log.debug("plan_mode model_turn_appended parts=%d", len(stream_result.parts))
 
         function_calls = stream_result.function_calls
-        if not function_calls:
+
+        # Check for explicit end_turn signal (only honored when called alone)
+        non_end = [fc for fc in function_calls if fc.name != END_TURN_TOOL_NAME]
+        if not non_end and any(fc.name == END_TURN_TOOL_NAME for fc in function_calls):
+            messages.append(types.Content(role="user", parts=[
+                types.Part.from_function_response(
+                    name=END_TURN_TOOL_NAME, response={"result": "Turn complete."}
+                )
+            ]))
             plan_text = full_text
             break
+        # If end_turn appeared with other calls, strip it and process real tools
+        if non_end and len(non_end) < len(function_calls):
+            function_calls = non_end
+
+        if not function_calls:
+            if full_text.strip():
+                if not saw_tool_calls and preamble_retries < 1:
+                    preamble_retries += 1
+                    _log.debug("plan_mode preamble_nudge text_len=%d", len(full_text))
+                    messages.append(
+                        types.Content(
+                            role="user",
+                            parts=[types.Part.from_text(
+                                text="You described what you were about to do but did not call "
+                                "any tools. Call your tools now to proceed, or call end_turn "
+                                "if you have nothing further to do."
+                            )],
+                        )
+                    )
+                    continue
+            plan_text = full_text
+            break
+
+        saw_tool_calls = True
 
         # Process tool calls (read-only only)
         tool_result_parts: list[types.Part] = []
@@ -651,6 +685,8 @@ def _run_main_loop(
         t0 = time.monotonic()
         approval_wait = 0.0
         continuation_retries = 0
+        saw_tool_calls = False
+        preamble_retries = 0
         reauth_attempted = False
         _log.debug("inner_loop_start map_mode=%s messages=%d", map_mode, len(messages))
         for _iteration in range(MAX_TOOL_ITERATIONS):
@@ -707,9 +743,38 @@ def _run_main_loop(
 
             function_calls = stream_result.function_calls if has_parts else []
 
+            # Check for explicit end_turn signal (only honored when called alone)
+            non_end = [fc for fc in function_calls if fc.name != END_TURN_TOOL_NAME]
+            if not non_end and any(fc.name == END_TURN_TOOL_NAME for fc in function_calls):
+                messages.append(types.Content(role="user", parts=[
+                    types.Part.from_function_response(
+                        name=END_TURN_TOOL_NAME, response={"result": "Turn complete."}
+                    )
+                ]))
+                _log.debug("inner_loop end_turn_signal")
+                break
+            # If end_turn appeared with other calls, strip it and process real tools
+            if non_end and len(non_end) < len(function_calls):
+                function_calls = non_end
+
             if not function_calls:
-                # A text-only response means the model has finished its turn.
                 if full_text.strip():
+                    # No tool calls ever seen — model may be narrating before acting.
+                    # Give one nudge. If tools already ran, this is a summary — break.
+                    if not saw_tool_calls and preamble_retries < 1:
+                        preamble_retries += 1
+                        _log.debug("inner_loop preamble_nudge text_len=%d", len(full_text))
+                        messages.append(
+                            types.Content(
+                                role="user",
+                                parts=[types.Part.from_text(
+                                    "You described what you were about to do but did not call "
+                                    "any tools. Call your tools now to proceed, or call end_turn "
+                                    "if you have nothing further to do."
+                                )],
+                            )
+                        )
+                        continue
                     break
                 # Empty turn: nudge the model to continue and try again.
                 if _should_retry_empty_turn(function_calls, full_text, continuation_retries):
@@ -726,6 +791,8 @@ def _run_main_loop(
                     )
                     continue
                 break
+
+            saw_tool_calls = True
 
             # activate_map is a turn-boundary tool: process it alone,
             # discard other tool calls, and restart the inner loop so the

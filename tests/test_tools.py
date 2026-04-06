@@ -34,7 +34,17 @@ def test_write_file_rejects_overwrite(tmp_path):
 def test_registry():
     api_tools = tools.get_api_tools()
     names = {fd.name for fd in api_tools.function_declarations}
-    assert names == {"activate_map", "apply_patch", "attach_path", "extract_document", "interview", "run_command", "write_file"}
+    assert names == {"activate_map", "apply_patch", "attach_path", "end_turn", "extract_document", "interview", "run_command", "write_file"}
+
+
+def test_end_turn_in_readonly_tools():
+    readonly = tools.get_readonly_api_tools()
+    names = {fd.name for fd in readonly.function_declarations}
+    assert "end_turn" in names
+
+
+def test_end_turn_not_mutating():
+    assert tools.classify_mutation("end_turn", {}) is False
 
 
 def test_classify_mutation_static():

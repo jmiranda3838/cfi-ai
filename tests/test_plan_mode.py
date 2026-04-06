@@ -22,10 +22,10 @@ def test_user_input_dataclass():
 
 
 def test_get_readonly_api_tools():
-    """Readonly tool set contains run_command, attach_path, extract_document, interview, and activate_map."""
+    """Readonly tool set contains run_command, attach_path, extract_document, interview, activate_map, and end_turn."""
     tool = get_readonly_api_tools()
     names = {fd.name for fd in tool.function_declarations}
-    assert names == {"run_command", "attach_path", "extract_document", "interview", "activate_map"}
+    assert names == {"run_command", "attach_path", "extract_document", "interview", "activate_map", "end_turn"}
     assert "apply_patch" not in names
     assert "write_file" not in names
 
@@ -358,3 +358,141 @@ def test_plan_mode_persists_across_get_input():
     assert result is not None
     assert result.plan_mode is True
     assert ui.plan_mode is True
+
+
+# --- end_turn and preamble nudge integration tests ---
+
+
+def _make_stream(text="", function_calls=None):
+    """Create a mock StreamResult with given text and function calls."""
+    mock_stream = MagicMock()
+    mock_stream.text_chunks.return_value = iter([text] if text else [])
+    parts = []
+    if text:
+        parts.append(types.Part.from_text(text=text))
+    if function_calls:
+        for fc in function_calls:
+            parts.append(types.Part.from_function_call(name=fc.name, args=dict(fc.args)))
+    mock_stream.parts = parts
+    mock_stream.function_calls = function_calls or []
+    mock_stream.request_id = "test"
+    mock_stream.log_completion = MagicMock()
+    return mock_stream
+
+
+def test_plan_mode_end_turn_breaks_loop():
+    """end_turn as the sole function call should break the loop and set plan_text."""
+    end_turn_fc = MagicMock()
+    end_turn_fc.name = "end_turn"
+    end_turn_fc.args = {}
+
+    stream = _make_stream(text="Here is the plan.", function_calls=[end_turn_fc])
+
+    mock_client = MagicMock()
+    mock_client.stream_response.return_value = stream
+
+    mock_ui = MagicMock()
+    mock_ui.stream_markdown.return_value = "Here is the plan."
+
+    result = _run_plan_mode(
+        client=mock_client,
+        ui=mock_ui,
+        workspace=MagicMock(),
+        plan_system_prompt="system",
+        readonly_tools=MagicMock(),
+        messages=[types.Content(role="user", parts=[types.Part.from_text(text="test")])],
+    )
+
+    assert result.plan_text == "Here is the plan."
+    # Should only have called stream_response once (loop broke on first iteration)
+    assert mock_client.stream_response.call_count == 1
+
+
+def test_plan_mode_preamble_nudge_then_tools():
+    """Text-only first response triggers preamble nudge, second with tools completes."""
+    # First stream: text only (no tools)
+    stream1 = _make_stream(text="I'll search the workspace...")
+
+    # Second stream: text + run_command tool call
+    run_fc = MagicMock()
+    run_fc.name = "run_command"
+    run_fc.args = {"command": "ls"}
+    stream2 = _make_stream(text="", function_calls=[run_fc])
+
+    # Third stream: final plan text + end_turn
+    end_fc = MagicMock()
+    end_fc.name = "end_turn"
+    end_fc.args = {}
+    stream3 = _make_stream(text="Final plan.", function_calls=[end_fc])
+
+    mock_client = MagicMock()
+    mock_client.stream_response.side_effect = [stream1, stream2, stream3]
+
+    mock_ui = MagicMock()
+    mock_ui.stream_markdown.side_effect = [
+        "I'll search the workspace...",
+        "",
+        "Final plan.",
+    ]
+
+    messages = [types.Content(role="user", parts=[types.Part.from_text(text="test")])]
+
+    with patch("cfi_ai.agent.tools.execute", return_value="file1.txt\nfile2.txt"):
+        result = _run_plan_mode(
+            client=mock_client,
+            ui=mock_ui,
+            workspace=MagicMock(),
+            plan_system_prompt="system",
+            readonly_tools=MagicMock(),
+            messages=messages,
+        )
+
+    # Should have had 3 API calls: preamble → nudge → tools → end_turn
+    assert mock_client.stream_response.call_count == 3
+    assert result.plan_text == "Final plan."
+    # Check that a preamble nudge was injected
+    nudge_found = any(
+        "did not call any tools" in str(m)
+        for m in messages
+    )
+    assert nudge_found, "Preamble nudge should have been injected into messages"
+
+
+def test_plan_mode_text_after_tools_breaks():
+    """After tools have executed, text-only response breaks without nudge."""
+    # First stream: tool call
+    run_fc = MagicMock()
+    run_fc.name = "run_command"
+    run_fc.args = {"command": "ls"}
+    stream1 = _make_stream(text="", function_calls=[run_fc])
+
+    # Second stream: text-only (summary)
+    stream2 = _make_stream(text="Here is the plan based on my research.")
+
+    mock_client = MagicMock()
+    mock_client.stream_response.side_effect = [stream1, stream2]
+
+    mock_ui = MagicMock()
+    mock_ui.stream_markdown.side_effect = ["", "Here is the plan based on my research."]
+
+    messages = [types.Content(role="user", parts=[types.Part.from_text(text="test")])]
+
+    with patch("cfi_ai.agent.tools.execute", return_value="file1.txt"):
+        result = _run_plan_mode(
+            client=mock_client,
+            ui=mock_ui,
+            workspace=MagicMock(),
+            plan_system_prompt="system",
+            readonly_tools=MagicMock(),
+            messages=messages,
+        )
+
+    # Should break on second iteration (text-only after tools ran)
+    assert mock_client.stream_response.call_count == 2
+    assert result.plan_text == "Here is the plan based on my research."
+    # No preamble nudge should have been injected
+    nudge_found = any(
+        "did not call any tools" in str(m)
+        for m in messages
+    )
+    assert not nudge_found, "No preamble nudge should fire after tools have executed"

@@ -4,6 +4,7 @@ from cfi_ai.tools.base import ToolDefinition
 from cfi_ai.tools.activate_map import ActivateMapTool
 from cfi_ai.tools.apply_patch import ApplyPatchTool
 from cfi_ai.tools.attach_path import AttachPathTool
+from cfi_ai.tools.end_turn import EndTurnTool
 from cfi_ai.tools.extract_document import ExtractDocumentTool
 from cfi_ai.tools.interview import InterviewTool
 from cfi_ai.tools.run_command import RunCommandTool, is_command_mutating
@@ -12,10 +13,11 @@ from cfi_ai.tools.write_file import WriteFileTool
 MUTATING_TOOLS: set[str] = set()
 INTERVIEW_TOOL_NAME = "interview"
 ACTIVATE_MAP_TOOL_NAME = "activate_map"
+END_TURN_TOOL_NAME = "end_turn"
 
 _ALL_TOOLS: list[type] = [
-    ActivateMapTool, ApplyPatchTool, AttachPathTool, ExtractDocumentTool,
-    InterviewTool, RunCommandTool, WriteFileTool,
+    ActivateMapTool, ApplyPatchTool, AttachPathTool, EndTurnTool,
+    ExtractDocumentTool, InterviewTool, RunCommandTool, WriteFileTool,
 ]
 _REGISTRY: dict[str, type] = {}
 
@@ -37,7 +39,7 @@ def get_api_tools() -> types.Tool:
     return types.Tool(function_declarations=declarations)
 
 
-_READONLY_TOOL_NAMES = {"run_command", "attach_path", "extract_document", "interview", "activate_map"}
+_READONLY_TOOL_NAMES = {"run_command", "attach_path", "extract_document", "interview", "activate_map", "end_turn"}
 
 
 def get_readonly_api_tools() -> types.Tool:
@@ -77,4 +79,5 @@ __all__ = [
     "MUTATING_TOOLS",
     "INTERVIEW_TOOL_NAME",
     "ACTIVATE_MAP_TOOL_NAME",
+    "END_TURN_TOOL_NAME",
 ]

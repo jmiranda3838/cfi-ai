@@ -20,6 +20,7 @@ def test_build_system_prompt():
     assert "attach_path" in prompt
     assert "apply_patch" in prompt
     assert "write_file" in prompt
+    assert "end_turn" in prompt
     # Old tools should not be present
     assert "list_files" not in prompt
     assert "read_file" not in prompt
@@ -100,6 +101,18 @@ def test_plan_mode_prompt_clinical_identity():
 def test_plan_mode_prompt_verify_before_claiming():
     prompt = build_plan_mode_system_prompt("/workspace", "summary")
     assert "never claim something is unaffected without verifying" in prompt.lower()
+
+
+def test_plan_mode_prompt_end_turn():
+    prompt = build_plan_mode_system_prompt("/workspace", "summary")
+    assert "end_turn" in prompt
+
+
+def test_prompts_no_narrate_guideline():
+    exec_prompt = build_system_prompt("/workspace", "summary")
+    plan_prompt = build_plan_mode_system_prompt("/workspace", "summary")
+    assert "do not narrate" in exec_prompt
+    assert "do not narrate" in plan_prompt
 
 
 def test_execution_prompt_clinical_identity():
