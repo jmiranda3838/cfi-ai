@@ -1,6 +1,6 @@
 """Clinical prompt templates for the /session map (ongoing progress notes)."""
 
-from cfi_ai.prompts.shared import CRITICAL_INSTRUCTIONS
+from cfi_ai.prompts.shared import CRITICAL_INSTRUCTIONS, NARRATIVE_THERAPY_PRINCIPLES
 
 SESSION_MAP_PROMPT = (
     """\
@@ -180,7 +180,9 @@ Use the standard plan format:
 
 # -- Shared Optum-compliant progress note guidance --
 
-PROGRESS_NOTE_GUIDANCE = """\
+PROGRESS_NOTE_GUIDANCE = (
+    NARRATIVE_THERAPY_PRINCIPLES
+    + """\
 ## Progress Note Guidance (Optum-Compliant, DAP Format)
 
 Write a progress note for this session using TheraNest's standard note fields. \
@@ -218,8 +220,9 @@ Current medications: [list if known from profile]."
 
 - **Treatment Plan Goals Addressed** — List the specific goal(s) and \
 objective(s) from the treatment plan that were addressed in this session, \
-by name and number (e.g., "Goal 1: Reduce anxiety; Objective 1a: Identify \
-cognitive distortions").
+by name and number (e.g., "Goal 1: Reduce the influence of anxiety on \
+daily functioning; Objective 1a: Externalize the anxiety and map its effects \
+on the client's life").
 
 - **Session Summary (DAP Format)**:
   - **D (Data):** Client self-report and objective observations. What the \
@@ -229,15 +232,26 @@ administered, document: GD score [X/45], severity level \
 [Low/Moderate/Severe/Very Severe], and CAGE-AID result [Negative/Positive \
 (N/3)] if initial. Example: "Wellness Assessment (G22E02) re-administered: \
 Global Distress = 18/45 (Moderate), down from 28/45 (Severe) at baseline."
-  - **A (Assessment):** Clinical impressions. For each treatment plan goal \
-addressed: document specific, measurable progress or lack of progress \
-(e.g., frequency changes, severity ratings, behavioral milestones). \
+  - **A (Assessment):** Clinical impressions using narrative therapy \
+formulation. For each treatment plan goal addressed: document the client's \
+evolving relationship with the problem — has the problem's influence \
+increased, decreased, or remained the same? Note specific, measurable \
+progress: changes in externalizing ratings (e.g., "Client rates the \
+anxiety's influence at 5/10, down from 8/10 at intake"), new unique \
+outcomes identified, degree of preferred story development (thin vs. thick \
+description), and behavioral indicators of living from the preferred story. \
 Note functional status across domains (work, relationships, self-care). \
-Identify emerging themes and patterns.
-  - **P (Plan):** Specific interventions used this session and which TP \
-objective they address (e.g., "Used cognitive restructuring [Goal 1, \
-Obj 1a] to challenge catastrophic thinking"). Between-session tasks \
-or homework assigned. Referrals made or needed.
+Identify emerging themes, shifts in dominant narratives, and the client's \
+relationship to their own values and commitments.
+  - **P (Plan):** Specific narrative therapy interventions used this session \
+and which TP objective they address (e.g., "Used externalizing conversation \
+[Goal 1, Obj 1a] to map the anxiety's influence on decision-making"; \
+"Facilitated re-authoring conversation [Goal 2, Obj 2a] to develop the \
+client's preferred story of themselves as capable and connected"; \
+"Used scaffolding questions [Goal 1, Obj 1b] to connect a unique outcome \
+to the client's values"). Between-session reflections or tasks assigned \
+(e.g., noticing assignments, therapeutic letters, journaling about unique \
+outcomes). Referrals made or needed.
 
 - **Strengths & Barriers** — Client strengths that supported progress this \
 session. Limitations or barriers encountered in working toward treatment \
@@ -248,6 +262,7 @@ ongoing symptoms, functional impairment, client engagement, and progress \
 trajectory. Why this level of care remains appropriate.
 
 - **Next Appointment** — Date and specific focus areas for next session."""
+)
 
 
 PROGRESS_NOTE_PLAN_CRITERIA = """\
@@ -257,8 +272,10 @@ PROGRESS_NOTE_PLAN_CRITERIA = """\
 - Structured risk assessment: SI, HI, self-harm (present/not present; details if present)
 - Medication changes or "No changes"
 - Treatment plan goals addressed by name and number
-- DAP format: D (client report + observations), A (measurable progress per goal), \
-P (interventions mapped to TP objectives + homework + referrals)
+- DAP format: D (client report + observations), A (measurable progress per goal — \
+externalizing ratings, unique outcomes, preferred story development), \
+P (narrative therapy interventions mapped to TP objectives + between-session \
+reflections/tasks + referrals)
 - Strengths & barriers
 - Medical necessity justification
 - Next appointment date and focus"""

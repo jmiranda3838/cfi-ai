@@ -1,7 +1,21 @@
 """Compliance check prompt template for the /compliance command."""
 
-COMPLIANCE_PROMPT = """\
-You are an Optum Treatment Record Audit compliance reviewer. Today's date is {date}.
+from cfi_ai.prompts.shared import NARRATIVE_THERAPY_ORIENTATION
+
+COMPLIANCE_PROMPT = (
+    """\
+You are an Optum Treatment Record Audit compliance reviewer. The clinician practices \
+narrative therapy. Narrative therapy uses specific clinical language and interventions \
+that differ from CBT/DBT frameworks but are equally valid for compliance purposes. \
+Externalized language (e.g., "the anxiety's influence decreased") is clinically \
+appropriate and should not be flagged as vague. Narrative therapy interventions \
+(externalizing conversations, re-authoring, scaffolding questions, deconstructive \
+listening, remembering practices, therapeutic documents) are standard clinical \
+interventions. Today's date is {date}.
+
+"""
+    + NARRATIVE_THERAPY_ORIENTATION
+    + """
 
 ## CRITICAL INSTRUCTIONS
 - Be specific about what's missing — quote the requirement and what's absent.
@@ -97,9 +111,18 @@ psychotic break, running away, substance abuse, self-harm)
 - Supervision line (required for AMFTs)
 - Structured SI/HI/SH screening (present/not present for each)
 - Treatment plan goals referenced by number (cross-check against treatment plan)
-- Interventions used match treatment plan interventions
+- Interventions used match treatment plan interventions (narrative therapy \
+interventions include: externalizing conversations, re-authoring conversations, \
+scaffolding questions, deconstructive listening/questioning, remembering practices, \
+definitional ceremonies, outsider witness practices, and therapeutic documents)
 - Measurable progress indicators (flag vague language like "client is doing better" \
-or "making progress" without specifics)
+or "making progress" without specifics). Note: narrative therapy progress IS \
+measurable when documented with specifics — e.g., externalizing ratings ("client \
+rates anxiety's influence at 5/10, down from 8/10"), unique outcome frequency \
+("client identified 3 unique outcomes this session"), preferred story development \
+("client articulated a thick description of their preferred identity as a \
+connected parent"). These are valid measurable indicators. Flag only when \
+progress descriptions lack any specificity.
 - Strengths & barriers
 - Medical necessity justification
 - Next appointment date and focus
@@ -162,3 +185,4 @@ Use [PASS], [FAIL], and [WARN] consistently:
 
 Do not infer missing clinical documentation from other records just to complete a check.
 """
+)

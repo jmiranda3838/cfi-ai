@@ -243,6 +243,9 @@ def test_shared_constants_importable():
     """All shared constants exist and are non-empty strings."""
     from cfi_ai.prompts.shared import (
         CRITICAL_INSTRUCTIONS,
+        NARRATIVE_THERAPY_PRINCIPLES,
+        NARRATIVE_THERAPY_PROGRESS,
+        NARRATIVE_THERAPY_ORIENTATION,
         INITIAL_ASSESSMENT_GUIDANCE,
         INITIAL_ASSESSMENT_GUIDANCE_FILE,
         TREATMENT_PLAN_GUIDANCE,
@@ -252,7 +255,10 @@ def test_shared_constants_importable():
         WA_OUTPUT_FORMAT,
     )
     for const in (
-        CRITICAL_INSTRUCTIONS, INITIAL_ASSESSMENT_GUIDANCE,
+        CRITICAL_INSTRUCTIONS,
+        NARRATIVE_THERAPY_PRINCIPLES, NARRATIVE_THERAPY_PROGRESS,
+        NARRATIVE_THERAPY_ORIENTATION,
+        INITIAL_ASSESSMENT_GUIDANCE,
         INITIAL_ASSESSMENT_GUIDANCE_FILE,
         TREATMENT_PLAN_GUIDANCE, INTAKE_PROGRESS_NOTE_GUIDANCE,
         CLIENT_PROFILE_GUIDANCE, WA_SCORING_RULES, WA_OUTPUT_FORMAT,
@@ -306,3 +312,29 @@ def test_map_instruction_in_maps_section():
     assert "[MAP:" in MAPS_SECTION
     assert "activate_map" in MAPS_SECTION
     assert 'source="implicit"' in MAPS_SECTION
+
+
+def test_measuring_progress_only_in_evaluation_prompts():
+    """Part B (Measuring Progress) appears in compliance/tp-review but not session/intake."""
+    from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
+    from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
+    from cfi_ai.prompts.session import PROGRESS_NOTE_GUIDANCE
+    from cfi_ai.prompts.intake import INTAKE_PROMPT
+
+    marker = "Measuring Progress in Narrative Therapy"
+    # Evaluation prompts keep the rubric
+    assert marker in COMPLIANCE_PROMPT
+    assert marker in TP_REVIEW_PROMPT
+    # Generation prompts use only core principles
+    assert marker not in PROGRESS_NOTE_GUIDANCE
+    assert marker not in INTAKE_PROMPT
+
+
+def test_orientation_alias_equals_split():
+    """Backwards-compat alias equals the two split constants combined."""
+    from cfi_ai.prompts.shared import (
+        NARRATIVE_THERAPY_ORIENTATION,
+        NARRATIVE_THERAPY_PRINCIPLES,
+        NARRATIVE_THERAPY_PROGRESS,
+    )
+    assert NARRATIVE_THERAPY_ORIENTATION == NARRATIVE_THERAPY_PRINCIPLES + NARRATIVE_THERAPY_PROGRESS

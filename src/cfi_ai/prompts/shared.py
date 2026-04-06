@@ -7,6 +7,57 @@ CRITICAL_INSTRUCTIONS = """\
 - The user reviews all file content in the approval step — do not preview it in chat.
 """
 
+NARRATIVE_THERAPY_PRINCIPLES = """\
+## Therapeutic Orientation: Narrative Therapy
+
+This clinician practices narrative therapy. All clinical documentation must reflect \
+narrative therapy principles and language:
+
+- **Externalization**: The problem is separate from the person. Use language that \
+positions problems as external entities the client has a relationship with (e.g., \
+"the anxiety," "the depression's influence," "the conflict") rather than traits \
+of the client (NOT "anxious client" or "client's anger issues").
+- **Re-authoring / Re-storying**: Therapy aims to help clients develop preferred \
+narratives — alternative stories about their lives, identity, and relationships \
+that reflect their values and intentions.
+- **Unique outcomes**: Exceptions to the problem-saturated story — moments when \
+the client acted against the problem's influence, resisted it, or lived from \
+their preferred story. These are key clinical data points.
+- **Scaffolding conversations**: Building from the known and familiar toward new \
+possibilities, using questions that move from the concrete to the abstract, from \
+the past to the present to the future.
+- **Thickening the alternative story**: Developing rich, detailed descriptions of \
+the preferred story — connecting it to the client's values, relationships, history, \
+and hopes.
+- **Deconstructing dominant narratives**: Examining how cultural, societal, or \
+familial narratives contribute to the problem story and limit the client's sense \
+of agency.
+- **Absent but implicit**: What the problem story reveals about what the person \
+values — distress as evidence of what matters.
+- **Therapeutic documents**: Letters, certificates, and declarations used to \
+anchor and circulate preferred stories.
+- **Remembering practices**: Reconnecting with figures (living or deceased) who \
+support the preferred story.
+"""
+
+NARRATIVE_THERAPY_PROGRESS = """\
+
+### Measuring Progress in Narrative Therapy
+Progress is documented through:
+- Changes in the client's relationship to the problem (increased sense of agency, \
+reduced influence of the problem on daily life)
+- Frequency and richness of unique outcomes identified in session
+- Degree of preferred story development (thin → thick description)
+- Client's self-reported influence over the problem vs. the problem's influence \
+over the client (externalizing scale: 0-10)
+- Behavioral indicators of living from the preferred story (observable actions, \
+relationship changes, new commitments)
+- Shifts in identity conclusions (from problem-saturated to preferred)
+"""
+
+# Combined alias used by compliance.py and tp_review.py
+NARRATIVE_THERAPY_ORIENTATION = NARRATIVE_THERAPY_PRINCIPLES + NARRATIVE_THERAPY_PROGRESS
+
 INITIAL_ASSESSMENT_GUIDANCE = """\
 ## Initial Assessment Guidance (TheraNest Part 6)
 
@@ -18,13 +69,22 @@ absent or was not assessed.
 - **Diagnostic Impressions** — ICD-10 codes with descriptions (e.g., \
 `F32.1 — Major depressive disorder, single episode, moderate`). List primary \
 diagnosis first, then any secondary diagnoses.
-- **Presenting Problem** — Client's initial explanation of the problem(s), \
-duration, and precipitant cause. Write as a narrative paragraph suitable for \
-TheraNest's Presenting Problem text area. If Wellness Assessment data is \
-available, reference the GD severity level.
+- **Presenting Problem** — Describe the problem(s) using externalized language: \
+name the problem as separate from the client (e.g., "the depression," "the \
+conflict") and describe its effects on the client's life, relationships, and \
+sense of self. Include duration and precipitating factors. Note any dominant \
+narratives the client holds about themselves or the problem (e.g., "I've always \
+been broken"). Identify the client's preferred direction — what they want their \
+life to look like when the problem has less influence. Write as a narrative \
+paragraph suitable for TheraNest's Presenting Problem text area. If Wellness \
+Assessment data is available, reference the GD severity level.
 - **Observations** — Therapist's observations of client's presentation and \
 family interactions. Include affect, appearance, engagement, and relational \
-dynamics observed in session.
+dynamics observed in session. Note the client's relationship to the problem \
+as observed (e.g., how the problem's influence showed up in session, moments \
+where the client resisted or stood apart from the problem). Document any \
+unique outcomes observed — times the client spoke or acted from a position \
+of agency rather than from the problem-saturated story.
 - **Pertinent History** — Any prior therapy (including family, social, \
 psychological, and medical history). Summarize relevant treatment history, \
 hospitalizations, and significant life events.
@@ -38,9 +98,19 @@ and note whether a safety plan was established. Format clearly so the clinician 
 can check the corresponding TheraNest checkboxes and paste the explanation. \
 **Important:** If the wellness assessment Q22-24 (CAGE screen) has any "Yes" \
 answers, flag substance abuse risk here and incorporate those findings.
-- **Strengths** — Client/family strengths including support systems, coping \
-skills, protective factors, and resources.
-- **Tentative Goals and Plans** — Initial goals discussed in session.
+- **Strengths** — Client/family strengths framed through preferred stories and \
+insider knowledges: skills of living the client already possesses, values that \
+sustain them, relationships that support their preferred identity, unique \
+outcomes or exceptions to the problem story, and acts of resistance against \
+the problem's influence. Include support systems, protective factors, and \
+resources.
+- **Tentative Goals and Plans** — Initial goals framed as narrative therapy \
+directions: developing preferred stories, increasing the client's influence \
+over the problem, re-authoring identity conclusions, thickening alternative \
+narratives, and connecting with values and commitments. State goals in terms \
+of the client's relationship to the problem and their preferred direction \
+(e.g., "Reduce the influence of anxiety on client's daily functioning and \
+develop a preferred story of courage and capability").
 - **Involvement** — Who will be involved in treatment (e.g., individual client, \
 family members, collateral contacts).
 - **Treatment Length** — Expected duration of treatment (e.g., "6 months," \
@@ -63,10 +133,15 @@ TREATMENT_PLAN_GUIDANCE = """\
 Write a treatment plan structured to match TheraNest's Treatment Plan tab. Each \
 section should be directly copy-pasteable into the corresponding TheraNest field.
 
-- **Behavioral Definitions** — Observable behaviors supporting the diagnoses. \
-Describe specific behaviors, symptoms, and functional impairments the client \
-presents with. If Wellness Assessment data is available, include baseline GD \
-score as a measurable indicator.
+- **Behavioral Definitions** — Describe the problem's effects on the client \
+using externalized language: how the problem shows up in the client's life, \
+the specific ways it influences their behavior, relationships, mood, and \
+functioning. Frame as the problem's impact rather than the client's deficits \
+(e.g., "The depression has reduced Client's engagement in social activities \
+from daily to once per week" rather than "Client is socially withdrawn"). \
+Include observable behavioral indicators and functional impairments. If \
+Wellness Assessment data is available, include baseline GD score as a \
+measurable indicator.
 - **Referral for Additional Services?** — None, Yes, or No. If Yes, specify \
 the referral (e.g., psychiatric evaluation, group therapy, substance abuse \
 treatment).
@@ -79,13 +154,29 @@ which applies.
 - **Goals & Objectives** — Number each goal (Goal 1, Goal 2, etc.) and each \
 objective under it (Objective 1a, 1b, 2a, etc.) so progress notes can reference \
 them. For each goal:
-  - **Client Goal**: State the goal in measurable, observable terms. Include \
-a target completion date.
+  - **Client Goal**: State the goal in terms of the client's preferred \
+relationship to the problem — measurable changes in the problem's influence \
+on the client's life, development of preferred stories, or behavioral \
+indicators of living from the preferred narrative. Include a target completion \
+date. Examples: "Client will report the anxiety's influence on daily decisions \
+has decreased from 8/10 to 4/10 or below," "Client will identify and describe \
+3+ unique outcomes where they acted from their preferred story."
   - For each goal, list one or more **Objectives**:
-    - Objective Description — specific, measurable steps toward the goal
-    - Intervention — use standard clinical intervention language (e.g., \
-"Therapist will utilize CBT techniques to identify and challenge cognitive \
-distortions")
+    - Objective Description — specific, measurable steps toward the goal, \
+framed as narrative therapy milestones (e.g., "Client will externalize the \
+problem and name it," "Client will identify 2 unique outcomes per session," \
+"Client will articulate preferred story of self in relationship to the problem")
+    - Intervention — use narrative therapy intervention language. Examples: \
+"Therapist will use externalizing conversations to help the client develop a \
+relationship with the problem that increases their sense of agency"; \
+"Therapist will facilitate re-authoring conversations to identify and thicken \
+the client's preferred story"; \
+"Therapist will use scaffolding questions to connect unique outcomes to the \
+client's values and intentions"; \
+"Therapist will employ remembering practices to reconnect the client with \
+supportive relational figures"; \
+"Therapist will use deconstructive listening to examine the influence of \
+dominant cultural narratives on the problem story"
     - Target Completion Date
     - Status: In Progress
 """
@@ -133,12 +224,23 @@ observations (affect, appearance, engagement). If Wellness Assessment (G22E02) w
 [Negative/Positive (N/3)]. Example: "Wellness Assessment (G22E02) administered: \
 Global Distress = 28/45 (Severe); CAGE-AID = 0/3 (Negative)."
   - **A (Assessment):** Clinical impressions. Baseline functioning assessment \
-across domains (work, relationships, self-care). Diagnostic formulation. \
-Emerging themes and patterns. Baseline severity ratings for presenting \
-concerns (e.g., "Client rates anxiety at 8/10").
+across domains (work, relationships, self-care). Diagnostic formulation using \
+externalized language — describe the problem's current influence on the \
+client rather than the client's pathology. Document the client's initial \
+relationship to the problem: How much influence does the problem have over \
+the client's life? (baseline externalizing rating, e.g., "Client rates the \
+anxiety's influence on daily life at 8/10"). Note dominant narratives \
+identified (problem-saturated stories the client tells about themselves) and \
+any unique outcomes or exceptions observed, even briefly. Identify what is \
+absent but implicit — what the client's distress reveals about their values.
   - **P (Plan):** Treatment plan established (reference goals by number). \
-Between-session tasks or homework assigned. Referrals made or needed. \
-Focus areas for next session.
+Narrative therapy interventions planned for upcoming sessions (e.g., \
+externalizing conversations, re-authoring, scaffolding conversations, \
+remembering practices, deconstructive questioning, therapeutic documents). \
+Between-session reflections or tasks assigned (narrative therapy may use \
+reflective letters, journaling about unique outcomes, or noticing assignments \
+rather than traditional "homework"). Referrals made or needed. Focus areas \
+for next session.
 
 - **Strengths & Barriers** — Client strengths identified during intake that \
 will support treatment. Barriers or limitations identified that may impact \
@@ -166,7 +268,10 @@ Write a concise, reusable profile summary:
 - **Presenting Problems**: Brief summary of current concerns
 - **Psychosocial Context**: Key relationships, stressors, supports
 - **Medical / Substance History**: Relevant medical conditions, medications, substance use
-- **Strengths**: Client strengths, resources, and resilience factors
+- **Strengths**: Client strengths framed as narrative therapy resources — \
+preferred stories, unique outcomes, insider knowledges (what the client knows \
+about their own life that others may not), values and commitments, skills of \
+living, and relational resources that support the preferred identity
 - **Cultural Considerations**: Cultural identity, relevant cultural factors for treatment
 """
 

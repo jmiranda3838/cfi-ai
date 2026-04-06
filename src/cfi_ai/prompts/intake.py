@@ -2,6 +2,7 @@
 
 from cfi_ai.prompts.shared import (
     CRITICAL_INSTRUCTIONS,
+    NARRATIVE_THERAPY_PRINCIPLES,
     INITIAL_ASSESSMENT_GUIDANCE,
     TREATMENT_PLAN_GUIDANCE,
     INTAKE_PROGRESS_NOTE_GUIDANCE,
@@ -39,9 +40,11 @@ and use the scores as follows:
 - **CAGE-AID** (Q22-24): Count "Yes" responses (0-3). Any Yes = positive screen.
 
 ### How to use the scores in this intake
-- **Presenting Problem**: Reference GD severity to contextualize concerns \
-(e.g., "endorsed Severe global distress (GD=28/45)")
-- **Behavioral Definitions** (Treatment Plan): Include GD score as measurable baseline
+- **Presenting Problem**: Reference GD severity to contextualize the problem's \
+effects on the client (e.g., "endorsed Severe global distress (GD=28/45), \
+reflecting the extent of the depression's influence on daily functioning")
+- **Behavioral Definitions** (Treatment Plan): Include GD score as measurable \
+baseline for the problem's impact (externalized framing)
 - **Progress Note Data**: Document GD score, severity, and CAGE-AID result explicitly
 - **Medical Necessity**: GD at/above cutoff (12+) supports medical necessity
 
@@ -116,6 +119,8 @@ If the source was an audio file, the sessions/ transcript file should note that 
 it was transcribed from audio in its header.
 
 """
+    + NARRATIVE_THERAPY_PRINCIPLES
+    + "\n"
     + INITIAL_ASSESSMENT_GUIDANCE
     + "\n"
     + TREATMENT_PLAN_GUIDANCE
