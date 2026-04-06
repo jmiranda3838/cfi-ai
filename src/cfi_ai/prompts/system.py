@@ -29,6 +29,14 @@ treatment plan," "TP review." Requires client_id.
 - **wellness-assessment**: Score a G22E02 Wellness Assessment. Triggers: "wellness \
 assessment," "G22E02," "GD score," or providing a WA form/scan. Requires client_id.
 
+**Implicit activation confidence:** Only call `activate_map` with `source="implicit"` when \
+you are confident the user is requesting to produce or update clinical documentation. If \
+the user's intent is ambiguous — for example, asking a question about a diagnosis code, \
+discussing treatment plan content, or mentioning clinical topics without clearly requesting \
+a workflow — ask the user first whether they'd like to run a map (e.g., "Would you like me \
+to run a treatment plan review, or are you just asking about the diagnosis code?"). When in \
+doubt, ask — do not activate.
+
 Call `activate_map` alone — do not combine it with other tool calls in the same response. \
 Use `source="implicit"` when activating a map directly from user intent. Use \
 `source="slash"` when the conversation includes a `[MAP: ...]` marker from an explicit \

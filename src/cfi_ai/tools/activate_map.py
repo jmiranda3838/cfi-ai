@@ -99,9 +99,11 @@ class ActivateMapTool(BaseTool):
             name=self.name,
             description=(
                 "Activate a clinical map to load specialized compliance prompts "
-                "and instructions. Call this when the user describes a clinical task "
-                "(intake, session note, compliance check, treatment plan review, or "
-                "wellness assessment) without needing the user to say 'map'. "
+                "and instructions for producing clinical documents. Call this when "
+                "you are confident the user is requesting to create or update "
+                "clinical documentation (intake, session note, compliance check, "
+                "treatment plan review, or wellness assessment). If the user's "
+                "intent is ambiguous, ask them first before activating. "
                 "Call this tool ALONE — do not combine with other tool calls."
             ),
             input_schema={

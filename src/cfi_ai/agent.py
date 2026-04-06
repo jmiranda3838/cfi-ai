@@ -768,7 +768,7 @@ def _run_main_loop(
                             types.Content(
                                 role="user",
                                 parts=[types.Part.from_text(
-                                    "You described what you were about to do but did not call "
+                                    text="You described what you were about to do but did not call "
                                     "any tools. Call your tools now to proceed, or call end_turn "
                                     "if you have nothing further to do."
                                 )],
