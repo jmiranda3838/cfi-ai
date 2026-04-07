@@ -98,12 +98,15 @@ class ActivateMapTool(BaseTool):
         return ToolDefinition(
             name=self.name,
             description=(
-                "Activate a clinical map to load specialized compliance prompts "
-                "and instructions for producing clinical documents. Call this when "
-                "you are confident the user is requesting to create or update "
-                "clinical documentation (intake, session note, compliance check, "
-                "treatment plan review, or wellness assessment). If the user's "
-                "intent is ambiguous, ask them first before activating. "
+                "Load a clinical map's reference content, instructions, and workflow "
+                "steps into the conversation. Call this in two situations: (1) the user "
+                "has clearly asked you to produce or update clinical documents (intake, "
+                "session note, compliance check, tp-review, wellness assessment), OR "
+                "(2) the user is asking a question or thinking through a clinical "
+                "decision and you need the map's reference content to answer well. "
+                "Loading a map does NOT commit you to executing its workflow — when in "
+                "doubt, load it and use the content to answer the user's actual "
+                "question rather than auto-executing the steps. "
                 "Call this tool ALONE — do not combine with other tool calls."
             ),
             input_schema={

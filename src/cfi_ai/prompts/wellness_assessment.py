@@ -7,6 +7,30 @@ WA_MAP_PROMPT = (
 You are processing a Wellness Assessment (Optum Form G22E02) and calculating \
 structured scores. Today's date is {date}.
 
+## How to Use This Map
+
+This map contains reference information and workflow steps for scoring a G22E02 \
+Wellness Assessment. Loading this map does not mean you must execute the \
+workflow. The Phase blocks, "Save ALL files" instructions, and any "immediately \
+proceed" directives below are the workflow — they apply only when execution is \
+the intent.
+
+- **Execution mode** — Use this when the user clearly asked you to score or \
+process a wellness assessment (e.g., "score this WA," "process the G22E02," or \
+any slash command that maps to this workflow). Follow the phases below in order, \
+including the client-context loading steps and the file write.
+- **Reference mode** — Use this when the user is asking a question, comparing \
+options, or thinking through a decision related to wellness assessments. Answer \
+the user's actual question using the content below as reference. You MAY still \
+load specific client files with `attach_path` or `run_command` if you need them \
+to answer well (e.g., to look up a prior GD score for trend context). What you \
+MUST NOT do in reference mode: auto-execute the canned phase sequence, bulk-load \
+every file the workflow normally touches, or call `write_file`/`apply_patch` \
+unless the user explicitly confirms they want the documents produced.
+
+When in doubt about which mode applies, default to reference mode: answer the \
+question first, then ask whether they'd like to run the workflow.
+
 """
     + CRITICAL_INSTRUCTIONS
     + """
@@ -63,6 +87,30 @@ WA_FILE_MAP_PROMPT = (
     """\
 You are processing a Wellness Assessment (Optum Form G22E02) and calculating \
 structured scores. Today's date is {date}.
+
+## How to Use This Map
+
+This map contains reference information and workflow steps for scoring a G22E02 \
+Wellness Assessment. Loading this map does not mean you must execute the \
+workflow. The Phase blocks, "Save ALL files" instructions, and any "immediately \
+proceed" directives below are the workflow — they apply only when execution is \
+the intent.
+
+- **Execution mode** — Use this when the user clearly asked you to score or \
+process a wellness assessment (e.g., "score this WA," "process the G22E02," or \
+any slash command that maps to this workflow). Follow the phases below in order, \
+including the client-context loading steps and the file write.
+- **Reference mode** — Use this when the user is asking a question, comparing \
+options, or thinking through a decision related to wellness assessments. Answer \
+the user's actual question using the content below as reference. You MAY still \
+load specific client files with `attach_path` or `run_command` if you need them \
+to answer well (e.g., to look up a prior GD score for trend context). What you \
+MUST NOT do in reference mode: auto-execute the canned phase sequence, bulk-load \
+every file the workflow normally touches, or call `write_file`/`apply_patch` \
+unless the user explicitly confirms they want the documents produced.
+
+When in doubt about which mode applies, default to reference mode: answer the \
+question first, then ask whether they'd like to run the workflow.
 
 """
     + CRITICAL_INSTRUCTIONS

@@ -1,6 +1,6 @@
 """Compliance check prompt template for the /compliance command."""
 
-from cfi_ai.prompts.shared import NARRATIVE_THERAPY_ORIENTATION
+from cfi_ai.prompts.shared import CRITICAL_INSTRUCTIONS, NARRATIVE_THERAPY_ORIENTATION
 
 COMPLIANCE_PROMPT = (
     """\
@@ -17,7 +17,35 @@ interventions. Today's date is {date}.
     + NARRATIVE_THERAPY_ORIENTATION
     + """
 
-## CRITICAL INSTRUCTIONS
+## How to Use This Map
+
+This map contains reference information and workflow steps for Optum compliance \
+audits. Loading this map does not mean you must execute the workflow. The Phase \
+blocks, "Save ALL files" instructions, and any "immediately proceed" directives \
+below are the workflow — they apply only when execution is the intent.
+
+- **Execution mode** — Use this when the user clearly asked you to run a \
+compliance check or audit (e.g., "do a compliance check on jane-doe," "audit \
+this client's records," or any slash command that maps to this workflow). \
+Follow the phases below in order, including the client-context loading steps \
+and the report generation.
+- **Reference mode** — Use this when the user is asking a question, comparing \
+options, or thinking through a decision related to compliance requirements. \
+Answer the user's actual question using the content below as reference. You MAY \
+still load specific client files with `attach_path` or `run_command` if you need \
+them to answer well (e.g., to look up a single field in a treatment plan). \
+What you MUST NOT do in reference mode: auto-execute the canned phase sequence, \
+bulk-load every file the workflow normally touches, or call \
+`write_file`/`apply_patch` unless the user explicitly confirms they want the \
+audit run.
+
+When in doubt about which mode applies, default to reference mode: answer the \
+question first, then ask whether they'd like to run the workflow.
+
+"""
+    + CRITICAL_INSTRUCTIONS
+    + """
+## Audit-Specific Rules
 - Be specific about what's missing — quote the requirement and what's absent.
 - For vague progress language, quote the problematic text and suggest a measurable alternative.
 - Missing documentation is a valid audit finding, not a reason to stop the review.
@@ -90,42 +118,117 @@ psychotic break, running away, substance abuse, self-harm)
 - Initiation date set
 - Review date set (via "Review in" field)
 
-**Intake Progress Note:**
-- Date of service
-- CPT code 90791
-- Session duration in minutes
-- Participants in session with roles
-- Supervision line (required for AMFTs)
-- Structured SI/HI/SH screening (present/not present for each)
-- Treatment plan goals referenced (baseline establishment)
-- DAP format with measurable baseline indicators
-- Strengths & barriers
-- Medical necessity justification
-- Next appointment date and focus
+**Intake Progress Note (TheraNest 30-field form, intake variant):**
+
+Audit each field present in the intake progress note. Use the field numbers \
+from the new TheraNest Dynamic Form layout.
+
+- #1 Participant(s) in Session — present with roles
+- #2 Type Of Note — should be "Intake"
+- #3 CPT Code Billed — must be 90791 for intake
+- #4 CPT Code Modifiers — see EWS-Specific Checks below
+- #5 Modality — In-Person / Video / Phone
+- #6 Authorization Number — see EWS-Specific Checks
+- #7 Session # of Authorized Total — see EWS-Specific Checks
+- #8 Payer — populated
+- #9 Diagnostic Impressions — ICD-10 codes present
+- #10 Diagnosis Addressed This Session — primary dx named
+- #13 Goals/Objectives Addressed This Session — baseline goals listed by number
+- #14 Mental Status — 13-domain grid populated
+- #15 Functional Impairment — concrete impairment by domain (work/school/ \
+relationships/self-care/ADLs); flag boilerplate or absence
+- #16 Risk Assessment — SI / HI / Risk Notes grid present
+- #17 Risk Level — populated (None / Low / Moderate / High / Imminent)
+- #18 Protective Factors — present even when Risk = None
+- #19 Safety Plan — populated when Risk Level > None
+- #20 Tarasoff / Mandated Reporting Triggered? — Yes/No populated
+- #21 Tarasoff explanation — populated when #20 = Yes
+- #25 Therapeutic Intervention — diagnostic interview, narrative stance-taking, \
+externalizing introduction, WA administration listed
+- #26 Client's Response to Intervention — observable response documented
+- #28 Medical Necessity Statement — explicit, references baseline GD score \
+when ≥ 12, ties to diagnosis and functional impairment; flag boilerplate
+- #29 Plan — folds in homework, referrals, next appointment, coordination of care
+- #30 Additional Notes — Wellness Assessment line present (REQUIRED at intake \
+for Optum EWS), CAGE-AID result documented if administered
 
 **If most recent action was ONGOING SESSION, check the most recent progress note for:**
-- Date of service
-- CPT code (90834, 90837, etc.)
-- Session duration in minutes
-- Participants in session with roles
-- Supervision line (required for AMFTs)
-- Structured SI/HI/SH screening (present/not present for each)
-- Treatment plan goals referenced by number (cross-check against treatment plan)
-- Interventions used match treatment plan interventions (narrative therapy \
-interventions include: externalizing conversations, re-authoring conversations, \
-scaffolding questions, deconstructive listening/questioning, remembering practices, \
-definitional ceremonies, outsider witness practices, and therapeutic documents)
-- Measurable progress indicators (flag vague language like "client is doing better" \
-or "making progress" without specifics). Note: narrative therapy progress IS \
-measurable when documented with specifics — e.g., externalizing ratings ("client \
-rates anxiety's influence at 5/10, down from 8/10"), unique outcome frequency \
-("client identified 3 unique outcomes this session"), preferred story development \
-("client articulated a thick description of their preferred identity as a \
-connected parent"). These are valid measurable indicators. Flag only when \
-progress descriptions lack any specificity.
-- Strengths & barriers
-- Medical necessity justification
-- Next appointment date and focus
+
+Audit each field of the new TheraNest 30-field form:
+
+- #1 Participant(s) in Session — present with roles
+- #2 Type Of Note — Individual/Family/Couples/Group
+- #3 CPT Code Billed — appropriate for duration and participants
+- #4 CPT Code Modifiers — see EWS-Specific Checks below
+- #5 Modality — In-Person / Video / Phone
+- #6 Authorization Number — see EWS-Specific Checks
+- #7 Session # of Authorized Total — see EWS-Specific Checks
+- #8 Payer — populated
+- #9 Diagnostic Impressions — ICD-10 list pulled from current TP
+- #10 Diagnosis Addressed This Session — names which dx was the focus today
+- #11 Treatment Goal History — present (or "no history" if early in treatment)
+- #12 Current Treatment Goals — pulled verbatim from latest TP
+- #13 Goals/Objectives Addressed This Session — explicit golden-thread linkage \
+by number, with HOW each was addressed; cross-check against #12
+- #14 Mental Status — 13-domain grid populated
+- #15 Functional Impairment — concrete impairment by domain; trajectory \
+(improved/stable/worsened) since last session noted; flag boilerplate or absence
+- #16 Risk Assessment — SI / HI / Risk Notes grid present
+- #17 Risk Level — populated
+- #18 Protective Factors — present even when Risk = None
+- #19 Safety Plan — populated when Risk Level > None
+- #20 Tarasoff / Mandated Reporting Triggered? — Yes/No populated
+- #21 Tarasoff explanation — populated when #20 = Yes
+- #25 Therapeutic Intervention — specific clinical techniques used today, \
+mapped to TP objectives. Narrative therapy interventions (externalizing \
+conversations, re-authoring conversations, scaffolding questions, \
+deconstructive listening/questioning, remembering practices, definitional \
+ceremonies, outsider witness practices, therapeutic documents) are valid \
+clinical interventions — do NOT flag them as drift unless they truly differ \
+from the TP. Cross-check against TP intervention list.
+- #26 Client's Response to Intervention — observable response THIS session: \
+engagement, willingness, insight, resistance. Distinct from #27.
+- #27 Client Progress — cumulative trajectory: externalizing ratings \
+("client rates anxiety's influence at 5/10, down from 8/10"), unique outcome \
+frequency, preferred story development. Flag only vague language without \
+specifics ("client is doing better", "making progress"). Narrative-therapy \
+metrics ARE measurable when documented with specifics.
+- #28 Medical Necessity Statement — explicit tie to active diagnosis, current \
+symptoms / functional impairment from #15, treatment goals from #13, and why \
+continued care is indicated. Flag boilerplate or template phrases.
+- #29 Plan — folds in homework, referrals, next appointment, coordination of \
+care (or explicit "client declined ROI")
+- #30 Additional Notes — Wellness Assessment line present per Optum EWS \
+schedule (see EWS-Specific Checks)
+
+### EWS-Specific Checks (apply when client profile Payer contains "Optum EWS" or "EAP")
+
+Run these IN ADDITION to the field-level checks above. If the client profile \
+is missing the Billing & Provider Information section entirely, flag as \
+`[FAIL]` and instruct that the next session note generation will backfill it.
+
+- **HJ modifier** — must appear in #4 for every Optum EWS claim. `[FAIL]` if absent.
+- **U5 modifier** — must appear in #4 when the profile's Supervised flag is Yes. \
+`[FAIL]` if absent.
+- **GT or 95 modifier** — must appear in #4 when #5 (Modality) is Video or \
+Phone. `[FAIL]` if absent.
+- **CPT 90837 + Optum EWS = HARD BLOCK** — 90837 is NOT allowed under Optum \
+EWS. `[FAIL]` and recommend 90834.
+- **Authorization Number (#6)** — must be populated for EWS clients. `[FAIL]` \
+if blank.
+- **Session # of Authorized Total (#7)** — must be populated for EWS clients. \
+`[FAIL]` if blank or unparseable.
+- **Wellness Assessment in #30** — must contain a WA tracking line with \
+submission status (`Submitted to Optum: Y/N on YYYY-MM-DD`). `[FAIL]` if absent \
+on Optum EWS notes.
+- **WA timing** — initial WA mandatory at session 1; re-administration required \
+between sessions 3-5. Cross-check the wellness-assessments/ directory and the \
+session count to verify cadence.
+
+If the client profile lacks the Billing & Provider Information section, all of \
+these EWS checks degrade to `[FAIL]` because verification is impossible — \
+report this as a single top-level finding and recommend running a session note \
+generation to trigger the one-time backfill `interview`.
 
 ### Step 3: Cross-Document Checks (Golden Thread)
 

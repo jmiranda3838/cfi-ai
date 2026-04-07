@@ -167,7 +167,7 @@ def test_session_map_prompt_formats():
         progress_note_guidance=note_guidance,
     )
     _assert_no_unreplaced_placeholders(result)
-    assert "DAP" in result
+    assert "TheraNest 30-Field Form" in result
     assert "run_command ls" in result
 
 
@@ -279,16 +279,62 @@ def test_shared_constants_importable():
         assert isinstance(const, str) and len(const) > 50
 
 
+def test_map_prompts_have_reference_loading_wrapper():
+    """All map prompts must clarify that loading != executing."""
+    from cfi_ai.prompts.intake import INTAKE_PROMPT
+    from cfi_ai.prompts.session import SESSION_MAP_PROMPT, SESSION_FILE_MAP_PROMPT
+    from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
+    from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
+    from cfi_ai.prompts.wellness_assessment import WA_MAP_PROMPT, WA_FILE_MAP_PROMPT
+
+    marker = "Loading this map does not mean you must execute the workflow"
+    for name, prompt in [
+        ("INTAKE_PROMPT", INTAKE_PROMPT),
+        ("SESSION_MAP_PROMPT", SESSION_MAP_PROMPT),
+        ("SESSION_FILE_MAP_PROMPT", SESSION_FILE_MAP_PROMPT),
+        ("COMPLIANCE_PROMPT", COMPLIANCE_PROMPT),
+        ("TP_REVIEW_PROMPT", TP_REVIEW_PROMPT),
+        ("WA_MAP_PROMPT", WA_MAP_PROMPT),
+        ("WA_FILE_MAP_PROMPT", WA_FILE_MAP_PROMPT),
+    ]:
+        assert marker in prompt, f"{name} missing reference-loading wrapper"
+
+
 def test_critical_instructions_in_all_map_prompts():
     """CRITICAL_INSTRUCTIONS text appears in all map prompts."""
+    from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
     from cfi_ai.prompts.intake import INTAKE_PROMPT
     from cfi_ai.prompts.session import SESSION_FILE_MAP_PROMPT, SESSION_MAP_PROMPT
+    from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
     from cfi_ai.prompts.wellness_assessment import WA_FILE_MAP_PROMPT, WA_MAP_PROMPT
     marker = "Do NOT narrate the map"
     for prompt in (INTAKE_PROMPT,
                    SESSION_MAP_PROMPT, SESSION_FILE_MAP_PROMPT,
+                   COMPLIANCE_PROMPT, TP_REVIEW_PROMPT,
                    WA_MAP_PROMPT, WA_FILE_MAP_PROMPT):
         assert marker in prompt
+
+
+def test_reference_mode_forbids_writes():
+    """All map prompts must explicitly forbid write_file/apply_patch in reference mode."""
+    from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
+    from cfi_ai.prompts.intake import INTAKE_PROMPT
+    from cfi_ai.prompts.session import SESSION_FILE_MAP_PROMPT, SESSION_MAP_PROMPT
+    from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
+    from cfi_ai.prompts.wellness_assessment import WA_FILE_MAP_PROMPT, WA_MAP_PROMPT
+
+    for name, prompt in [
+        ("INTAKE_PROMPT", INTAKE_PROMPT),
+        ("SESSION_MAP_PROMPT", SESSION_MAP_PROMPT),
+        ("SESSION_FILE_MAP_PROMPT", SESSION_FILE_MAP_PROMPT),
+        ("COMPLIANCE_PROMPT", COMPLIANCE_PROMPT),
+        ("TP_REVIEW_PROMPT", TP_REVIEW_PROMPT),
+        ("WA_MAP_PROMPT", WA_MAP_PROMPT),
+        ("WA_FILE_MAP_PROMPT", WA_FILE_MAP_PROMPT),
+    ]:
+        assert "MUST NOT" in prompt, f"{name} missing reference-mode prohibition"
+        assert "write_file" in prompt, f"{name} missing write_file prohibition"
+        assert "apply_patch" in prompt, f"{name} missing apply_patch prohibition"
 
 
 def test_cage_aid_in_unified_intake_prompt():
@@ -351,3 +397,121 @@ def test_orientation_alias_equals_split():
         NARRATIVE_THERAPY_PROGRESS,
     )
     assert NARRATIVE_THERAPY_ORIENTATION == NARRATIVE_THERAPY_PRINCIPLES + NARRATIVE_THERAPY_PROGRESS
+
+
+# -- TheraNest 30-field progress note form --
+
+THERANEST_FIELD_MARKERS = [
+    "Participant(s) in Session",
+    "Type Of Note",
+    "CPT Code Billed",
+    "CPT Code Modifiers",
+    "Modality",
+    "Authorization Number",
+    "Session # of Authorized Total",
+    "Payer",
+    "Diagnostic Impressions",
+    "Diagnosis Addressed This Session",
+    "Treatment Goal History",
+    "Current Treatment Goals",
+    "Goals/Objectives Addressed This Session",
+    "Mental Status",
+    "Functional Impairment",
+    "Risk Assessment",
+    "Risk Level",
+    "Protective Factors",
+    "Safety Plan",
+    "Tarasoff",
+    "Subjective",
+    "Session Focus",
+    "Planned Intervention",
+    "Therapeutic Intervention",
+    "Client's Response to Intervention",
+    "Client Progress",
+    "Medical Necessity Statement",
+    "Plan",
+    "Additional Notes",
+]
+
+
+def test_progress_note_guidance_covers_all_30_fields():
+    """Ongoing-session progress note guidance must cover every TheraNest field."""
+    from cfi_ai.prompts.session import PROGRESS_NOTE_GUIDANCE
+    for marker in THERANEST_FIELD_MARKERS:
+        assert marker in PROGRESS_NOTE_GUIDANCE, (
+            f"PROGRESS_NOTE_GUIDANCE missing field marker: {marker!r}"
+        )
+
+
+def test_intake_progress_note_guidance_covers_all_30_fields():
+    """Intake-session progress note guidance must cover every TheraNest field."""
+    from cfi_ai.prompts.shared import INTAKE_PROGRESS_NOTE_GUIDANCE
+    for marker in THERANEST_FIELD_MARKERS:
+        assert marker in INTAKE_PROGRESS_NOTE_GUIDANCE, (
+            f"INTAKE_PROGRESS_NOTE_GUIDANCE missing field marker: {marker!r}"
+        )
+
+
+def test_progress_note_guidance_has_compliance_validation_block():
+    """Ongoing-session prompt must include the COMPLIANCE WARNING validation rules."""
+    from cfi_ai.prompts.session import PROGRESS_NOTE_GUIDANCE
+    assert "COMPLIANCE WARNING" in PROGRESS_NOTE_GUIDANCE
+    assert "HJ" in PROGRESS_NOTE_GUIDANCE
+    assert "U5" in PROGRESS_NOTE_GUIDANCE
+    assert "GT" in PROGRESS_NOTE_GUIDANCE
+    assert "90837" in PROGRESS_NOTE_GUIDANCE
+    assert "Optum EWS" in PROGRESS_NOTE_GUIDANCE
+
+
+def test_intake_progress_note_guidance_has_compliance_validation_block():
+    """Intake prompt must also include COMPLIANCE WARNING validation rules."""
+    from cfi_ai.prompts.shared import INTAKE_PROGRESS_NOTE_GUIDANCE
+    assert "COMPLIANCE WARNING" in INTAKE_PROGRESS_NOTE_GUIDANCE
+    assert "HJ" in INTAKE_PROGRESS_NOTE_GUIDANCE
+    assert "U5" in INTAKE_PROGRESS_NOTE_GUIDANCE
+    assert "Optum EWS" in INTAKE_PROGRESS_NOTE_GUIDANCE
+
+
+def test_client_profile_guidance_has_billing_section():
+    """Client profile guidance must include the Billing & Provider section."""
+    from cfi_ai.prompts.shared import CLIENT_PROFILE_GUIDANCE
+    assert "Billing & Provider Information" in CLIENT_PROFILE_GUIDANCE
+    assert "Payer" in CLIENT_PROFILE_GUIDANCE
+    assert "Authorization Number" in CLIENT_PROFILE_GUIDANCE
+    assert "Total Authorized Sessions" in CLIENT_PROFILE_GUIDANCE
+    assert "Default Modality" in CLIENT_PROFILE_GUIDANCE
+    assert "Rendering Provider" in CLIENT_PROFILE_GUIDANCE
+    assert "Supervised" in CLIENT_PROFILE_GUIDANCE
+    assert "Supervisor" in CLIENT_PROFILE_GUIDANCE
+
+
+def test_compliance_prompt_checks_new_fields():
+    """Compliance audit must reference the new TheraNest field names + EWS rules."""
+    from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
+    assert "Functional Impairment" in COMPLIANCE_PROMPT
+    assert "Client's Response to Intervention" in COMPLIANCE_PROMPT
+    assert "Therapeutic Intervention" in COMPLIANCE_PROMPT
+    assert "Authorization Number" in COMPLIANCE_PROMPT
+    assert "EWS-Specific Checks" in COMPLIANCE_PROMPT
+    assert "HJ" in COMPLIANCE_PROMPT
+    assert "U5" in COMPLIANCE_PROMPT
+    assert "90837" in COMPLIANCE_PROMPT
+    assert "Billing & Provider" in COMPLIANCE_PROMPT
+
+
+def test_tp_review_references_new_field_names():
+    """tp-review Phase 1 must point at the new TheraNest field names."""
+    from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
+    assert "Therapeutic Intervention" in TP_REVIEW_PROMPT
+    assert "Client Progress" in TP_REVIEW_PROMPT
+    assert "Client's Response to Intervention" in TP_REVIEW_PROMPT
+    assert "Functional Impairment" in TP_REVIEW_PROMPT
+
+
+def test_session_map_phase1_backfills_billing_section():
+    """Both session map prompts must instruct interview-driven billing backfill."""
+    from cfi_ai.prompts.session import SESSION_FILE_MAP_PROMPT, SESSION_MAP_PROMPT
+    for prompt in (SESSION_MAP_PROMPT, SESSION_FILE_MAP_PROMPT):
+        assert "Billing & Provider Information" in prompt
+        assert "interview" in prompt
+        assert "overwrite=true" in prompt

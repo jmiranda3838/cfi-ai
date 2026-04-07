@@ -452,7 +452,7 @@ def test_plan_mode_preamble_nudge_then_tools():
     assert result.plan_text == "Final plan."
     # Check that a preamble nudge was injected
     nudge_found = any(
-        "did not call any tools" in str(m)
+        "no tool calls" in str(m)
         for m in messages
     )
     assert nudge_found, "Preamble nudge should have been injected into messages"
@@ -492,7 +492,7 @@ def test_plan_mode_text_after_tools_breaks():
     assert result.plan_text == "Here is the plan based on my research."
     # No preamble nudge should have been injected
     nudge_found = any(
-        "did not call any tools" in str(m)
+        "no tool calls" in str(m)
         for m in messages
     )
     assert not nudge_found, "No preamble nudge should fire after tools have executed"

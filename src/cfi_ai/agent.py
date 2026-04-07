@@ -292,9 +292,9 @@ def _run_plan_mode(
                         types.Content(
                             role="user",
                             parts=[types.Part.from_text(
-                                text="You described what you were about to do but did not call "
-                                "any tools. Call your tools now to proceed, or call end_turn "
-                                "if you have nothing further to do."
+                                text="Your response had no tool calls. If your response is complete and "
+                                "the user has what they need, call end_turn to hand control back. "
+                                "If you intended to take an action, call the relevant tools now."
                             )],
                         )
                     )
@@ -768,9 +768,9 @@ def _run_main_loop(
                             types.Content(
                                 role="user",
                                 parts=[types.Part.from_text(
-                                    text="You described what you were about to do but did not call "
-                                    "any tools. Call your tools now to proceed, or call end_turn "
-                                    "if you have nothing further to do."
+                                    text="Your response had no tool calls. If your response is complete and "
+                                    "the user has what they need, call end_turn to hand control back. "
+                                    "If you intended to take an action, call the relevant tools now."
                                 )],
                             )
                         )

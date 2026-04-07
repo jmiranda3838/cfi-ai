@@ -1,7 +1,13 @@
 """Shared clinical specification blocks used across prompt templates."""
 
 CRITICAL_INSTRUCTIONS = """\
-## CRITICAL INSTRUCTIONS
+## When Executing This Workflow
+
+The rules below apply only when you are actively producing the documents this map \
+describes. If the user is asking a question, comparing options, or thinking through \
+a decision, treat the rest of this map as reference material and answer their \
+question normally — ignore these execution rules.
+
 - Do NOT narrate the map or reproduce document content in your response text.
 - Keep free-text responses to 2-3 sentences maximum. Proceed directly to tool calls.
 - The user reviews all file content in the approval step — do not preview it in chat.
@@ -182,77 +188,288 @@ dominant cultural narratives on the problem story"
 """
 
 INTAKE_PROGRESS_NOTE_GUIDANCE = """\
-## Progress Note Guidance (Optum-Compliant, DAP Format — Intake Session)
+## Progress Note Guidance (TheraNest 30-Field Form — Intake Session)
 
-Write a progress note for the intake session using TheraNest's standard note \
-fields. This covers the clinical session itself (not the assessment or plan). \
-Since this is an intake session, treatment plan goals are being established \
-rather than tracked.
+Write the intake progress note as a markdown document with one section per \
+TheraNest field, in the EXACT field order below. The clinician will paste each \
+section into the corresponding TheraNest Dynamic Form field. Today's date is \
+{date}.
 
-### Required Fields
+This is an intake session — treatment plan goals are being **established**, \
+not tracked. CPT code is hardcoded to 90791. The Wellness Assessment is \
+ALWAYS administered at intake (Optum EWS requirement at session 1).
 
-- **Date of Service** — {date}
-- **Service Code** — 90791 (Psychiatric diagnostic evaluation) for intake sessions.
-- **Session Duration** — Total session time in minutes.
-- **Participants in Session** — All individuals present with roles (e.g., \
-"Client, therapist"). Include names/roles for collateral participants.
-- **Supervision** — "Session conducted under the supervision of [supervisor \
-name], [license type] #[license number]." Note supervision format (live \
-observation, recording review, or individual supervision discussion).
+Read the client profile's **Billing & Provider Information** section before \
+generating the note. If that section is missing, the session map will have \
+already used `interview` to populate it before reaching this step.
 
-- **Risk Assessment** —
-  - Suicidal ideation: present / not present
-  - Homicidal ideation: present / not present
-  - Self-harm: present / not present
-  - If any present: detail (passive/active, plan, means, intent) and \
-document intervention/safety plan
-  - If none: "Client denied suicidal ideation, homicidal ideation, and \
-self-harm."
+---
 
-- **Medication Changes** — Any medication changes reported by client, or \
-"No changes reported. Current medications: [list if known]."
+### Header / Administrative
 
-- **Treatment Plan Goals Addressed** — "Baseline assessment — treatment plan \
-goals established this session." List the goals and objectives created, \
-referencing them by number for future session linkage.
+#### 1. Participant(s) in Session
+List everyone present with roles (e.g., "Client only", "Client and partner", \
+"Client and therapist"). For minors, include parent/guardian role.
 
-- **Session Summary (DAP Format)**:
-  - **D (Data):** Client self-report and objective observations. What the \
-client reported, presenting issues discussed, relevant quotes, behavioral \
-observations (affect, appearance, engagement). If Wellness Assessment (G22E02) was administered, document: GD score \
-[X/45], severity level [Low/Moderate/Severe/Very Severe], and CAGE-AID result \
-[Negative/Positive (N/3)]. Example: "Wellness Assessment (G22E02) administered: \
-Global Distress = 28/45 (Severe); CAGE-AID = 0/3 (Negative)."
-  - **A (Assessment):** Clinical impressions. Baseline functioning assessment \
-across domains (work, relationships, self-care). Diagnostic formulation using \
-externalized language — describe the problem's current influence on the \
-client rather than the client's pathology. Document the client's initial \
-relationship to the problem: How much influence does the problem have over \
-the client's life? (baseline externalizing rating, e.g., "Client rates the \
-anxiety's influence on daily life at 8/10"). Note dominant narratives \
-identified (problem-saturated stories the client tells about themselves) and \
-any unique outcomes or exceptions observed, even briefly. Identify what is \
-absent but implicit — what the client's distress reveals about their values.
-  - **P (Plan):** Treatment plan established (reference goals by number). \
-Narrative therapy interventions planned for upcoming sessions (e.g., \
-externalizing conversations, re-authoring, scaffolding conversations, \
-remembering practices, deconstructive questioning, therapeutic documents). \
-Between-session reflections or tasks assigned (narrative therapy may use \
-reflective letters, journaling about unique outcomes, or noticing assignments \
-rather than traditional "homework"). Referrals made or needed. Focus areas \
-for next session.
+#### 2. Type Of Note
+`Intake`
 
-- **Strengths & Barriers** — Client strengths identified during intake that \
-will support treatment. Barriers or limitations identified that may impact \
-treatment progress.
+---
 
-- **Medical Necessity** — Initial session establishes baseline for treatment. \
-Continued treatment indicated based on presenting concerns, diagnostic \
-impressions, and functional impairment. Specify why this level of care \
-(frequency, modality) is appropriate. If GD score is at or above clinical \
-cutoff (12+), reference it as objective evidence supporting medical necessity.
+### Billing & Authorization
 
-- **Next Appointment** — Date and specific focus areas for next session.
+#### 3. CPT Code Billed [REQUIRED]
+`90791` (Psychiatric Diagnostic Evaluation) — hardcoded for intake sessions \
+regardless of duration.
+
+#### 4. CPT Code Modifiers
+Apply this conditional logic based on the client profile's Billing & Provider \
+section:
+- **HJ** — REQUIRED for all Optum EWS/EAP claims. Add when Payer contains \
+"Optum EWS" or "EAP".
+- **U5** — REQUIRED when Supervised = Yes in the profile. Signals that the \
+service was rendered by a supervisee under licensed supervision.
+- **GT** or **95** — REQUIRED when Modality = Video or Phone (telehealth).
+- For self-pay, in-person, fully licensed clinicians: leave blank.
+
+Format as comma-separated list: `HJ, U5` or `HJ, U5, 95` etc.
+
+#### 5. Modality [REQUIRED]
+`In-Person` / `Video` / `Phone`. Pull from the profile's Default Modality, or \
+infer from the source material if it differs (e.g., session audio with \
+in-person ambient sound vs. Zoom recording).
+
+#### 6. Authorization Number
+Pull from the profile's Authorization Number field. Required for EAP/EWS; \
+leave blank for self-pay/non-authorized payers.
+
+#### 7. Session # of Authorized Total
+Compute as `[count of existing progress notes for this client] + 1` of \
+[Total Authorized Sessions from profile]. For intake, this is typically \
+"1 of 5" or "1 of 10". Critical for EAP utilization tracking.
+
+#### 8. Payer [REQUIRED]
+Pull verbatim from the profile's Payer field (e.g., "Optum EWS/EAP", \
+"Anthem PPO", "Self-pay").
+
+---
+
+### Diagnosis
+
+#### 9. Diagnostic Impressions
+Pull the full ICD-10/DSM-5 diagnosis list from this intake session's Initial \
+Assessment document. List primary diagnosis first, then secondary diagnoses. \
+Format: `F43.23 — Adjustment disorder with mixed anxiety and depressed mood`.
+
+#### 10. Diagnosis Addressed This Session [REQUIRED]
+For an intake, the primary diagnosis established in field #9. State which dx \
+was the focus of the assessment (typically the primary).
+
+---
+
+### Treatment Plan Linkage
+
+#### 11. Treatment Goal History
+`N/A — initial intake; no prior treatment goals on record.`
+
+#### 12. Current Treatment Goals
+`Established this session — see treatment plan document for full numbered \
+goals and objectives.`
+
+#### 13. Goals/Objectives Addressed This Session [REQUIRED]
+`Baseline assessment — treatment plan goals established this session.` Then \
+list the goals and objectives created during intake by number for future \
+session linkage (e.g., "Goal 1: Reduce the influence of the anxiety on daily \
+functioning. Objective 1a: Externalize the anxiety and map its effects.").
+
+---
+
+### Mental Status Exam
+
+#### 14. Mental Status
+Map narrative MSE observations from the session to each sub-category. Output \
+as a markdown table with checkbox notation the clinician can paste:
+
+```
+| Domain | Observation |
+|---|---|
+| Appearance | [neat / disheveled / appropriate / etc.] |
+| Orientation | [oriented x3 / etc.] |
+| Behavior | [cooperative / restless / guarded / etc.] |
+| Speech | [normal rate/tone / pressured / slowed / etc.] |
+| Affect | [congruent / restricted / flat / labile / etc.] |
+| Mood | [euthymic / depressed / anxious / etc.] |
+| Thought Process | [linear / tangential / circumstantial / etc.] |
+| Thought Content | [no SI/HI / preoccupied with X / etc.] |
+| Perception | [no AH/VH / etc.] |
+| Judgment | [intact / fair / impaired] |
+| Insight | [good / fair / limited] |
+| Appetite | [normal / decreased / increased] |
+| Sleep | [normal / insomnia / hypersomnia] |
+```
+
+#### 15. Functional Impairment [REQUIRED]
+**This field is critical for medical necessity — do NOT skip or boilerplate.**
+For intake, document baseline impairment across domains: work/school, \
+relationships, self-care, ADLs (activities of daily living). Be specific and \
+concrete (e.g., "Client reports missing 3 days of work in past 2 weeks due to \
+anxiety; has stopped attending weekly social gatherings; reports difficulty \
+cooking and grocery shopping due to fatigue from depression").
+
+---
+
+### Risk Assessment
+
+#### 16. Risk Assessment
+Format as a checkbox grid:
+```
+| Domain | Present | Notes |
+|---|---|---|
+| Suicidality | [Yes/No] | [details if Yes; "Client denies SI" if No] |
+| Homicidality | [Yes/No] | [details if Yes; "Client denies HI" if No] |
+| Risk Assessment Notes | | [self-harm history, prior attempts, ideation patterns, intervention used in session] |
+```
+For intake, also include the CAGE-AID screen result if administered: \
+`CAGE-AID: [Negative / Positive (N/3)]` — this satisfies the substance use \
+risk domain.
+
+#### 17. Risk Level [REQUIRED]
+`None` / `Low` / `Moderate` / `High` / `Imminent`. Choose based on the risk \
+assessment in #16. For most stable intake clients without active SI/HI, this \
+will be `None` or `Low`.
+
+#### 18. Protective Factors [REQUIRED]
+Required even when Risk Level = None. List concrete protective factors: \
+support system (specify who), reasons for living, future-oriented goals, \
+treatment engagement, coping skills already in use, religious/spiritual \
+resources, access to means restriction, etc.
+
+#### 19. Safety Plan (if clinically indicated)
+Populate ONLY if Risk Level > None. Use the Stanley-Brown Safety Plan format \
+(warning signs → internal coping → social distractions → people for help → \
+professionals/agencies → means restriction). For Risk Level = None, write \
+`Not clinically indicated at this time.`
+
+#### 20. Tarasoff / Mandated Reporting Triggered? [REQUIRED]
+`Yes` / `No`. Triggered by: credible threat of harm to identifiable victim, \
+suspected child/elder/dependent adult abuse, or court-ordered disclosure. \
+For most intake sessions this is `No`.
+
+#### 21. If "Yes" was selected above, please explain
+Populate ONLY if #20 = Yes. Document who was contacted (CPS/APS/police/victim), \
+when, what was reported, and supervisor consultation. Otherwise leave blank.
+
+---
+
+### Session Content
+
+#### 22. Subjective
+Client narrative and self-report. What the client reported about their \
+presenting issues, history of the problem, prior treatment, current symptoms, \
+and what brought them in now. Include direct quotes where clinically relevant. \
+Use externalized language where the client used it (e.g., "Client describes \
+the depression as 'something that pulls me under'").
+
+#### 23. Session Focus
+Primary topics, themes, and presenting issues addressed in the intake. For \
+intake this is typically: history-taking, presenting problem exploration, \
+externalizing introduction, risk screening, baseline functioning assessment, \
+preferred direction.
+
+#### 24. Planned Intervention
+Narrative therapy interventions planned for upcoming sessions: externalizing \
+conversations, re-authoring conversations, scaffolding questions, \
+deconstructive listening/questioning, remembering practices, definitional \
+ceremonies, therapeutic documents (letters, certificates). Frame in terms of \
+the client's preferred direction.
+
+#### 25. Therapeutic Intervention
+Specific clinical techniques used in THIS intake session. For intake, this \
+typically includes: diagnostic interview, biopsychosocial assessment, \
+narrative therapy stance-taking, externalizing introduction, Wellness \
+Assessment administration, risk assessment, treatment planning collaboration. \
+Be specific.
+
+#### 26. Client's Response to Intervention [REQUIRED]
+**Distinct from #27 — this is whether the intake interventions worked TODAY.**
+Document the client's observable response to the intake process: engagement \
+level, willingness to externalize the problem, narrative receptivity, comfort \
+with the structure, insight demonstrated, areas of resistance or difficulty.
+
+#### 27. Client Progress
+For intake: `Baseline established this session.` Briefly note the starting \
+point (e.g., "Baseline GD = 28/45 Severe; baseline externalizing rating: \
+client rates the depression's influence at 9/10").
+
+---
+
+### Synthesis
+
+#### 28. Medical Necessity Statement [REQUIRED]
+**This is Optum's #1 audit focus. Do NOT skip or boilerplate.** Explicitly tie \
+today's intake to: (a) the active diagnosis from #10, (b) current symptoms / \
+functional impairment from #15, (c) treatment plan goals being established in \
+#13, and (d) why ongoing psychotherapy is clinically indicated. Reference \
+specific clinical findings from this session — never use a template phrase. \
+For intake, baseline GD score ≥ 12 supports medical necessity as objective \
+evidence of clinically significant distress.
+
+#### 29. Plan
+Free-text plan that folds in the following compliance items (none of these \
+have dedicated form fields):
+- **Homework / between-session tasks** assigned (e.g., noticing assignments, \
+reflective writing about preferred outcomes, externalizing journal)
+- **Referrals made** (e.g., psychiatric eval, group therapy, medical workup) \
+or `No referrals at this time`
+- **Next appointment**: date/time and focus areas for the next session
+- **Coordination of care**: Communication with PCP, psychiatrist, school, \
+family, prior providers — OR explicitly note `Client declined ROI for \
+coordination of care at this time` or `No coordination of care needed today`
+
+#### 30. Additional Notes
+Free-text field that folds in the following compliance items.
+
+**Wellness Assessment tracking** — REQUIRED for Optum EWS clients (and \
+ALWAYS at intake, since the initial WA is mandatory at session 1). Format:
+```
+Wellness Assessment: Administered today: Y | Tool: Optum WA-Adult (G22E02) | Score: GD=[X]/45 [Severity]; CAGE-AID=[N]/3 [Negative/Positive] | Submitted to Optum: [Y/N] on [YYYY-MM-DD]
+```
+If the member refused: `Member refused WA — demographics submitted with MRef \
+bubble marked.` For non-Optum clients, only include the WA line if a screening \
+tool was actually administered.
+
+Any other clinical info that doesn't fit the structured fields above goes here \
+(e.g., notable observations about narrative receptivity, supervisor \
+consultation notes, technical issues during telehealth, etc.).
+
+---
+
+### Compliance Validation (run AFTER drafting all 30 fields)
+
+After populating every field, evaluate the following rules. If ANY rule fails, \
+prepend a `> [COMPLIANCE WARNING]` blockquote at the very TOP of the note \
+(above field #1) listing each violation and what the clinician must fix in \
+TheraNest before submission. Do NOT silently fix or omit fields.
+
+- **Payer is Optum EWS/EAP** → field #4 MUST contain `HJ`; field #6 MUST be \
+populated; field #7 MUST be populated; field #30 MUST contain a Wellness \
+Assessment line with submission status.
+- **Profile says Supervised = Yes** → field #4 MUST contain `U5`.
+- **Field #5 = Video or Phone** → field #4 MUST contain `GT` or `95`.
+- **Payer is Optum EWS AND CPT = 90837** → BLOCK: 90837 is not allowed under \
+Optum EWS. (Intake is always 90791, so this should never trigger for intake \
+notes — but flag it loudly if it somehow does.)
+- **Field #17 (Risk Level) > None** → field #19 MUST be populated with a \
+real safety plan.
+- **Field #20 = Yes** → field #21 MUST be populated.
+
+Example warning block:
+```
+> [COMPLIANCE WARNING]
+> - Payer is Optum EWS/EAP but the HJ modifier is missing from field #4.
+> - Authorization Number (#6) is blank — Optum EWS requires this populated.
+> Fix in TheraNest before submitting this claim.
+```
 """
 
 CLIENT_PROFILE_GUIDANCE = """\
@@ -273,6 +490,39 @@ preferred stories, unique outcomes, insider knowledges (what the client knows \
 about their own life that others may not), values and commitments, skills of \
 living, and relational resources that support the preferred identity
 - **Cultural Considerations**: Cultural identity, relevant cultural factors for treatment
+
+## Billing & Provider Information
+
+> **Important:** This section drives compliant progress note generation. The \
+session map reads these fields to populate CPT modifiers, authorization fields, \
+supervision lines, and Wellness Assessment tracking automatically. If any of \
+these fields are missing or unknown, leave them as `[unknown]` and the session \
+map will use `interview` to backfill before generating the next progress note.
+
+- **Payer**: Insurance plan or payment source. Examples: "Optum EWS/EAP", \
+"Optum Commercial", "Anthem PPO", "Aetna", "Self-pay", "Sliding scale".
+- **Authorization Number**: Required for EAP/EWS clients. Blank or "N/A" \
+otherwise. Example: "AUTH-2026-04829".
+- **Total Authorized Sessions**: Integer count of sessions covered by the \
+current authorization. Example: "5". Use "N/A" for non-authorized payers.
+- **Authorization Period**: Start and end dates of the current authorization. \
+Example: "2026-01-15 to 2026-04-15". Use "N/A" if not applicable.
+- **Default Modality**: Typical session delivery method for this client. \
+Options: `In-Person`, `Video`, `Phone`. This drives CPT code modifier selection \
+(GT or 95 for telehealth).
+- **Rendering Provider**: The clinician seeing the client. Example: \
+"Jonathan Miranda, AMFT" or "Chris Hoff, LMFT". For Associate-level clinicians \
+(AMFT, ACSW, APCC), the supervisor is the rendering provider on the claim.
+- **Supervised**: `Yes` or `No`. Yes for Associate-level clinicians (AMFT, \
+ACSW, APCC) practicing under supervision. When Yes, the U5 modifier MUST appear \
+on every progress note for this client.
+- **Supervisor**: Only populate when Supervised = Yes. Format: \
+"Name, license type, NPI #". Example: "Chris Hoff, LMFT, NPI 1760705818".
+- **Supervision Format**: How supervision is conducted for this case. Options: \
+`live observation`, `recording review`, `individual supervision discussion`.
+- **Service Setting / POS**: Place of service code for billing. Example: \
+"Office (POS 11)" or "Telehealth - Patient Home (POS 10)" or \
+"Telehealth - Other than Patient Home (POS 02)".
 """
 
 WA_SCORING_RULES = """\

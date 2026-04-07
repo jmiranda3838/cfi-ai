@@ -1,6 +1,6 @@
 """Treatment plan review prompt template for the /tp-review command."""
 
-from cfi_ai.prompts.shared import NARRATIVE_THERAPY_ORIENTATION
+from cfi_ai.prompts.shared import CRITICAL_INSTRUCTIONS, NARRATIVE_THERAPY_ORIENTATION
 
 TP_REVIEW_PROMPT = (
     """\
@@ -14,6 +14,35 @@ evolving relationship to the problem. Today's date is {date}.
     + NARRATIVE_THERAPY_ORIENTATION
     + """
 
+## How to Use This Map
+
+This map contains reference information and workflow steps for treatment plan \
+reviews. Loading this map does not mean you must execute the workflow. The Phase \
+blocks, "Save ALL files" instructions, and any "immediately proceed" directives \
+below are the workflow — they apply only when execution is the intent.
+
+- **Execution mode** — Use this when the user clearly asked you to review or \
+update a treatment plan (e.g., "do a tp review for jane-doe," "update this \
+treatment plan," or any slash command that maps to this workflow). Follow the \
+phases below in order, including the Phase 0 client-context loading steps and \
+the file writes.
+- **Reference mode** — Use this when the user is asking a question, comparing \
+options, or thinking through a decision related to a client's treatment plan or \
+diagnosis (e.g., "why does F43.23 fit better than generalized anxiety?"). \
+Answer the user's actual question using the content below as reference. You MAY \
+still load specific client files with `attach_path` or `run_command` if you \
+need them to answer well (e.g., to look up the current diagnosis or a recent \
+progress note). What you MUST NOT do in reference mode: auto-execute Phase 0's \
+bulk-load of every file, run Phase 1's full analysis, or call \
+`write_file`/`apply_patch` unless the user explicitly confirms they want the \
+treatment plan updated.
+
+When in doubt about which mode applies, default to reference mode: answer the \
+question first, then ask whether they'd like to run the workflow.
+
+"""
+    + CRITICAL_INSTRUCTIONS
+    + """
 ## Client
 
 Client ID: `{client_id}`
@@ -56,27 +85,39 @@ treatment plan plus an audit-trail review summary. Work in three phases.
 
 ### Phase 1 — Analyze (text output only, NO tool calls)
 
-Read the progress notes chronologically against the current treatment plan. For each \
-goal and objective, determine:
+Read the progress notes chronologically against the current treatment plan. \
+Notes follow the TheraNest 30-field form — measurable clinical data lives in \
+specific fields, listed below. For each goal and objective, determine:
 
-1. **Measurable progress** — externalizing ratings (client's rating of the problem's \
-influence), frequency and richness of unique outcomes, degree of preferred story \
-development, severity ratings, frequency changes, and behavioral indicators of \
-living from the preferred story documented in notes
-2. **Completed objectives** — target met and sustained across 2+ sessions
-3. **Stalled objectives** — 3+ consecutive notes without measurable progress on the \
-same objective
-4. **Emerging themes** — clinical themes in notes not covered by any current TP objective
-5. **Intervention drift** — interventions used in notes but not listed in the TP, or TP \
-interventions never documented in notes. Note: narrative therapy interventions include \
-externalizing conversations, re-authoring conversations, scaffolding questions, \
-deconstructive listening/questioning, remembering practices, definitional ceremonies, \
-outsider witness practices, and therapeutic documents (letters, certificates, \
-declarations). These are legitimate clinical interventions — do not flag them as \
-drift unless they genuinely differ from the TP
+1. **Measurable progress** — pull from progress note fields:
+   - **#27 Client Progress** — externalizing ratings ("client rates the \
+anxiety's influence at 5/10, down from 8/10"), unique outcome frequency, \
+preferred story development (thin → thick description), behavioral indicators \
+of living from the preferred story
+   - **#26 Client's Response to Intervention** — per-session response data \
+(engagement, insight demonstrated, skill use, breakthrough moments)
+   - **#15 Functional Impairment** — concrete impairment by domain across \
+notes; declining impairment is a strong "Complete" signal, persistent or \
+worsening impairment supports "Stalled" or TP modification
+2. **Completed objectives** — target met and sustained across 2+ sessions \
+(look for consistent improvement in #27 and reduced impairment in #15)
+3. **Stalled objectives** — 3+ consecutive notes (check #13 Goals/Objectives \
+Addressed This Session and #27 Client Progress) without measurable progress \
+on the same objective
+4. **Emerging themes** — clinical themes in #22 Subjective and #23 Session \
+Focus across notes not covered by any current TP objective
+5. **Intervention drift** — compare TP intervention list against #25 \
+Therapeutic Intervention across notes. Note: narrative therapy interventions \
+include externalizing conversations, re-authoring conversations, scaffolding \
+questions, deconstructive listening/questioning, remembering practices, \
+definitional ceremonies, outsider witness practices, and therapeutic documents \
+(letters, certificates, declarations). These are legitimate clinical \
+interventions — do not flag them as drift unless they genuinely differ from \
+the TP
 6. **Wellness Assessment trend** — if wellness assessment files are present, \
-note the GD score trend. Declining GD supports "Complete" status; flat/rising \
-GD may support "Stalled" or TP modification.
+note the GD score trend. Also check #30 Additional Notes for any WA \
+administered during a session. Declining GD supports "Complete" status; \
+flat/rising GD may support "Stalled" or TP modification.
 
 Output a 1-2 sentence findings summary, then immediately proceed to Phase 2.
 

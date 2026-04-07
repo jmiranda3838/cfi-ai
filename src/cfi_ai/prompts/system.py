@@ -10,41 +10,48 @@ if TYPE_CHECKING:
 MAPS_SECTION = """
 ## Available Clinical Maps
 
-Maps are reusable clinical routes. The user does not need to say "map" to invoke one. \
-If the user's request clearly matches one of these maps, call `activate_map` to load the \
-specialized compliance prompts and instructions. Do NOT attempt clinical documentation \
-without activating the appropriate map first — the map prompts contain critical compliance \
-requirements and formatting rules.
+Maps are reusable bundles of clinical reference and workflow steps. Activating a map \
+loads its content into the conversation — it does NOT commit you to executing the \
+workflow. There are two valid reasons to call `activate_map`:
+
+1. **Reference loading** — The user is asking a question, discussing clinical content, \
+or thinking through a decision where the map's domain knowledge would help you answer \
+well. Load the map, then answer the user's actual question using the loaded content as \
+reference. You may still use read-only tools (`run_command`, `attach_path`, \
+`extract_document`) to look up specific client files when they help you answer. Do NOT \
+execute the canned phase sequence and do NOT call `write_file` or `apply_patch`.
+
+2. **Workflow execution** — The user has clearly asked you to produce or update the \
+documents this map describes (e.g., "write the intake," "do a tp review," or any \
+`[MAP: ...]` slash invocation). Load the map AND proceed through its phases.
+
+When in doubt about which mode applies, default to reference loading. Only execute the \
+workflow when the user's intent to produce documents is unambiguous.
 
 - **intake**: New client intake materials (recordings, transcripts, questionnaire PDFs, \
-wellness assessments). Triggers: "new client," "intake," "first session," "initial \
-assessment," or providing intake materials without specifying a map.
-- **session**: Progress note for an ongoing session. Triggers: "session note," "progress \
-note," session audio/transcript for a known client. Requires client_id.
+wellness assessments). Triggers for execution: "new client," "intake," "first session," \
+"initial assessment," or providing intake materials without specifying a map.
+- **session**: Progress note for an ongoing session. Triggers for execution: "session \
+note," "progress note," session audio/transcript for a known client. Requires client_id.
 - **compliance**: Optum audit compliance check; missing records may be surfaced as \
-findings. Triggers: "compliance check," "audit," "check records." Requires client_id.
+findings. Triggers for execution: "compliance check," "audit," "check records." \
+Requires client_id.
 - **tp-review**: Review and update treatment plan; requires an existing treatment plan \
-and progress notes to generate updates. Triggers: "treatment plan review," "update \
-treatment plan," "TP review." Requires client_id.
-- **wellness-assessment**: Score a G22E02 Wellness Assessment. Triggers: "wellness \
-assessment," "G22E02," "GD score," or providing a WA form/scan. Requires client_id.
-
-**Implicit activation confidence:** Only call `activate_map` with `source="implicit"` when \
-you are confident the user is requesting to produce or update clinical documentation. If \
-the user's intent is ambiguous — for example, asking a question about a diagnosis code, \
-discussing treatment plan content, or mentioning clinical topics without clearly requesting \
-a workflow — ask the user first whether they'd like to run a map (e.g., "Would you like me \
-to run a treatment plan review, or are you just asking about the diagnosis code?"). When in \
-doubt, ask — do not activate.
+and progress notes to generate updates. Triggers for execution: "treatment plan review," \
+"update treatment plan," "TP review." Requires client_id.
+- **wellness-assessment**: Score a G22E02 Wellness Assessment. Triggers for execution: \
+"wellness assessment," "G22E02," "GD score," or providing a WA form/scan. \
+Requires client_id.
 
 Call `activate_map` alone — do not combine it with other tool calls in the same response. \
 Use `source="implicit"` when activating a map directly from user intent. Use \
 `source="slash"` when the conversation includes a `[MAP: ...]` marker from an explicit \
 slash invocation. If client_id is needed but unknown, use `interview` first to ask the user.
 
-When you receive a message starting with `[MAP: ...]`, the user invoked a slash map. \
-If the message indicates missing information (client ID, session input, etc.), use \
-`interview` to collect it first, then call `activate_map` with the resolved parameters.
+When you receive a message starting with `[MAP: ...]`, the user invoked a slash map — \
+proceed with workflow execution. If the message indicates missing information (client \
+ID, session input, etc.), use `interview` to collect it first, then call `activate_map` \
+with the resolved parameters.
 """
 
 
@@ -56,9 +63,9 @@ This workspace contains a `clients/` directory for clinical documentation. Files
 ```
 clients/<client-id>/
   intake/<YYYY-MM-DD>-initial-assessment.md   (TheraNest Initial Assessment fields)
-  profile/<YYYY-MM-DD>-profile.md             (internal reference)
+  profile/<YYYY-MM-DD>-profile.md             (internal reference, includes Billing & Provider section)
   treatment-plan/<YYYY-MM-DD>-treatment-plan.md  (TheraNest Treatment Plan fields)
-  sessions/<YYYY-MM-DD>-progress-note.md      (TheraNest standard note, DAP)
+  sessions/<YYYY-MM-DD>-progress-note.md      (TheraNest 30-field progress note)
   sessions/<YYYY-MM-DD>-intake-transcript.md
   wellness-assessments/<YYYY-MM-DD>-wellness-assessment.md  (G22E02 structured scores)
 ```

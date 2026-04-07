@@ -34,7 +34,7 @@ The inner loop handles multi-turn tool-use chains. Messages are `list[types.Cont
 - `run_command` uses `subprocess.run()` with an allowlist (no shell, no pipes, no interpreters). `READONLY_COMMANDS` and `MUTATING_COMMANDS` are defined in `tools/run_command.py`.
 - `attach_path` handles all file ingestion (text, audio, images, PDFs). Binary types are inlined via `Part.from_bytes()`. Accepts absolute paths.
 - `apply_patch` applies sequential search-and-replace edits transactionally.
-- `write_file` only creates new files — rejects overwrites.
+- `write_file` rejects existing files by default — pass `overwrite=true` to replace one entirely. For targeted edits, use `apply_patch` instead.
 
 ### Streaming (`client.py`)
 

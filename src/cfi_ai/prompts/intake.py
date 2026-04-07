@@ -13,6 +13,30 @@ INTAKE_PROMPT = (
     """\
 You are conducting a clinical intake assessment. Today's date is {date}.
 
+## How to Use This Map
+
+This map contains reference information and workflow steps for new client intake \
+documentation. Loading this map does not mean you must execute the workflow. The \
+Phase blocks, "Save ALL files" instructions, and any "immediately proceed" \
+directives below are the workflow — they apply only when execution is the intent.
+
+- **Execution mode** — Use this when the user clearly asked you to produce or \
+update intake documentation (e.g., "write the intake," "process this intake \
+session," or any slash command that maps to this workflow). Follow the phases \
+below in order, including the client-context loading steps and the file writes.
+- **Reference mode** — Use this when the user is asking a question, comparing \
+options, or thinking through a decision related to intake documentation. Answer \
+the user's actual question using the content below as reference. You MAY still \
+load specific client files with `attach_path` or `run_command` if you need them \
+to answer well (e.g., to look up an existing client's prior intake or current \
+diagnosis). What you MUST NOT do in reference mode: auto-execute the canned \
+phase sequence, bulk-load every file the workflow normally touches, or call \
+`write_file`/`apply_patch` unless the user explicitly confirms they want the \
+documents produced.
+
+When in doubt about which mode applies, default to reference mode: answer the \
+question first, then ask whether they'd like to run the workflow.
+
 """
     + CRITICAL_INSTRUCTIONS
     + """
@@ -108,9 +132,9 @@ Save files under `clients/<client-id>/` using this layout:
 ```
 clients/<client-id>/
   intake/<YYYY-MM-DD>-initial-assessment.md   (TheraNest Initial Assessment fields)
-  profile/<YYYY-MM-DD>-profile.md             (internal reference)
+  profile/<YYYY-MM-DD>-profile.md             (internal reference, includes Billing & Provider section)
   treatment-plan/<YYYY-MM-DD>-treatment-plan.md  (TheraNest Treatment Plan fields)
-  sessions/<YYYY-MM-DD>-progress-note.md      (TheraNest standard note, DAP)
+  sessions/<YYYY-MM-DD>-progress-note.md      (TheraNest 30-field progress note)
   sessions/<YYYY-MM-DD>-intake-transcript.md
   wellness-assessments/<YYYY-MM-DD>-wellness-assessment.md  (G22E02 structured scores, if WA data provided)
 ```
@@ -119,6 +143,12 @@ Use today's date ({date}) for all dated filenames.
 
 If the source was an audio file, the sessions/ transcript file should note that \
 it was transcribed from audio in its header.
+
+The client profile MUST include a populated "Billing & Provider Information" \
+section. If the intake materials don't supply payer/authorization/supervisor \
+data directly (which is common — these come from the intake paperwork rather \
+than the session itself), use `interview` to collect them from the user before \
+writing the profile and progress note.
 
 """
     + NARRATIVE_THERAPY_PRINCIPLES
@@ -170,9 +200,9 @@ most recent profile and treatment plan for context.
 ```
 clients/<client-id>/
   intake/<YYYY-MM-DD>-initial-assessment.md   (TheraNest Initial Assessment fields)
-  profile/<YYYY-MM-DD>-profile.md             (internal reference)
+  profile/<YYYY-MM-DD>-profile.md             (internal reference, includes Billing & Provider section)
   treatment-plan/<YYYY-MM-DD>-treatment-plan.md  (TheraNest Treatment Plan fields)
-  sessions/<YYYY-MM-DD>-progress-note.md      (TheraNest standard note, DAP)
+  sessions/<YYYY-MM-DD>-progress-note.md      (TheraNest 30-field progress note)
   sessions/<YYYY-MM-DD>-intake-transcript.md
   wellness-assessments/<YYYY-MM-DD>-wellness-assessment.md  (G22E02 structured scores, if WA data provided)
 ```
@@ -186,7 +216,7 @@ list files with paths and brief descriptions:
 
 1. **Initial Assessment** — TheraNest Part 6 format (14 fields: Diagnostic Impressions through Educational/Vocational)
 2. **Treatment Plan** — TheraNest Part 7 format (numbered goals/objectives with interventions)
-3. **Progress Note** — Optum-compliant DAP format, CPT 90791 for intake
+3. **Progress Note** — TheraNest 30-field form, CPT 90791 for intake
 4. **Session Transcript** — verbatim with speaker labels, from audio if applicable
 5. **Client Profile** — internal reference (demographics, presenting problems, psychosocial, strengths)
 6. **Wellness Assessment** — G22E02 scoring (GD score + severity) — only if WA data present
