@@ -60,6 +60,10 @@ def parse_map_invocation(user_input: str) -> tuple[str, str | None] | None:
     name = parts[0][1:]  # remove leading /
     if not name:
         return None
+    if "/" in name:
+        # Looks like an absolute path (e.g. "/var/folders/..."), not a map.
+        # Forward to the LLM as ordinary input so it can attach_path.
+        return None
     args = parts[1] if len(parts) > 1 else None
     return (name, args)
 
