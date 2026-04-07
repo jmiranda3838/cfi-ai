@@ -14,12 +14,18 @@ from cfi_ai.prompts.session import (
 )
 
 if TYPE_CHECKING:
+    from cfi_ai.sessions import SessionStore
     from cfi_ai.ui import UI
     from cfi_ai.workspace import Workspace
 
 
 @register_map("session", description="Generate an Optum-compliant progress note for a session")
-def handle_session(args: str | None, ui: UI, workspace: "Workspace") -> MapResult:
+def handle_session(
+    args: str | None,
+    ui: UI,
+    workspace: "Workspace",
+    session_store: "SessionStore",
+) -> MapResult:
     # Fast path: first token is a valid client directory AND there's a remainder
     if args and args.strip():
         parts = args.strip().split(maxsplit=1)

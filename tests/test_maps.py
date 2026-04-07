@@ -41,7 +41,7 @@ def test_parse_map_invocation_multi_word_args():
 def test_dispatch_unknown_map():
     ui = MagicMock()
     ws = Workspace("/tmp")
-    result = dispatch_map("nonexistent", None, ui, ws)
+    result = dispatch_map("nonexistent", None, ui, ws, MagicMock())
     assert result.error is not None
     assert "Unknown map" in result.error
 
@@ -49,7 +49,7 @@ def test_dispatch_unknown_map():
 def test_dispatch_help():
     ui = MagicMock()
     ws = Workspace("/tmp")
-    result = dispatch_map("help", None, ui, ws)
+    result = dispatch_map("help", None, ui, ws, MagicMock())
     assert result.handled is True
     assert result.message is None
     assert result.error is None
@@ -59,7 +59,7 @@ def test_dispatch_help():
 def test_dispatch_help_lists_maps():
     ui = MagicMock()
     ws = Workspace("/tmp")
-    dispatch_map("help", None, ui, ws)
+    dispatch_map("help", None, ui, ws, MagicMock())
     rendered = ui.render_markdown.call_args[0][0]
     assert "/help" in rendered
     assert "/intake" in rendered
@@ -68,7 +68,7 @@ def test_dispatch_help_lists_maps():
 def test_dispatch_help_shows_missing_record_contracts():
     ui = MagicMock()
     ws = Workspace("/tmp")
-    dispatch_map("help", None, ui, ws)
+    dispatch_map("help", None, ui, ws, MagicMock())
     rendered = ui.render_markdown.call_args[0][0]
     assert "missing records may be surfaced as findings" in rendered
     assert "requires an existing treatment plan and progress notes to generate updates" in rendered
@@ -140,7 +140,7 @@ def test_compliance_fast_path(tmp_path):
     (tmp_path / "clients" / "jane-doe").mkdir(parents=True)
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
-    result = dispatch_map("compliance", "jane-doe", ui, ws)
+    result = dispatch_map("compliance", "jane-doe", ui, ws, MagicMock())
     assert result.error is None
     assert result.message is not None
     assert "jane-doe" in result.message
@@ -152,7 +152,7 @@ def test_compliance_no_args_map_path(tmp_path):
     """No args -> map path, no error."""
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
-    result = dispatch_map("compliance", None, ui, ws)
+    result = dispatch_map("compliance", None, ui, ws, MagicMock())
     assert result.error is None
     assert "[MAP: compliance]" in result.message
 
@@ -161,7 +161,7 @@ def test_compliance_invalid_client_map_path(tmp_path):
     """Invalid client -> map path, no error."""
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
-    result = dispatch_map("compliance", "nonexistent", ui, ws)
+    result = dispatch_map("compliance", "nonexistent", ui, ws, MagicMock())
     assert result.error is None
     assert "[MAP: compliance]" in result.message
 
@@ -171,7 +171,7 @@ def test_compliance_natural_language_map_path(tmp_path):
     (tmp_path / "clients" / "jane-doe").mkdir(parents=True)
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
-    result = dispatch_map("compliance", "check jane's records", ui, ws)
+    result = dispatch_map("compliance", "check jane's records", ui, ws, MagicMock())
     assert result.error is None
     assert "[MAP: compliance]" in result.message
     assert "check jane's records" in result.message
@@ -185,7 +185,7 @@ def test_tp_review_fast_path(tmp_path):
     (tmp_path / "clients" / "bob").mkdir(parents=True)
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
-    result = dispatch_map("tp-review", "bob", ui, ws)
+    result = dispatch_map("tp-review", "bob", ui, ws, MagicMock())
     assert result.error is None
     assert result.map_mode is True
     assert "[MAP:" not in result.message
@@ -195,7 +195,7 @@ def test_tp_review_fast_path(tmp_path):
 def test_tp_review_no_args_map_path(tmp_path):
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
-    result = dispatch_map("tp-review", None, ui, ws)
+    result = dispatch_map("tp-review", None, ui, ws, MagicMock())
     assert result.error is None
     assert "[MAP: tp-review]" in result.message
 
@@ -207,7 +207,7 @@ def test_session_fast_path(tmp_path):
     (tmp_path / "clients" / "alice").mkdir(parents=True)
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
-    result = dispatch_map("session", "alice recording.m4a", ui, ws)
+    result = dispatch_map("session", "alice recording.m4a", ui, ws, MagicMock())
     assert result.error is None
     assert result.map_mode is True
     assert result.plan_prompt is not None
@@ -221,7 +221,7 @@ def test_session_fast_path_has_tool_discovery(tmp_path):
     (tmp_path / "clients" / "alice").mkdir(parents=True)
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
-    result = dispatch_map("session", "alice recording.m4a", ui, ws)
+    result = dispatch_map("session", "alice recording.m4a", ui, ws, MagicMock())
     assert "run_command ls" in result.message
 
 
@@ -231,7 +231,7 @@ def test_session_fast_path_matches_activate_map_prompt(tmp_path):
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
 
-    command_result = dispatch_map("session", "alice recording.m4a", ui, ws)
+    command_result = dispatch_map("session", "alice recording.m4a", ui, ws, MagicMock())
     tool_result = ActivateMapTool().execute(
         ws, map="session", source="slash", client_id="alice", file_reference="recording.m4a"
     )
@@ -242,7 +242,7 @@ def test_session_fast_path_matches_activate_map_prompt(tmp_path):
 def test_session_no_args_map_path(tmp_path):
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
-    result = dispatch_map("session", None, ui, ws)
+    result = dispatch_map("session", None, ui, ws, MagicMock())
     assert result.error is None
     assert "[MAP: session]" in result.message
 
@@ -252,7 +252,7 @@ def test_session_client_only_map_path(tmp_path):
     (tmp_path / "clients" / "alice").mkdir(parents=True)
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
-    result = dispatch_map("session", "alice", ui, ws)
+    result = dispatch_map("session", "alice", ui, ws, MagicMock())
     assert result.error is None
     assert "[MAP: session]" in result.message
 
@@ -264,7 +264,7 @@ def test_wa_fast_path(tmp_path):
     (tmp_path / "clients" / "carol").mkdir(parents=True)
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
-    result = dispatch_map("wellness-assessment", "carol wa-scan.pdf", ui, ws)
+    result = dispatch_map("wellness-assessment", "carol wa-scan.pdf", ui, ws, MagicMock())
     assert result.error is None
     assert result.map_mode is True
     assert "wa-scan.pdf" in result.message
@@ -274,6 +274,6 @@ def test_wa_fast_path(tmp_path):
 def test_wa_no_args_map_path(tmp_path):
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
-    result = dispatch_map("wellness-assessment", None, ui, ws)
+    result = dispatch_map("wellness-assessment", None, ui, ws, MagicMock())
     assert result.error is None
     assert "[MAP: wellness-assessment]" in result.message

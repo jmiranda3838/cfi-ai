@@ -9,6 +9,7 @@ from cfi_ai.maps import MapResult, build_map_message, register_map
 from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
 
 if TYPE_CHECKING:
+    from cfi_ai.sessions import SessionStore
     from cfi_ai.ui import UI
     from cfi_ai.workspace import Workspace
 
@@ -17,7 +18,12 @@ if TYPE_CHECKING:
     "tp-review",
     description="Review and update a client's treatment plan based on progress notes; requires an existing treatment plan and progress notes to generate updates",
 )
-def handle_tp_review(args: str | None, ui: UI, workspace: "Workspace") -> MapResult:
+def handle_tp_review(
+    args: str | None,
+    ui: UI,
+    workspace: "Workspace",
+    session_store: "SessionStore",
+) -> MapResult:
     if args and args.strip():
         tokens = args.strip().split()
         if len(tokens) == 1:
