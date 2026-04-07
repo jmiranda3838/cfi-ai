@@ -169,6 +169,29 @@ def _interview_key_bindings() -> KeyBindings:
     return kb
 
 
+def _approval_key_bindings() -> KeyBindings:
+    """Key bindings for the approve? [Y/n] prompt.
+
+    Escape → raise EOFError so caller returns False (reject).
+    Critically: Escape MUST NOT exit with result="" the way _chat_key_bindings
+    does, because prompt_approval() treats "" as YES (capital-Y default), so
+    a result="" exit would silently approve a mutation. Bare Enter on an empty
+    line is still a valid approval — only Escape needs the special handling.
+    Ctrl+C raises KeyboardInterrupt by default.
+    """
+    kb = KeyBindings()
+
+    @kb.add("escape")
+    def _escape(event):
+        event.app.exit(exception=EOFError)
+
+    @kb.add("c-d")
+    def _ctrl_d(event):
+        pass  # disabled
+
+    return kb
+
+
 class SlashMapCompleter(Completer):
     """Autocomplete for slash maps."""
 
@@ -417,6 +440,7 @@ class UI:
                             prompt_text = f"  {qid}> "
                         raw = self.session.prompt(
                             [("class:prompt", prompt_text)],
+                            multiline=False,
                             key_bindings=_interview_key_bindings(),
                         )
                 except EOFError:
@@ -446,7 +470,8 @@ class UI:
             response = self.session.prompt(
                 [("class:approval", "approve? [Y/n] ")],
                 bottom_toolbar=HTML(f"cfi-ai | {self.status.display}"),
-                key_bindings=_chat_key_bindings(),
+                multiline=False,
+                key_bindings=_approval_key_bindings(),
             )
             return response.strip().lower() in ("", "y", "yes")
         except KeyboardInterrupt:

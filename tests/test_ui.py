@@ -113,3 +113,65 @@ def test_approval_options_covers_all_enum_values():
     from cfi_ai.ui import _APPROVAL_OPTIONS, PlanApproval
     option_values = {opt[0] for opt in _APPROVAL_OPTIONS}
     assert option_values == set(PlanApproval)
+
+
+class TestPromptApproval:
+    """Test prompt_approval() — the y/n confirmation for mutating tool calls."""
+
+    def test_passes_multiline_false_even_when_session_polluted(self, tmp_path):
+        """Regression: prompt_toolkit's PromptSession.prompt() permanently
+        mutates session.multiline. A prior multiline interview question can
+        leave session.multiline=True; prompt_approval must explicitly pass
+        multiline=False so Enter submits instead of inserting a newline."""
+        ui, session = _make_ui(tmp_path)
+        # Simulate a prior multiline call having flipped session state
+        session.multiline = True
+        session.prompt.return_value = "y"
+
+        assert ui.prompt_approval() is True
+
+        _, kwargs = session.prompt.call_args
+        assert kwargs.get("multiline") is False
+
+    def test_yes_inputs(self, tmp_path):
+        ui, session = _make_ui(tmp_path)
+        for ans in ("", "y", "Y", "yes", "YES"):
+            session.prompt.return_value = ans
+            assert ui.prompt_approval() is True
+
+    def test_no_inputs(self, tmp_path):
+        ui, session = _make_ui(tmp_path)
+        for ans in ("n", "no", "nope", "anything else"):
+            session.prompt.return_value = ans
+            assert ui.prompt_approval() is False
+
+    def test_uses_approval_key_bindings_not_chat(self, tmp_path):
+        """Regression: prompt_approval() must use _approval_key_bindings(),
+        not _chat_key_bindings(). The chat bindings exit Escape with result='',
+        and the ('', 'y', 'yes') check would treat that as YES — silently
+        approving a mutation. Patch the helper to a sentinel and assert it's
+        the value passed to session.prompt."""
+        from unittest.mock import patch as _patch
+        ui, session = _make_ui(tmp_path)
+        session.prompt.return_value = "y"
+        sentinel = object()
+        with _patch("cfi_ai.ui._approval_key_bindings", return_value=sentinel) as helper:
+            ui.prompt_approval()
+        helper.assert_called_once()
+        _, kwargs = session.prompt.call_args
+        assert kwargs.get("key_bindings") is sentinel
+
+    def test_escape_does_not_approve(self, tmp_path):
+        """Companion to the binding-wiring test: when the Escape handler
+        raises EOFError (which is what _approval_key_bindings does), the
+        function returns False, NOT True via the ('', ...) check."""
+        ui, session = _make_ui(tmp_path)
+        session.prompt.side_effect = EOFError
+        assert ui.prompt_approval() is False
+
+    def test_keyboard_interrupt_propagates(self, tmp_path):
+        import pytest
+        ui, session = _make_ui(tmp_path)
+        session.prompt.side_effect = KeyboardInterrupt
+        with pytest.raises(KeyboardInterrupt):
+            ui.prompt_approval()
