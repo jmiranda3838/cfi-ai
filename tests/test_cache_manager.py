@@ -63,6 +63,32 @@ def test_invalidate_removes_key():
     assert mgr.get_cache_name("normal") is None
 
 
+def test_invalidate_all_clears_all_state():
+    genai = _make_genai_client()
+    cache1 = MM()
+    cache1.name = "cache-1"
+    cache1.usage_metadata.total_token_count = 100
+    cache2 = MM()
+    cache2.name = "cache-2"
+    cache2.usage_metadata.total_token_count = 200
+    genai.caches.create.side_effect = [cache1, cache2]
+
+    mgr = CacheManager(genai, model="m")
+    with _PATCH_CONFIG:
+        mgr.create_cache("normal", system="s", tools=MM())
+        mgr.create_cache("plan", system="s2", tools=MM())
+
+    mgr.invalidate_all()
+
+    assert mgr.get_cache_name("normal") is None
+    assert mgr.get_cache_name("plan") is None
+    # Crucial: does NOT call server-side delete (server already expired them)
+    genai.caches.delete.assert_not_called()
+    # And shutdown's delete_all() must be a no-op afterward
+    mgr.delete_all()
+    genai.caches.delete.assert_not_called()
+
+
 def test_delete_all_calls_delete():
     genai = _make_genai_client()
     cache1 = MM()

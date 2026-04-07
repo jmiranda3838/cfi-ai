@@ -9,7 +9,7 @@ from dataclasses import dataclass
 from google.auth import exceptions as auth_exceptions
 from google.genai import types
 
-from cfi_ai.client import CacheManager, Client
+from cfi_ai.client import CacheManager, Client, is_cache_expired_error
 from cfi_ai.config import Config
 from cfi_ai.maps import dispatch_map, parse_map_invocation
 from cfi_ai.planner import ExecutionPlan, format_plan
@@ -226,12 +226,17 @@ def _run_plan_mode(
     readonly_tools: types.Tool,
     messages: list[types.Content],
     allow_map_activation: bool = True,
+    *,
+    cache_manager: CacheManager | None = None,
+    system_prompt: str | None = None,
+    api_tools: types.Tool | None = None,
 ) -> PlanModeResult:
     """Run the plan-mode inner loop. Returns a PlanModeResult."""
     _log.debug("plan_mode_enter messages=%d", len(messages))
     plan_text = None
     saw_tool_calls = False
     preamble_retries = 0
+    cache_retry_attempted = False
 
     for _iteration in range(MAX_TOOL_ITERATIONS):
         _log.debug("plan_mode iteration=%d messages=%d", _iteration, len(messages))
@@ -245,6 +250,13 @@ def _run_plan_mode(
                 mode="plan",
             )
         except Exception as e:
+            if not cache_retry_attempted and _try_recover_cache_expiry(
+                e, ui, cache_manager, system_prompt, api_tools,
+                plan_system_prompt, readonly_tools,
+                location="plan_call",
+            ):
+                cache_retry_attempted = True
+                continue
             ui.print_error(f"API error: {e}")
             return PlanModeResult()
 
@@ -256,6 +268,13 @@ def _run_plan_mode(
             return PlanModeResult()
         except Exception as e:
             _log.debug("[req:%s] stream_aborted reason=api_error", stream_result.request_id)
+            if not cache_retry_attempted and _try_recover_cache_expiry(
+                e, ui, cache_manager, system_prompt, api_tools,
+                plan_system_prompt, readonly_tools,
+                location="plan_stream",
+            ):
+                cache_retry_attempted = True
+                continue
             ui.print_error(f"API error: {e}")
             return PlanModeResult()
         finally:
@@ -266,6 +285,7 @@ def _run_plan_mode(
 
         messages.append(types.Content(role="model", parts=stream_result.parts))
         _log.debug("plan_mode model_turn_appended parts=%d", len(stream_result.parts))
+        cache_retry_attempted = False
 
         function_calls = stream_result.function_calls
 
@@ -455,6 +475,55 @@ def _create_session_caches(
             _log.warning("cache_create_failed key=%s error=%s", key, e)
 
 
+def _refresh_caches(
+    cache_manager: CacheManager,
+    system_prompt: str,
+    api_tools: types.Tool,
+    plan_system_prompt: str,
+    readonly_api_tools: types.Tool,
+) -> None:
+    """Rebuild both session caches after a server-side expiry.
+
+    Best-effort: _create_session_caches swallows individual failures, so a
+    partial failure leaves the session running uncached for the missing key
+    until the next refresh trigger.
+    """
+    cache_manager.invalidate_all()
+    _create_session_caches(
+        cache_manager, system_prompt, api_tools,
+        plan_system_prompt, readonly_api_tools,
+    )
+
+
+def _try_recover_cache_expiry(
+    exc: BaseException,
+    ui: UI,
+    cache_manager: CacheManager | None,
+    system_prompt: str | None,
+    api_tools: types.Tool | None,
+    plan_system_prompt: str,
+    readonly_api_tools: types.Tool,
+    *,
+    location: str,
+) -> bool:
+    """Detect a Vertex cache-expired error and refresh both caches in place.
+
+    Returns True if the caller should retry (caches were refreshed), False
+    otherwise (the exception is unrelated or not enough state to recover).
+    """
+    if not is_cache_expired_error(exc):
+        return False
+    if cache_manager is None or system_prompt is None or api_tools is None:
+        return False
+    ui.print_info("Session cache expired, refreshing...")
+    _log.info("cache_expired_detected location=%s refreshing and retrying", location)
+    _refresh_caches(
+        cache_manager, system_prompt, api_tools,
+        plan_system_prompt, readonly_api_tools,
+    )
+    return True
+
+
 def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: str, config: Config) -> None:
     messages: list[types.Content] = []
     api_tools = tools.get_api_tools()
@@ -552,6 +621,9 @@ def _run_main_loop(
             plan_result = _run_plan_mode(
                 client, ui, workspace, plan_system_prompt,
                 readonly_api_tools, messages,
+                cache_manager=cache_manager,
+                system_prompt=system_prompt,
+                api_tools=api_tools,
             )
             elapsed = time.monotonic() - t0
 
@@ -571,6 +643,9 @@ def _run_main_loop(
                         client, ui, workspace, plan_system_prompt,
                         readonly_api_tools, messages,
                         allow_map_activation=False,
+                        cache_manager=cache_manager,
+                        system_prompt=system_prompt,
+                        api_tools=api_tools,
                     )
                     elapsed += time.monotonic() - t0_wf
 
@@ -688,6 +763,7 @@ def _run_main_loop(
         saw_tool_calls = False
         preamble_retries = 0
         reauth_attempted = False
+        cache_retry_attempted = False
         _log.debug("inner_loop_start map_mode=%s messages=%d", map_mode, len(messages))
         for _iteration in range(MAX_TOOL_ITERATIONS):
             _log.debug("inner_loop iteration=%d messages=%d", _iteration, len(messages))
@@ -709,6 +785,13 @@ def _run_main_loop(
                             plan_system_prompt, readonly_api_tools,
                         )
                         continue
+                if not cache_retry_attempted and _try_recover_cache_expiry(
+                    e, ui, cache_manager, system_prompt, api_tools,
+                    plan_system_prompt, readonly_api_tools,
+                    location="call",
+                ):
+                    cache_retry_attempted = True
+                    continue
                 ui.print_error(f"API error: {e}")
                 # Remove the last user message so they can retry
                 messages.pop()
@@ -731,10 +814,24 @@ def _run_main_loop(
                             plan_system_prompt, readonly_api_tools,
                         )
                         continue
+                if not cache_retry_attempted and _try_recover_cache_expiry(
+                    e, ui, cache_manager, system_prompt, api_tools,
+                    plan_system_prompt, readonly_api_tools,
+                    location="stream",
+                ):
+                    cache_retry_attempted = True
+                    continue
                 ui.print_error(f"API error: {e}")
                 break
             finally:
                 stream_result.log_completion()
+
+            # Successful round-trip: release the cache-recovery gate so a later
+            # expiry within this same turn can also be recovered. Placed before
+            # the has_parts check because the empty-turn continuation path
+            # (_should_retry_empty_turn) iterates without going through
+            # `if has_parts:`, and we still want the gate released for it.
+            cache_retry_attempted = False
 
             has_parts = bool(stream_result.parts)
             if has_parts:

@@ -6,11 +6,37 @@ import uuid
 from typing import Generator
 
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 
 from cfi_ai.config import Config
 
 _log = logging.getLogger(__name__)
+
+
+def is_cache_expired_error(exc: BaseException) -> bool:
+    """Check if an exception is caused by an expired Vertex AI context cache.
+
+    Vertex returns this as a 400 INVALID_ARGUMENT with the message
+    'Cache content {N} is expired.' We walk the cause/context chain to
+    catch wrapped exceptions raised through the lazy stream generator.
+    """
+    current: BaseException | None = exc
+    while current is not None:
+        if isinstance(current, genai_errors.APIError):
+            status = getattr(current, "status", None) or ""
+            message = getattr(current, "message", None) or ""
+            if (
+                status == "INVALID_ARGUMENT"
+                and "Cache content" in message
+                and "is expired" in message
+            ):
+                return True
+        msg = str(current)
+        if "Cache content" in msg and "is expired" in msg:
+            return True
+        current = current.__cause__ or current.__context__
+    return False
 
 
 class CacheManager:
@@ -46,6 +72,16 @@ class CacheManager:
     def invalidate(self, key: str) -> None:
         """Remove a single cache key (e.g. after a cached call fails)."""
         self._caches.pop(key, None)
+
+    def invalidate_all(self) -> None:
+        """Forget all local cache references without deleting server-side.
+
+        Use when caches are known to be expired or gone server-side — avoids
+        wasteful delete() round-trips that would 404. Also prunes
+        _all_cache_names so shutdown's delete_all() does not retry them.
+        """
+        self._caches.clear()
+        self._all_cache_names.clear()
 
     def reset(self, new_genai_client: genai.Client) -> None:
         """Delete all caches, update the client ref, and clear state."""
@@ -167,6 +203,14 @@ class Client:
                 )
                 return StreamResult(stream, request_id=request_id)
             except Exception as e:
+                if is_cache_expired_error(e):
+                    # Let the agent loop refresh caches and retry the request.
+                    self._cache_manager.invalidate(cache_key)
+                    _log.info(
+                        "[req:%s] cache_expired key=%s, propagating for refresh",
+                        request_id, cache_key,
+                    )
+                    raise
                 _log.warning(
                     "[req:%s] cached_call_failed key=%s, falling back: %s",
                     request_id, cache_key, e,
