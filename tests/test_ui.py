@@ -175,3 +175,69 @@ class TestPromptApproval:
         session.prompt.side_effect = KeyboardInterrupt
         with pytest.raises(KeyboardInterrupt):
             ui.prompt_approval()
+
+
+class TestGetInput:
+    """Test get_input() — the main chat prompt."""
+
+    def test_uses_multiline_true(self, tmp_path):
+        """Regression: get_input() must pass multiline=True so pasted multi-line
+        content remains visible. Before this fix, multiline=False caused the
+        single-line renderer to hide everything except the line under the cursor
+        after a paste, making previously-typed text disappear from view (even
+        though it was still in the buffer and got submitted to the model)."""
+        ui, session = _make_ui(tmp_path)
+        session.prompt.return_value = "hello"
+
+        result = ui.get_input()
+        assert result is not None
+        assert result.text == "hello"
+
+        _, kwargs = session.prompt.call_args
+        assert kwargs.get("multiline") is True, \
+            f"get_input() must pass multiline=True (got {kwargs.get('multiline')!r})"
+
+    def test_chat_key_bindings_enter_submits(self):
+        """Chat prompt must bind Enter to validate_and_handle (submit), not
+        the multiline default of inserting a newline. Otherwise users would
+        have to press Alt+Enter to submit single-line messages — a UX regression."""
+        from unittest.mock import MagicMock
+        from prompt_toolkit.keys import Keys
+        from cfi_ai.ui import _chat_key_bindings
+
+        kb = _chat_key_bindings()
+        # prompt-toolkit normalizes "enter" to Keys.ControlM internally, so look
+        # up by enum value rather than by string.
+        bindings = kb.get_bindings_for_keys((Keys.ControlM,))
+        assert len(bindings) >= 1, "Enter must be bound on the chat key bindings"
+
+        event = MagicMock()
+        bindings[0].handler(event)
+        event.current_buffer.validate_and_handle.assert_called_once()
+
+    def test_chat_key_bindings_alt_enter_inserts_newline(self):
+        """Chat prompt must bind Alt+Enter (Escape, Enter) to insert a literal
+        newline so users can compose intentional multi-line messages."""
+        from unittest.mock import MagicMock
+        from prompt_toolkit.keys import Keys
+        from cfi_ai.ui import _chat_key_bindings
+
+        kb = _chat_key_bindings()
+        # Alt+Enter is the Escape-prefix sequence (Keys.Escape, Keys.ControlM).
+        bindings = kb.get_bindings_for_keys((Keys.Escape, Keys.ControlM))
+        assert len(bindings) >= 1, "Alt+Enter must be bound on the chat key bindings"
+
+        event = MagicMock()
+        bindings[0].handler(event)
+        event.current_buffer.insert_text.assert_called_once_with("\n")
+
+    def test_chat_key_bindings_preserves_existing(self):
+        """Existing bindings (Escape cancel, Ctrl+D disabled, Shift+Tab plan
+        toggle) must still resolve to handlers after adding the new ones."""
+        from prompt_toolkit.keys import Keys
+        from cfi_ai.ui import _chat_key_bindings
+
+        kb = _chat_key_bindings()
+        assert kb.get_bindings_for_keys((Keys.Escape,)), "Escape must still be bound"
+        assert kb.get_bindings_for_keys((Keys.ControlD,)), "Ctrl+D must still be bound"
+        assert kb.get_bindings_for_keys((Keys.BackTab,)), "Shift+Tab must still be bound"

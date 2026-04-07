@@ -102,13 +102,28 @@ class StatusManager:
 
 
 def _chat_key_bindings(on_toggle_plan=None) -> KeyBindings:
-    """Key bindings for the main chat prompt.
+    """Key bindings for the main multi-line chat prompt.
 
-    Escape → cancel (return ""), Ctrl+D → disabled (no-op),
-    Shift+Tab → toggle plan mode (if callback provided).
+    Enter        → submit the buffer
+    Alt+Enter    → insert a literal newline (compose multi-line messages)
+    Escape       → cancel (return "")
+    Ctrl+D       → disabled (no-op)
+    Shift+Tab    → toggle plan mode (if callback provided)
     Ctrl+C raises KeyboardInterrupt by default; get_input() catches it to exit.
+
+    The prompt runs with multiline=True so pasted multi-line content stays
+    visible (single-line mode would hide everything except the line under the
+    cursor). Enter is bound explicitly so submit-on-Enter UX is preserved.
     """
     kb = KeyBindings()
+
+    @kb.add("enter")
+    def _enter(event):
+        event.current_buffer.validate_and_handle()
+
+    @kb.add("escape", "enter")  # Alt+Enter / Option+Enter
+    def _alt_enter(event):
+        event.current_buffer.insert_text("\n")
 
     @kb.add("escape")
     def _escape(event):
@@ -280,7 +295,7 @@ class UI:
             text = self.session.prompt(
                 _prompt_message,
                 bottom_toolbar=_toolbar,
-                multiline=False,
+                multiline=True,
                 key_bindings=_chat_key_bindings(on_toggle_plan=self.toggle_plan_mode),
             )
             return UserInput(text=text, plan_mode=self._plan_mode)
