@@ -33,23 +33,32 @@ def _build_registry() -> None:
 _build_registry()
 
 
-def get_api_tools() -> types.Tool:
-    """Return tool definitions formatted for the Google Gen AI API."""
+def get_api_tools(enable_grounding: bool = True) -> list[types.Tool]:
+    """Return tool definitions formatted for the Google Gen AI API. When
+    enable_grounding is True (default), append a Google Search grounding tool
+    so the model can issue web searches alongside function calls."""
     declarations = [cls().definition().to_function_declaration() for cls in _REGISTRY.values()]
-    return types.Tool(function_declarations=declarations)
+    result: list[types.Tool] = [types.Tool(function_declarations=declarations)]
+    if enable_grounding:
+        result.append(types.Tool(google_search=types.GoogleSearch()))
+    return result
 
 
 _READONLY_TOOL_NAMES = {"run_command", "attach_path", "extract_document", "interview", "activate_map", "end_turn"}
 
 
-def get_readonly_api_tools() -> types.Tool:
-    """Return only read-only tool declarations (for plan mode)."""
+def get_readonly_api_tools(enable_grounding: bool = True) -> list[types.Tool]:
+    """Return only read-only tool declarations (for plan mode). When
+    enable_grounding is True (default), append a Google Search grounding tool."""
     declarations = [
         cls().definition().to_function_declaration()
         for name, cls in _REGISTRY.items()
         if name in _READONLY_TOOL_NAMES
     ]
-    return types.Tool(function_declarations=declarations)
+    result: list[types.Tool] = [types.Tool(function_declarations=declarations)]
+    if enable_grounding:
+        result.append(types.Tool(google_search=types.GoogleSearch()))
+    return result
 
 
 def execute(name: str, workspace, client=None, **kwargs) -> str | tuple[str, list]:

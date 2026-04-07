@@ -19,7 +19,7 @@ def test_map_mode_raises_max_tokens():
         mock_genai.Client.return_value.models.generate_content_stream.return_value = mock_stream
 
         client.stream_response(
-            messages=[], system="test", tools=MM(), mode="map"
+            messages=[], system="test", tools=[MM()], mode="map"
         )
 
         call_kwargs = mock_genai.Client.return_value.models.generate_content_stream.call_args
@@ -45,7 +45,7 @@ def test_normal_mode_keeps_configured_tokens():
         mock_genai.Client.return_value.models.generate_content_stream.return_value = mock_stream
 
         client.stream_response(
-            messages=[], system="test", tools=MM(), mode="normal"
+            messages=[], system="test", tools=[MM()], mode="normal"
         )
 
         call_kwargs = mock_genai.Client.return_value.models.generate_content_stream.call_args
@@ -76,7 +76,7 @@ def test_stream_response_uses_cached_content():
         client.set_cache_manager(cache_mgr)
 
         client.stream_response(
-            messages=[], system="test-system", tools=MM(), mode="normal"
+            messages=[], system="test-system", tools=[MM()], mode="normal"
         )
 
         call_kwargs = mock_genai.Client.return_value.models.generate_content_stream.call_args
@@ -103,7 +103,7 @@ def test_stream_response_fallback_on_no_cache():
         mock_stream = MM()
         mock_genai.Client.return_value.models.generate_content_stream.return_value = mock_stream
 
-        tools_arg = MM()
+        tools_arg = [MM(), MM()]
         client.stream_response(
             messages=[], system="test-system", tools=tools_arg, mode="normal"
         )
@@ -111,7 +111,7 @@ def test_stream_response_fallback_on_no_cache():
         call_kwargs = mock_genai.Client.return_value.models.generate_content_stream.call_args
         config_arg = call_kwargs.kwargs.get("config") or call_kwargs[1].get("config")
         assert config_arg.system_instruction == "test-system"
-        assert config_arg.tools == [tools_arg]
+        assert config_arg.tools == tools_arg
         assert config_arg.cached_content is None
 
 
@@ -142,7 +142,7 @@ def test_stream_response_fallback_on_generic_cached_call_error():
         client.set_cache_manager(cache_mgr)
 
         result = client.stream_response(
-            messages=[], system="test-system", tools=MM(), mode="normal"
+            messages=[], system="test-system", tools=[MM()], mode="normal"
         )
 
         # Should have called generate_content_stream twice
@@ -224,7 +224,7 @@ def test_plan_mode_uses_plan_cache_key():
         client.set_cache_manager(cache_mgr)
 
         client.stream_response(
-            messages=[], system="test-system", tools=MM(), mode="plan"
+            messages=[], system="test-system", tools=[MM()], mode="plan"
         )
 
         cache_mgr.get_cache_name.assert_called_with("plan")
@@ -239,12 +239,14 @@ def test_stream_result_captures_usage_metadata():
     chunk1.candidates = [MM()]
     chunk1.candidates[0].content.parts = [MM(text="hello", function_call=None)]
     chunk1.candidates[0].finish_reason = None
+    chunk1.candidates[0].grounding_metadata = None
     chunk1.usage_metadata = None
 
     chunk2 = MM()
     chunk2.candidates = [MM()]
     chunk2.candidates[0].content.parts = [MM(text=" world", function_call=None)]
     chunk2.candidates[0].finish_reason = "STOP"
+    chunk2.candidates[0].grounding_metadata = None
     usage = MM()
     usage.prompt_token_count = 100
     usage.cached_content_token_count = 50

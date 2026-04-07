@@ -3,13 +3,16 @@ from __future__ import annotations
 import logging
 import os
 import subprocess
+import tempfile
 import time
+import webbrowser
 from dataclasses import dataclass
+from pathlib import Path
 
 from google.auth import exceptions as auth_exceptions
 from google.genai import types
 
-from cfi_ai.client import CacheManager, Client, is_cache_expired_error
+from cfi_ai.client import CacheManager, Client, StreamResult, is_cache_expired_error
 from cfi_ai.config import Config
 from cfi_ai.maps import dispatch_map, parse_map_invocation
 from cfi_ai.planner import ExecutionPlan, format_plan
@@ -45,6 +48,91 @@ _MAP_DISPLAY_NAMES = {
 
 def _display_map_name(map_name: str) -> str:
     return _MAP_DISPLAY_NAMES.get(map_name, map_name.replace("-", " ").title())
+
+
+_SEARCH_SUGGESTIONS_PATH = Path(tempfile.gettempdir()) / "cfi-ai-search-suggestions.html"
+
+
+def _write_search_suggestions(gm: types.GroundingMetadata, *, open_browser: bool) -> str | None:
+    """Write the Vertex AI search_entry_point HTML to a stable temp path. When
+    open_browser is True, also open it in the user's browser. Returns the file URI
+    if the HTML was written, or None if there was nothing to render.
+
+    The HTML is always persisted (not just when open_browser is True) so the citations
+    block can surface a clickable file:// URI — this satisfies the "rendered and
+    accessible" reading of Vertex AI grounding terms without auto-popping a tab.
+    """
+    sep = getattr(gm, "search_entry_point", None)
+    rendered = getattr(sep, "rendered_content", None) if sep else None
+    if not rendered:
+        return None
+    try:
+        _SEARCH_SUGGESTIONS_PATH.write_text(rendered, encoding="utf-8")
+        uri = _SEARCH_SUGGESTIONS_PATH.as_uri()
+        if open_browser:
+            webbrowser.open(uri)
+        return uri
+    except Exception as e:
+        _log.debug("search_suggestions_write_failed: %s", type(e).__name__)
+        return None
+
+
+def _render_grounding_sources(
+    ui: UI, stream_result: StreamResult, *, open_browser: bool
+) -> None:
+    """Display Google Search grounding citations if present on the stream result.
+
+    Citation labels are derived from grounding_supports[*].grounding_chunk_indices
+    so they line up with Google's recommended [i+1] sparse numbering convention.
+
+    The web search queries the model issued are surfaced above the sources block
+    so the user can audit what the model actually looked up — important for
+    accountability in clinical workflows.
+
+    Always writes the Vertex search-suggestions HTML to a stable temp path and
+    surfaces a clickable file:// URI in the citations block. When open_browser is
+    True, also opens the HTML in the user's browser (per Vertex AI grounding terms).
+    """
+    gm = stream_result.grounding_metadata
+    if not gm:
+        return
+
+    queries = list(gm.web_search_queries or [])
+
+    cited: set[int] = set()
+    chunks = gm.grounding_chunks or []
+    for support in (gm.grounding_supports or []):
+        for idx in (support.grounding_chunk_indices or []):
+            if 0 <= idx < len(chunks):
+                cited.add(idx)
+    if not cited and chunks:
+        cited = set(range(len(chunks)))
+
+    sources: list[str] = []
+    for idx in sorted(cited):
+        chunk = chunks[idx]
+        if chunk.web and chunk.web.uri:
+            title = chunk.web.title or chunk.web.uri
+            sources.append(f"  [{idx + 1}] {title} — {chunk.web.uri}")
+
+    suggestions_uri = _write_search_suggestions(gm, open_browser=open_browser)
+
+    output_lines: list[str] = []
+    if queries:
+        output_lines.append("Web searches:")
+        output_lines.extend(f"  - {q}" for q in queries)
+    if sources:
+        if output_lines:
+            output_lines.append("")
+        output_lines.append("Sources:")
+        output_lines.extend(sources)
+    if suggestions_uri:
+        if output_lines:
+            output_lines.append("")
+        output_lines.append(f"Suggestions UI: {suggestions_uri}")
+
+    if output_lines:
+        ui.print_info("\n".join(output_lines))
 
 
 def _should_retry_empty_turn(
@@ -154,6 +242,40 @@ def _is_auth_error(exc: Exception) -> bool:
     return False
 
 
+def _is_grounding_invalid_argument(exc: Exception) -> bool:
+    """Detect Vertex INVALID_ARGUMENT failures caused by combining function calling
+    with Google Search grounding on a model that doesn't support both at once.
+
+    Older Gemini models reject the request with INVALID_ARGUMENT and a message that
+    references google_search / GoogleSearch / grounding. We match on both signals so
+    unrelated INVALID_ARGUMENT failures (e.g. malformed function declarations) don't
+    get this misleading explanation.
+    """
+    msg = str(exc)
+    if "INVALID_ARGUMENT" not in msg and "400" not in msg:
+        return False
+    return any(
+        token in msg
+        for token in ("google_search", "GoogleSearch", "google search", "grounding")
+    )
+
+
+def _report_api_error(ui: UI, exc: Exception, config: Config) -> None:
+    """Print a Rich error for an API failure. Substitutes a targeted message when
+    the failure looks like a known grounding+function-calling incompatibility."""
+    if _is_grounding_invalid_argument(exc):
+        ui.print_error(
+            f"Model '{config.model}' rejected the request because it does not "
+            "support combining function calling with Google Search grounding. "
+            "Switch to gemini-3-flash-preview (or another grounding-capable "
+            "model) via 'cfi-ai --setup' or by editing "
+            "~/.config/cfi-ai/config.toml."
+        )
+        _log.debug("grounding_invalid_argument model=%s detail=%s", config.model, exc)
+        return
+    ui.print_error(f"API error: {exc}")
+
+
 def _run_reauth(ui: UI) -> bool:
     """Launch interactive gcloud reauth flow. Returns True on success."""
     ui.print_info(
@@ -223,13 +345,14 @@ def _run_plan_mode(
     ui: UI,
     workspace: Workspace,
     plan_system_prompt: str,
-    readonly_tools: types.Tool,
+    readonly_tools: list[types.Tool],
     messages: list[types.Content],
+    config: Config,
     allow_map_activation: bool = True,
     *,
     cache_manager: CacheManager | None = None,
     system_prompt: str | None = None,
-    api_tools: types.Tool | None = None,
+    api_tools: list[types.Tool] | None = None,
 ) -> PlanModeResult:
     """Run the plan-mode inner loop. Returns a PlanModeResult."""
     _log.debug("plan_mode_enter messages=%d", len(messages))
@@ -257,7 +380,7 @@ def _run_plan_mode(
             ):
                 cache_retry_attempted = True
                 continue
-            ui.print_error(f"API error: {e}")
+            _report_api_error(ui, e, config)
             return PlanModeResult()
 
         try:
@@ -275,13 +398,17 @@ def _run_plan_mode(
             ):
                 cache_retry_attempted = True
                 continue
-            ui.print_error(f"API error: {e}")
+            _report_api_error(ui, e, config)
             return PlanModeResult()
         finally:
             stream_result.log_completion()
 
         if not stream_result.parts:
             break
+
+        # Render grounding citations only for turns that actually produced
+        # something — skip on aborted/empty turns where the loop is about to bail.
+        _render_grounding_sources(ui, stream_result, open_browser=config.grounding_open_browser)
 
         messages.append(types.Content(role="model", parts=stream_result.parts))
         _log.debug("plan_mode model_turn_appended parts=%d", len(stream_result.parts))
@@ -441,9 +568,9 @@ def _rebuild_client_after_reauth(
     config: Config,
     cache_manager: CacheManager | None,
     system_prompt: str,
-    api_tools: types.Tool,
+    api_tools: list[types.Tool],
     plan_system_prompt: str,
-    readonly_api_tools: types.Tool,
+    readonly_api_tools: list[types.Tool],
 ) -> Client:
     """Create a fresh Client after reauthentication and restore caches."""
     client = Client(config)
@@ -460,9 +587,9 @@ def _rebuild_client_after_reauth(
 def _create_session_caches(
     cache_manager: CacheManager,
     system_prompt: str,
-    api_tools: types.Tool,
+    api_tools: list[types.Tool],
     plan_system_prompt: str,
-    readonly_api_tools: types.Tool,
+    readonly_api_tools: list[types.Tool],
 ) -> None:
     """Create context caches for normal and plan modes. Logs but does not raise on failure."""
     for key, system, tool_set in [
@@ -478,9 +605,9 @@ def _create_session_caches(
 def _refresh_caches(
     cache_manager: CacheManager,
     system_prompt: str,
-    api_tools: types.Tool,
+    api_tools: list[types.Tool],
     plan_system_prompt: str,
-    readonly_api_tools: types.Tool,
+    readonly_api_tools: list[types.Tool],
 ) -> None:
     """Rebuild both session caches after a server-side expiry.
 
@@ -500,9 +627,9 @@ def _try_recover_cache_expiry(
     ui: UI,
     cache_manager: CacheManager | None,
     system_prompt: str | None,
-    api_tools: types.Tool | None,
+    api_tools: list[types.Tool] | None,
     plan_system_prompt: str,
-    readonly_api_tools: types.Tool,
+    readonly_api_tools: list[types.Tool],
     *,
     location: str,
 ) -> bool:
@@ -526,10 +653,11 @@ def _try_recover_cache_expiry(
 
 def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: str, config: Config) -> None:
     messages: list[types.Content] = []
-    api_tools = tools.get_api_tools()
-    readonly_api_tools = tools.get_readonly_api_tools()
+    api_tools = tools.get_api_tools(enable_grounding=config.grounding_enabled)
+    readonly_api_tools = tools.get_readonly_api_tools(enable_grounding=config.grounding_enabled)
     plan_system_prompt = build_plan_mode_system_prompt(
-        str(workspace.root), workspace.summary(), workspace=workspace
+        str(workspace.root), workspace.summary(), workspace=workspace,
+        grounding_enabled=config.grounding_enabled,
     )
 
     # Set up context caching
@@ -563,8 +691,8 @@ def _run_main_loop(
     system_prompt: str,
     config: Config,
     messages: list[types.Content],
-    api_tools: types.Tool,
-    readonly_api_tools: types.Tool,
+    api_tools: list[types.Tool],
+    readonly_api_tools: list[types.Tool],
     plan_system_prompt: str,
     cache_manager: CacheManager | None,
 ) -> None:
@@ -620,7 +748,7 @@ def _run_main_loop(
             t0 = time.monotonic()
             plan_result = _run_plan_mode(
                 client, ui, workspace, plan_system_prompt,
-                readonly_api_tools, messages,
+                readonly_api_tools, messages, config,
                 cache_manager=cache_manager,
                 system_prompt=system_prompt,
                 api_tools=api_tools,
@@ -641,7 +769,7 @@ def _run_main_loop(
                     t0_wf = time.monotonic()
                     wf_plan_result = _run_plan_mode(
                         client, ui, workspace, plan_system_prompt,
-                        readonly_api_tools, messages,
+                        readonly_api_tools, messages, config,
                         allow_map_activation=False,
                         cache_manager=cache_manager,
                         system_prompt=system_prompt,
@@ -731,10 +859,15 @@ def _run_main_loop(
                         )
                     else:
                         # Standard code task: plan-only execution
+                        web_clause = (
+                            " and current web information from Google Search when "
+                            "external references are required"
+                            if config.grounding_enabled else ""
+                        )
                         execution_prompt = (
                             "Execute the following implementation plan. Follow each step precisely. "
                             "Use the tools available to you (run_command, attach_path, apply_patch, "
-                            "write_file) to implement all changes described.\n\n"
+                            f"write_file){web_clause}.\n\n"
                             f"## Plan\n\n{plan_text}"
                         )
 
@@ -792,7 +925,7 @@ def _run_main_loop(
                 ):
                     cache_retry_attempted = True
                     continue
-                ui.print_error(f"API error: {e}")
+                _report_api_error(ui, e, config)
                 # Remove the last user message so they can retry
                 messages.pop()
                 break
@@ -821,7 +954,7 @@ def _run_main_loop(
                 ):
                     cache_retry_attempted = True
                     continue
-                ui.print_error(f"API error: {e}")
+                _report_api_error(ui, e, config)
                 break
             finally:
                 stream_result.log_completion()
@@ -837,6 +970,9 @@ def _run_main_loop(
             if has_parts:
                 messages.append(types.Content(role="model", parts=stream_result.parts))
                 _log.debug("inner_loop model_turn_appended parts=%d", len(stream_result.parts))
+                # Render grounding citations only for turns that actually produced
+                # something — skip on aborted/empty turns where the loop is about to bail.
+                _render_grounding_sources(ui, stream_result, open_browser=config.grounding_open_browser)
 
             function_calls = stream_result.function_calls if has_parts else []
 

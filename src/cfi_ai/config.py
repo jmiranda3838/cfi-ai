@@ -16,18 +16,31 @@ def _load_config_file(path: Path = CONFIG_PATH) -> dict | None:
 
 
 def _write_toml(path: Path, data: dict) -> None:
-    """Write a simple nested dict as TOML (strings and ints only)."""
+    """Write a simple nested dict as TOML (strings, ints, and bools)."""
     path.parent.mkdir(parents=True, exist_ok=True)
     lines: list[str] = []
     for section, values in data.items():
         lines.append(f"[{section}]")
         for key, val in values.items():
-            if isinstance(val, int):
+            if isinstance(val, bool):
+                # bool must come before int (bool is a subclass of int)
+                lines.append(f"{key} = {'true' if val else 'false'}")
+            elif isinstance(val, int):
                 lines.append(f"{key} = {val}")
             else:
                 lines.append(f'{key} = "{val}"')
         lines.append("")
     path.write_text("\n".join(lines))
+
+
+def _parse_bool_env(value: str | None, default: bool) -> bool:
+    """Parse a boolean env var with case-insensitive recognition of common
+    falsy values. Returns default if value is None or an empty/whitespace string
+    (so a user setting CFI_AI_FOO='' doesn't accidentally flip a default-True
+    flag to False)."""
+    if value is None or value.strip() == "":
+        return default
+    return value.strip().lower() not in ("0", "false", "no", "off")
 
 
 def _prompt(label: str, default: str) -> str:
@@ -56,10 +69,11 @@ def _run_first_time_setup(existing: dict | None = None, path: Path = CONFIG_PATH
     model_name = _prompt("Model", model_section.get("name", "gemini-3-flash-preview"))
     max_tokens_str = _prompt("Max tokens", str(model_section.get("max_tokens", 8192)))
 
-    data = {
-        "project": {"id": project_id, "location": location},
-        "model": {"name": model_name, "max_tokens": int(max_tokens_str)},
-    }
+    # Preserve any unknown top-level sections (e.g. [grounding]) the user may
+    # have added manually — only [project] and [model] are overwritten.
+    data: dict = dict(existing) if existing else {}
+    data["project"] = {"id": project_id, "location": location}
+    data["model"] = {"name": model_name, "max_tokens": int(max_tokens_str)}
     _write_toml(path, data)
     print(f"\nConfig written to {path}")
     return data
@@ -72,6 +86,8 @@ class Config:
     model: str
     max_tokens: int
     context_cache: bool = True
+    grounding_open_browser: bool = False
+    grounding_enabled: bool = True
 
     @classmethod
     def from_env(cls) -> "Config":
@@ -85,6 +101,12 @@ class Config:
             model=os.environ.get("CFI_AI_MODEL", "gemini-3-flash-preview"),
             max_tokens=int(os.environ.get("CFI_AI_MAX_TOKENS", "8192")),
             context_cache=os.environ.get("CFI_AI_CONTEXT_CACHE", "1") not in ("0", "false"),
+            grounding_open_browser=_parse_bool_env(
+                os.environ.get("CFI_AI_GROUNDING_OPEN_BROWSER"), False
+            ),
+            grounding_enabled=_parse_bool_env(
+                os.environ.get("CFI_AI_GROUNDING_ENABLED"), True
+            ),
         )
 
     @classmethod
@@ -112,10 +134,25 @@ class Config:
 
         context_cache = os.environ.get("CFI_AI_CONTEXT_CACHE", "1") not in ("0", "false")
 
+        grounding = file_data.get("grounding", {})
+        env_open_browser = os.environ.get("CFI_AI_GROUNDING_OPEN_BROWSER")
+        if env_open_browser is not None:
+            grounding_open_browser = _parse_bool_env(env_open_browser, False)
+        else:
+            grounding_open_browser = bool(grounding.get("open_browser", False))
+
+        env_grounding_enabled = os.environ.get("CFI_AI_GROUNDING_ENABLED")
+        if env_grounding_enabled is not None:
+            grounding_enabled = _parse_bool_env(env_grounding_enabled, True)
+        else:
+            grounding_enabled = bool(grounding.get("enabled", True))
+
         return cls(
             project=project,
             location=location,
             model=model_name,
             max_tokens=max_tokens,
             context_cache=context_cache,
+            grounding_open_browser=grounding_open_browser,
+            grounding_enabled=grounding_enabled,
         )

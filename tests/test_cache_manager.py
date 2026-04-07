@@ -24,7 +24,7 @@ def test_create_stores_name():
 
     mgr = CacheManager(genai, model="gemini-3-flash-preview")
     with _PATCH_CONFIG:
-        mgr.create_cache("normal", system="sys prompt", tools=MM())
+        mgr.create_cache("normal", system="sys prompt", tools=[MM()])
 
     assert mgr.get_cache_name("normal") == cache_obj.name
     genai.caches.create.assert_called_once()
@@ -42,7 +42,7 @@ def test_create_failure_propagates():
     mgr = CacheManager(genai, model="m")
     with _PATCH_CONFIG:
         with pytest.raises(RuntimeError, match="API error"):
-            mgr.create_cache("normal", system="s", tools=MM())
+            mgr.create_cache("normal", system="s", tools=[MM()])
 
     assert mgr.get_cache_name("normal") is None
 
@@ -56,7 +56,7 @@ def test_invalidate_removes_key():
 
     mgr = CacheManager(genai, model="m")
     with _PATCH_CONFIG:
-        mgr.create_cache("normal", system="s", tools=MM())
+        mgr.create_cache("normal", system="s", tools=[MM()])
     assert mgr.get_cache_name("normal") == "cache-123"
 
     mgr.invalidate("normal")
@@ -101,8 +101,8 @@ def test_delete_all_calls_delete():
 
     mgr = CacheManager(genai, model="m")
     with _PATCH_CONFIG:
-        mgr.create_cache("normal", system="s", tools=MM())
-        mgr.create_cache("plan", system="s2", tools=MM())
+        mgr.create_cache("normal", system="s", tools=[MM()])
+        mgr.create_cache("plan", system="s2", tools=[MM()])
 
     mgr.delete_all()
 
@@ -125,8 +125,8 @@ def test_delete_all_handles_errors():
 
     mgr = CacheManager(genai, model="m")
     with _PATCH_CONFIG:
-        mgr.create_cache("normal", system="s", tools=MM())
-        mgr.create_cache("plan", system="s2", tools=MM())
+        mgr.create_cache("normal", system="s", tools=[MM()])
+        mgr.create_cache("plan", system="s2", tools=[MM()])
 
     # First delete fails, second should still be called
     genai.caches.delete.side_effect = [RuntimeError("fail"), None]
@@ -144,7 +144,7 @@ def test_reset_clears_and_updates_client():
 
     mgr = CacheManager(old_genai, model="m")
     with _PATCH_CONFIG:
-        mgr.create_cache("normal", system="s", tools=MM())
+        mgr.create_cache("normal", system="s", tools=[MM()])
 
     new_genai = _make_genai_client()
     mgr.reset(new_genai)
@@ -159,6 +159,6 @@ def test_reset_clears_and_updates_client():
     new_cache.usage_metadata.total_token_count = 100
     new_genai.caches.create.return_value = new_cache
     with _PATCH_CONFIG:
-        mgr.create_cache("normal", system="s", tools=MM())
+        mgr.create_cache("normal", system="s", tools=[MM()])
     new_genai.caches.create.assert_called_once()
     assert mgr.get_cache_name("normal") == "new-cache"

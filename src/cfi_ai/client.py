@@ -48,13 +48,13 @@ class CacheManager:
         self._caches: dict[str, str] = {}  # key -> cache resource name
         self._all_cache_names: list[str] = []  # track all for cleanup
 
-    def create_cache(self, key: str, system: str, tools: types.Tool) -> None:
+    def create_cache(self, key: str, system: str, tools: list[types.Tool]) -> None:
         """Create a cached content entry. Raises on failure (caller should catch)."""
         cache = self._genai_client.caches.create(
             model=self._model,
             config=types.CreateCachedContentConfig(
                 system_instruction=system,
-                tools=[tools],
+                tools=tools,
                 ttl="3600s",
                 display_name=f"cfi-ai-{key}",
             ),
@@ -163,7 +163,7 @@ class Client:
         self,
         messages: list[types.Content],
         system: str,
-        tools: types.Tool,
+        tools: list[types.Tool],
         *,
         mode: str = "normal",
     ) -> StreamResult:
@@ -222,7 +222,7 @@ class Client:
             contents=messages,
             config=types.GenerateContentConfig(
                 system_instruction=system,
-                tools=[tools],
+                tools=tools,
                 max_output_tokens=max_tokens,
             ),
         )
@@ -237,6 +237,7 @@ class StreamResult:
         self._parts: list[types.Part] = []
         self._finish_reason: str | None = None
         self._usage_metadata: types.GenerateContentResponseUsageMetadata | None = None
+        self._grounding_metadata: types.GroundingMetadata | None = None
         self.request_id: str = request_id
 
     def text_chunks(self) -> Generator[str, None, None]:
@@ -254,6 +255,9 @@ class StreamResult:
             candidate = chunk.candidates[0]
             if candidate.finish_reason:
                 self._finish_reason = candidate.finish_reason
+            if candidate.grounding_metadata:
+                # Gemini streams grounding metadata on the final chunk only; last writer wins.
+                self._grounding_metadata = candidate.grounding_metadata
             if not candidate.content or not candidate.content.parts:
                 _log.debug(
                     "[req:%s] chunk %d finish_reason=%s no_parts=True",
@@ -313,6 +317,10 @@ class StreamResult:
     @property
     def usage_metadata(self) -> types.GenerateContentResponseUsageMetadata | None:
         return self._usage_metadata
+
+    @property
+    def grounding_metadata(self) -> types.GroundingMetadata | None:
+        return self._grounding_metadata
 
     @property
     def finish_reason(self) -> str | None:
