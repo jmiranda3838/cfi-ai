@@ -105,3 +105,67 @@ def test_text_truncation(tmp_path):
     result = AttachPathTool().execute(ws, path="big.txt")
     assert isinstance(result, str)
     assert "truncated" in result
+
+
+def test_absolute_with_escaped_spaces(tmp_path):
+    f = tmp_path / "Screenshot 2026-04-06 at 5.15.13 PM.png"
+    f.write_bytes(b"\x89PNG\r\n\x1a\n" + b"\x00" * 50)
+    ws = Workspace(str(tmp_path / "other"))
+    (tmp_path / "other").mkdir()
+    escaped = str(f).replace(" ", "\\ ")
+    result = AttachPathTool().execute(ws, path=escaped)
+    assert isinstance(result, tuple)
+    text, _ = result
+    assert "Screenshot 2026-04-06 at 5.15.13 PM.png" in text
+
+
+def test_absolute_with_quoted_path(tmp_path):
+    f = tmp_path / "name with spaces.txt"
+    f.write_text("ok")
+    ws = Workspace(str(tmp_path / "other"))
+    (tmp_path / "other").mkdir()
+    result = AttachPathTool().execute(ws, path=f'"{f}"')
+    assert isinstance(result, str)
+    assert "ok" in result
+
+
+def test_relative_with_escaped_spaces(tmp_path):
+    (tmp_path / "my file.txt").write_text("hi")
+    ws = Workspace(str(tmp_path))
+    result = AttachPathTool().execute(ws, path="my\\ file.txt")
+    assert isinstance(result, str)
+    assert "hi" in result
+
+
+def test_absolute_with_tilde_expansion(tmp_path, monkeypatch):
+    """The resolver must honor ~ expansion so the model can pass paths
+    like ~/Desktop/foo.png as advertised in the tool description."""
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    (fake_home / "Desktop").mkdir()
+    target = fake_home / "Desktop" / "note.txt"
+    target.write_text("from home")
+
+    monkeypatch.setenv("HOME", str(fake_home))
+
+    ws = Workspace(str(tmp_path / "workspace"))
+    (tmp_path / "workspace").mkdir()
+
+    result = AttachPathTool().execute(ws, path="~/Desktop/note.txt")
+    assert isinstance(result, str)
+    assert "from home" in result
+
+
+def test_backslash_in_filename_not_corrupted(tmp_path):
+    """Regression: the resolver must not strip backslashes that precede
+    alphanumerics — otherwise Windows-style paths like C:\\Users\\name
+    would be mangled. We can't actually create C:\\... on macOS, so we
+    instead verify that a path with literal '\\U' in it produces a clean
+    'not a file' error referencing the original (un-mangled) string."""
+    ws = Workspace(str(tmp_path))
+    weird = "C:\\Users\\nobody\\file.txt"
+    result = AttachPathTool().execute(ws, path=weird)
+    assert isinstance(result, str)
+    # The error message should still contain the original backslashes,
+    # proving the resolver did not silently rewrite \U → U.
+    assert "\\Users\\nobody" in result or "C:\\Users" in result
