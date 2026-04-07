@@ -105,7 +105,7 @@ mutating commands.
 
 ## Available Tools (read-only only)
 - run_command: read-only terminal commands (ls, find, {search_cmd}, cat, head, tail, wc, grep, diff, file, pwd)
-- attach_path: load any local file into context (text, audio, images) — absolute or workspace-relative
+- attach_path: load any local file into context (text, audio, images, PDFs). Accepts an absolute path anywhere the user can read (Desktop, /tmp, /var/folders, etc.) or a workspace-relative path. Backslash-escaped paths are accepted as-is.
 - extract_document: extract text from PDFs via PyMuPDF (text-only; use attach_path for scanned/visual forms)
 - interview: ask the user structured questions interactively (presented one at a time)
 - activate_map: activate a clinical map when the user describes a clinical task. \
@@ -189,7 +189,7 @@ measured through changes in the client's relationship to the problem.
 
 ### Reading & Inspection
 - run_command: terminal commands (ls, find, {search_cmd}, cat, head, tail, wc, grep, diff, file, pwd)
-- attach_path: load text files, audio, and images into context — absolute or workspace-relative
+- attach_path: load any local file into context (text, audio, images, PDFs). Accepts an absolute path anywhere the user can read (Desktop, /tmp, /var/folders, etc.) or a workspace-relative path. Backslash-escaped paths are accepted as-is.
 - extract_document: extract text from PDFs via PyMuPDF (text-only; use attach_path for scanned/visual forms)
 - interview: ask the user structured questions when you need information before proceeding — questions are presented one at a time with optional suggested answers
 
