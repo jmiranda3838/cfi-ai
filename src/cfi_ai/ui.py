@@ -102,13 +102,28 @@ class StatusManager:
 
 
 def _chat_key_bindings(on_toggle_plan=None) -> KeyBindings:
-    """Key bindings for the main chat prompt.
+    """Key bindings for the main multi-line chat prompt.
 
-    Escape → cancel (return ""), Ctrl+D → disabled (no-op),
-    Shift+Tab → toggle plan mode (if callback provided).
+    Enter        → submit the buffer
+    Alt+Enter    → insert a literal newline (compose multi-line messages)
+    Escape       → cancel (return "")
+    Ctrl+D       → disabled (no-op)
+    Shift+Tab    → toggle plan mode (if callback provided)
     Ctrl+C raises KeyboardInterrupt by default; get_input() catches it to exit.
+
+    The prompt runs with multiline=True so pasted multi-line content stays
+    visible (single-line mode would hide everything except the line under the
+    cursor). Enter is bound explicitly so submit-on-Enter UX is preserved.
     """
     kb = KeyBindings()
+
+    @kb.add("enter")
+    def _enter(event):
+        event.current_buffer.validate_and_handle()
+
+    @kb.add("escape", "enter")  # Alt+Enter / Option+Enter
+    def _alt_enter(event):
+        event.current_buffer.insert_text("\n")
 
     @kb.add("escape")
     def _escape(event):
@@ -154,6 +169,29 @@ def _interview_key_bindings() -> KeyBindings:
     """Key bindings for interview question prompts.
 
     Escape → cancel (EOFError), Ctrl+D → disabled.
+    Ctrl+C raises KeyboardInterrupt by default.
+    """
+    kb = KeyBindings()
+
+    @kb.add("escape")
+    def _escape(event):
+        event.app.exit(exception=EOFError)
+
+    @kb.add("c-d")
+    def _ctrl_d(event):
+        pass  # disabled
+
+    return kb
+
+
+def _approval_key_bindings() -> KeyBindings:
+    """Key bindings for the approve? [Y/n] prompt.
+
+    Escape → raise EOFError so caller returns False (reject).
+    Critically: Escape MUST NOT exit with result="" the way _chat_key_bindings
+    does, because prompt_approval() treats "" as YES (capital-Y default), so
+    a result="" exit would silently approve a mutation. Bare Enter on an empty
+    line is still a valid approval — only Escape needs the special handling.
     Ctrl+C raises KeyboardInterrupt by default.
     """
     kb = KeyBindings()
@@ -257,7 +295,7 @@ class UI:
             text = self.session.prompt(
                 _prompt_message,
                 bottom_toolbar=_toolbar,
-                multiline=False,
+                multiline=True,
                 key_bindings=_chat_key_bindings(on_toggle_plan=self.toggle_plan_mode),
             )
             return UserInput(text=text, plan_mode=self._plan_mode)
@@ -417,6 +455,7 @@ class UI:
                             prompt_text = f"  {qid}> "
                         raw = self.session.prompt(
                             [("class:prompt", prompt_text)],
+                            multiline=False,
                             key_bindings=_interview_key_bindings(),
                         )
                 except EOFError:
@@ -446,7 +485,8 @@ class UI:
             response = self.session.prompt(
                 [("class:approval", "approve? [Y/n] ")],
                 bottom_toolbar=HTML(f"cfi-ai | {self.status.display}"),
-                key_bindings=_chat_key_bindings(),
+                multiline=False,
+                key_bindings=_approval_key_bindings(),
             )
             return response.strip().lower() in ("", "y", "yes")
         except KeyboardInterrupt:
