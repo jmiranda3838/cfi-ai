@@ -7,6 +7,7 @@ from unittest.mock import patch
 from cfi_ai.config import (
     Config,
     _load_config_file,
+    _parse_bool_env,
     _write_toml,
     _run_first_time_setup,
 )
@@ -203,3 +204,182 @@ def test_first_run_setup_defaults(tmp_path):
     assert data["project"]["location"] == "global"
     assert data["model"]["name"] == "gemini-3-flash-preview"
     assert data["model"]["max_tokens"] == 8192
+
+
+def test_setup_preserves_unknown_sections(tmp_path):
+    """If a user has manually added [grounding] to their config and then re-runs
+    setup, the [grounding] section must survive the round-trip."""
+    cfg_path = tmp_path / "config.toml"
+    cfg_path.write_text(
+        '[project]\nid = "old-project"\nlocation = "us-central1"\n\n'
+        '[model]\nname = "gemini-3-flash-preview"\nmax_tokens = 8192\n\n'
+        '[grounding]\nopen_browser = true\n'
+    )
+    existing = _load_config_file(cfg_path)
+    # Accept all defaults by pressing enter on every prompt.
+    with patch("builtins.input", side_effect=iter(["", "", "", ""])):
+        _run_first_time_setup(existing=existing, path=cfg_path)
+
+    reloaded = _load_config_file(cfg_path)
+    assert reloaded is not None
+    assert reloaded.get("grounding", {}).get("open_browser") is True
+    # And the existing project values should still be there too.
+    assert reloaded["project"]["id"] == "old-project"
+    assert reloaded["project"]["location"] == "us-central1"
+
+
+def test_write_toml_serializes_bools_as_literals(tmp_path):
+    """_write_toml must emit lowercase TOML bool literals (not quoted strings or
+    Python-style True/False) so they round-trip cleanly through tomllib."""
+    cfg = tmp_path / "out.toml"
+    _write_toml(cfg, {"grounding": {"open_browser": False}})
+    text = cfg.read_text()
+    assert "open_browser = false" in text
+    assert 'open_browser = "false"' not in text  # not a quoted string
+    parsed = _load_config_file(cfg)
+    assert parsed["grounding"]["open_browser"] is False
+
+    cfg2 = tmp_path / "out2.toml"
+    _write_toml(cfg2, {"grounding": {"open_browser": True}})
+    parsed2 = _load_config_file(cfg2)
+    assert parsed2["grounding"]["open_browser"] is True
+
+
+@pytest.mark.parametrize(
+    "val,expected",
+    [
+        ("0", False),
+        ("false", False),
+        ("False", False),
+        ("FALSE", False),
+        ("no", False),
+        ("off", False),
+        ("", False),
+        ("1", True),
+        ("true", True),
+        ("True", True),
+        ("yes", True),
+    ],
+)
+def test_grounding_open_browser_env_parsing(val, expected):
+    """CFI_AI_GROUNDING_OPEN_BROWSER must accept case-insensitive falsy values
+    so users typing 'False' don't accidentally enable the browser auto-open."""
+    env = {"GOOGLE_CLOUD_PROJECT": "test", "CFI_AI_GROUNDING_OPEN_BROWSER": val}
+    with patch.dict(os.environ, env, clear=True):
+        config = Config.from_env()
+    assert config.grounding_open_browser is expected
+
+
+def test_load_grounding_open_browser_env_overrides_file(tmp_path):
+    """Env var override for grounding_open_browser should beat the file setting,
+    and case-insensitive falsy values should turn it off."""
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        '[project]\nid = "p"\nlocation = "global"\n\n'
+        '[model]\nname = "gemini-3-flash-preview"\nmax_tokens = 8192\n\n'
+        '[grounding]\nopen_browser = true\n'
+    )
+    # File says true, env says "False" — env should win and parse to False.
+    env = {"CFI_AI_GROUNDING_OPEN_BROWSER": "False"}
+    with patch.dict(os.environ, env, clear=True):
+        config = Config.load(config_path=cfg)
+    assert config.grounding_open_browser is False
+
+
+# ── grounding_enabled (kill switch) ──────────────────────────────────
+
+
+def test_grounding_enabled_default_true():
+    """Without env or file config, grounding_enabled defaults to True."""
+    with patch.dict(os.environ, {"GOOGLE_CLOUD_PROJECT": "test"}, clear=True):
+        config = Config.from_env()
+    assert config.grounding_enabled is True
+
+
+@pytest.mark.parametrize(
+    "val,expected",
+    [
+        ("0", False),
+        ("false", False),
+        ("False", False),
+        ("FALSE", False),
+        ("no", False),
+        ("off", False),
+        ("", True),  # empty string falls back to default (True for grounding_enabled)
+        ("1", True),
+        ("true", True),
+        ("True", True),
+        ("yes", True),
+    ],
+)
+def test_grounding_enabled_env_parsing(val, expected):
+    """CFI_AI_GROUNDING_ENABLED parses falsy strings to False, empty falls back
+    to the default (True for this flag)."""
+    env = {"GOOGLE_CLOUD_PROJECT": "test", "CFI_AI_GROUNDING_ENABLED": val}
+    with patch.dict(os.environ, env, clear=True):
+        config = Config.from_env()
+    assert config.grounding_enabled is expected
+
+
+def test_load_grounding_enabled_from_file(tmp_path):
+    """[grounding] enabled = false in the config file should disable grounding."""
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        '[project]\nid = "p"\nlocation = "global"\n\n'
+        '[model]\nname = "gemini-3-flash-preview"\nmax_tokens = 8192\n\n'
+        '[grounding]\nenabled = false\n'
+    )
+    with patch.dict(os.environ, {}, clear=True):
+        config = Config.load(config_path=cfg)
+    assert config.grounding_enabled is False
+
+
+def test_load_grounding_enabled_env_overrides_file(tmp_path):
+    """Env var override beats the file setting for grounding_enabled."""
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        '[project]\nid = "p"\nlocation = "global"\n\n'
+        '[model]\nname = "gemini-3-flash-preview"\nmax_tokens = 8192\n\n'
+        '[grounding]\nenabled = true\n'
+    )
+    # File says true, env says "0" — env wins.
+    env = {"CFI_AI_GROUNDING_ENABLED": "0"}
+    with patch.dict(os.environ, env, clear=True):
+        config = Config.load(config_path=cfg)
+    assert config.grounding_enabled is False
+
+
+def test_load_grounding_enabled_default_when_section_missing(tmp_path):
+    """A config file with no [grounding] section should default grounding_enabled
+    to True (preserves backward compatibility)."""
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        '[project]\nid = "p"\nlocation = "global"\n\n'
+        '[model]\nname = "gemini-3-flash-preview"\nmax_tokens = 8192\n'
+    )
+    with patch.dict(os.environ, {}, clear=True):
+        config = Config.load(config_path=cfg)
+    assert config.grounding_enabled is True
+
+
+# ── _parse_bool_env empty-string asymmetry fix ──────────────────────
+
+
+@pytest.mark.parametrize(
+    "value,default,expected",
+    [
+        (None, True, True),
+        (None, False, False),
+        ("", True, True),       # empty string falls back to default (was False before fix)
+        ("", False, False),
+        ("   ", True, True),    # whitespace-only also falls back to default
+        ("   ", False, False),
+        ("1", False, True),
+        ("0", True, False),
+    ],
+)
+def test_parse_bool_env_empty_string_falls_back_to_default(value, default, expected):
+    """Empty/whitespace-only env var values must return the default rather than
+    silently flipping to False. Prevents `CFI_AI_GROUNDING_ENABLED=''` from
+    accidentally disabling a default-True flag."""
+    assert _parse_bool_env(value, default) is expected

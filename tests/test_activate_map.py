@@ -25,7 +25,7 @@ def _make_client(tmp_path: Path, client_id: str) -> None:
 
 def test_tool_in_registry():
     assert "activate_map" in {
-        fd.name for fd in tools.get_api_tools().function_declarations
+        fd.name for fd in tools.get_api_tools()[0].function_declarations
     }
 
 
@@ -36,7 +36,7 @@ def test_tool_not_mutating():
 
 def test_tool_in_readonly_set():
     readonly = tools.get_readonly_api_tools()
-    names = {fd.name for fd in readonly.function_declarations}
+    names = {fd.name for fd in readonly[0].function_declarations}
     assert "activate_map" in names
 
 

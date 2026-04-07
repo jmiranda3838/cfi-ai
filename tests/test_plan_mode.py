@@ -23,8 +23,8 @@ def test_user_input_dataclass():
 
 def test_get_readonly_api_tools():
     """Readonly tool set contains run_command, attach_path, extract_document, interview, activate_map, and end_turn."""
-    tool = get_readonly_api_tools()
-    names = {fd.name for fd in tool.function_declarations}
+    tools_list = get_readonly_api_tools()
+    names = {fd.name for fd in tools_list[0].function_declarations}
     assert names == {"run_command", "attach_path", "extract_document", "interview", "activate_map", "end_turn"}
     assert "apply_patch" not in names
     assert "write_file" not in names
@@ -185,6 +185,7 @@ def test_plan_mode_activate_map_pops_map_before_get_map_plan_prompt():
 
     mock_stream.request_id = "test"
     mock_stream.log_completion = MagicMock()
+    mock_stream.grounding_metadata = None
 
     mock_client = MagicMock()
     mock_client.stream_response.return_value = mock_stream
@@ -207,6 +208,7 @@ def test_plan_mode_activate_map_pops_map_before_get_map_plan_prompt():
             plan_system_prompt="system",
             readonly_tools=MagicMock(),
             messages=[types.Content(role="user", parts=[types.Part.from_text(text="test")])],
+            config=_test_config(),
             allow_map_activation=True,
         )
 
@@ -247,6 +249,7 @@ def test_plan_mode_implicit_map_activation_announces_map():
 
     mock_stream.request_id = "test"
     mock_stream.log_completion = MagicMock()
+    mock_stream.grounding_metadata = None
 
     mock_client = MagicMock()
     mock_client.stream_response.return_value = mock_stream
@@ -266,6 +269,7 @@ def test_plan_mode_implicit_map_activation_announces_map():
             plan_system_prompt="system",
             readonly_tools=MagicMock(),
             messages=[types.Content(role="user", parts=[types.Part.from_text(text="test")])],
+            config=_test_config(),
             allow_map_activation=True,
         )
 
@@ -289,6 +293,7 @@ def test_plan_mode_slash_map_activation_skips_announcement():
 
     mock_stream.request_id = "test"
     mock_stream.log_completion = MagicMock()
+    mock_stream.grounding_metadata = None
 
     mock_client = MagicMock()
     mock_client.stream_response.return_value = mock_stream
@@ -308,6 +313,7 @@ def test_plan_mode_slash_map_activation_skips_announcement():
             plan_system_prompt="system",
             readonly_tools=MagicMock(),
             messages=[types.Content(role="user", parts=[types.Part.from_text(text="test")])],
+            config=_test_config(),
             allow_map_activation=True,
         )
 
@@ -377,7 +383,22 @@ def _make_stream(text="", function_calls=None):
     mock_stream.function_calls = function_calls or []
     mock_stream.request_id = "test"
     mock_stream.log_completion = MagicMock()
+    # No grounding metadata so _render_grounding_sources is a no-op.
+    mock_stream.grounding_metadata = None
     return mock_stream
+
+
+def _test_config():
+    """Build a Config with safe defaults for plan-mode tests (no browser auto-open)."""
+    from cfi_ai.config import Config
+    return Config(
+        project="test",
+        location="global",
+        model="gemini-3-flash-preview",
+        max_tokens=8192,
+        context_cache=False,
+        grounding_open_browser=False,
+    )
 
 
 def test_plan_mode_end_turn_breaks_loop():
@@ -401,6 +422,7 @@ def test_plan_mode_end_turn_breaks_loop():
         plan_system_prompt="system",
         readonly_tools=MagicMock(),
         messages=[types.Content(role="user", parts=[types.Part.from_text(text="test")])],
+        config=_test_config(),
     )
 
     assert result.plan_text == "Here is the plan."
@@ -445,6 +467,7 @@ def test_plan_mode_preamble_nudge_then_tools():
             plan_system_prompt="system",
             readonly_tools=MagicMock(),
             messages=messages,
+            config=_test_config(),
         )
 
     # Should have had 3 API calls: preamble → nudge → tools → end_turn
@@ -485,6 +508,7 @@ def test_plan_mode_text_after_tools_breaks():
             plan_system_prompt="system",
             readonly_tools=MagicMock(),
             messages=messages,
+            config=_test_config(),
         )
 
     # Should break on second iteration (text-only after tools ran)

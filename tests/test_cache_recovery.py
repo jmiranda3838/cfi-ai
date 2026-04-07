@@ -116,6 +116,7 @@ def test_run_plan_mode_retries_after_cache_expiry():
     success_stream.function_calls = [end_turn_fc]
     success_stream.request_id = "rid"
     success_stream.log_completion = MM()
+    success_stream.grounding_metadata = None
 
     mock_client = MM()
     # First call raises (call-time path is the simplest to mock — same retry plumbing
@@ -127,6 +128,8 @@ def test_run_plan_mode_retries_after_cache_expiry():
 
     mock_workspace = MM()
     mock_cache_manager = MM(spec=CacheManager)
+    mock_config = MM()
+    mock_config.grounding_open_browser = False
 
     with patch("cfi_ai.agent._refresh_caches") as mock_refresh:
         result = _run_plan_mode(
@@ -136,6 +139,7 @@ def test_run_plan_mode_retries_after_cache_expiry():
             plan_system_prompt="plan_sys",
             readonly_tools=MM(),
             messages=[types.Content(role="user", parts=[types.Part.from_text(text="hi")])],
+            config=mock_config,
             cache_manager=mock_cache_manager,
             system_prompt="sys",
             api_tools=MM(),
@@ -160,6 +164,8 @@ def test_run_plan_mode_no_retry_when_cache_manager_missing():
 
     mock_ui = MM()
     mock_workspace = MM()
+    mock_config = MM()
+    mock_config.grounding_open_browser = False
 
     with patch("cfi_ai.agent._refresh_caches") as mock_refresh:
         result = _run_plan_mode(
@@ -169,6 +175,7 @@ def test_run_plan_mode_no_retry_when_cache_manager_missing():
             plan_system_prompt="plan_sys",
             readonly_tools=MM(),
             messages=[types.Content(role="user", parts=[types.Part.from_text(text="hi")])],
+            config=mock_config,
         )
 
     mock_refresh.assert_not_called()
@@ -263,6 +270,7 @@ def test_run_plan_mode_recovers_from_two_consecutive_expiries():
     success1.function_calls = [interview_fc]
     success1.request_id = "rid1"
     success1.log_completion = MM()
+    success1.grounding_metadata = None
 
     # Second success: end_turn so the loop terminates cleanly
     end_turn_fc = MM()
@@ -276,6 +284,7 @@ def test_run_plan_mode_recovers_from_two_consecutive_expiries():
     success2.function_calls = [end_turn_fc]
     success2.request_id = "rid2"
     success2.log_completion = MM()
+    success2.grounding_metadata = None
 
     mock_client = MM()
     mock_client.stream_response.side_effect = [expired1, success1, expired2, success2]
@@ -284,6 +293,8 @@ def test_run_plan_mode_recovers_from_two_consecutive_expiries():
     mock_ui.stream_markdown.side_effect = ["", "Here is the plan."]
     mock_workspace = MM()
     mock_cache_manager = MM(spec=CacheManager)
+    mock_config = MM()
+    mock_config.grounding_open_browser = False
 
     with patch("cfi_ai.agent._refresh_caches") as mock_refresh:
         result = _run_plan_mode(
@@ -293,6 +304,7 @@ def test_run_plan_mode_recovers_from_two_consecutive_expiries():
             plan_system_prompt="plan_sys",
             readonly_tools=MM(),
             messages=[types.Content(role="user", parts=[types.Part.from_text(text="hi")])],
+            config=mock_config,
             cache_manager=mock_cache_manager,
             system_prompt="sys",
             api_tools=MM(),

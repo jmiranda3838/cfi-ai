@@ -47,14 +47,14 @@ def test_interview_not_mutating():
 def test_interview_in_readonly_tools():
     """interview is available in plan mode (readonly tool set)."""
     readonly = tools.get_readonly_api_tools()
-    names = {fd.name for fd in readonly.function_declarations}
+    names = {fd.name for fd in readonly[0].function_declarations}
     assert "interview" in names
 
 
 def test_interview_in_all_tools():
     """interview is in the full tool set."""
     all_tools = tools.get_api_tools()
-    names = {fd.name for fd in all_tools.function_declarations}
+    names = {fd.name for fd in all_tools[0].function_declarations}
     assert "interview" in names
 
 
