@@ -14,6 +14,7 @@ from google.genai import types
 
 from cfi_ai.client import CacheManager, Client, StreamResult, is_cache_expired_error
 from cfi_ai.config import Config
+from cfi_ai.cost_tracker import CostTracker
 from cfi_ai.maps import dispatch_map, parse_map_invocation
 from cfi_ai.planner import ExecutionPlan, format_plan
 from cfi_ai.prompts.system import build_plan_mode_system_prompt
@@ -354,6 +355,7 @@ def _run_plan_mode(
     cache_manager: CacheManager | None = None,
     system_prompt: str | None = None,
     api_tools: list[types.Tool] | None = None,
+    cost_tracker: CostTracker | None = None,
 ) -> PlanModeResult:
     """Run the plan-mode inner loop. Returns a PlanModeResult."""
     _log.debug("plan_mode_enter messages=%d", len(messages))
@@ -403,6 +405,8 @@ def _run_plan_mode(
             return PlanModeResult()
         finally:
             stream_result.log_completion()
+            if cost_tracker is not None and stream_result.usage_metadata is not None:
+                cost_tracker.record(stream_result.usage_metadata)
 
         if not stream_result.parts:
             break
@@ -652,12 +656,25 @@ def _try_recover_cache_expiry(
     return True
 
 
-def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: str, config: Config) -> None:
+def run_agent_loop(
+    client: Client,
+    ui: UI,
+    workspace: Workspace,
+    system_prompt: str,
+    config: Config,
+    cost_tracker: CostTracker | None = None,
+) -> None:
     messages: list[types.Content] = []
     # Prune expired session files before constructing the store so stale PHI
     # doesn't linger for users who rarely hit /resume.
     SessionStore.prune_expired()
     session_store = SessionStore(workspace)
+    if cost_tracker is None:
+        cost_tracker = CostTracker(model=config.model)
+    # Make sure the UI's bottom toolbar reads from the same instance the loop
+    # writes to. main.py usually wires this up, but we re-assert here so the
+    # agent loop is self-contained / testable.
+    ui.cost_tracker = cost_tracker
     api_tools = tools.get_api_tools(enable_grounding=config.grounding_enabled)
     readonly_api_tools = tools.get_readonly_api_tools(enable_grounding=config.grounding_enabled)
     plan_system_prompt = build_plan_mode_system_prompt(
@@ -682,7 +699,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
         _run_main_loop(
             client, ui, workspace, system_prompt, config,
             messages, api_tools, readonly_api_tools, plan_system_prompt,
-            cache_manager, session_store,
+            cache_manager, session_store, cost_tracker,
         )
     finally:
         if cache_manager is not None:
@@ -701,6 +718,7 @@ def _run_main_loop(
     plan_system_prompt: str,
     cache_manager: CacheManager | None,
     session_store: SessionStore,
+    cost_tracker: CostTracker,
 ) -> None:
     """Inner main loop, extracted so run_agent_loop can wrap with try/finally for cache cleanup."""
     while True:
@@ -733,6 +751,16 @@ def _run_main_loop(
                 # /resume: replace in-memory conversation with the loaded one.
                 messages.clear()
                 messages.extend(result.loaded_messages)
+                # Restore the session's cumulative token/cost totals so the
+                # toolbar resumes counting from where it left off rather than
+                # resetting to zero. Mutates in place — do not rebind the
+                # cost_tracker, since the UI holds the original reference.
+                restored = CostTracker.from_dict(cost_tracker.model, session_store.usage)
+                cost_tracker.last_prompt_tokens = restored.last_prompt_tokens
+                cost_tracker.total_input_billed = restored.total_input_billed
+                cost_tracker.total_cached = restored.total_cached
+                cost_tracker.total_output = restored.total_output
+                cost_tracker.total_cost_usd = restored.total_cost_usd
                 continue
             if result.handled and result.message is None and result.parts is None:
                 continue
@@ -763,6 +791,7 @@ def _run_main_loop(
                 cache_manager=cache_manager,
                 system_prompt=system_prompt,
                 api_tools=api_tools,
+                cost_tracker=cost_tracker,
             )
             elapsed = time.monotonic() - t0
 
@@ -785,6 +814,7 @@ def _run_main_loop(
                         cache_manager=cache_manager,
                         system_prompt=system_prompt,
                         api_tools=api_tools,
+                        cost_tracker=cost_tracker,
                     )
                     elapsed += time.monotonic() - t0_wf
 
@@ -969,6 +999,8 @@ def _run_main_loop(
                 break
             finally:
                 stream_result.log_completion()
+                if stream_result.usage_metadata is not None:
+                    cost_tracker.record(stream_result.usage_metadata)
 
             # Successful round-trip: release the cache-recovery gate so a later
             # expiry within this same turn can also be recovered. Placed before
@@ -1192,4 +1224,4 @@ def _run_main_loop(
         ui.print_elapsed(elapsed)
 
         # Persist the completed turn so it can be resumed later via /resume.
-        session_store.save(messages)
+        session_store.save(messages, usage=cost_tracker.to_dict())

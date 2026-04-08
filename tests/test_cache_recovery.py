@@ -12,6 +12,7 @@ from cfi_ai.agent import (
     _try_recover_cache_expiry,
 )
 from cfi_ai.client import CacheManager, is_cache_expired_error
+from cfi_ai.cost_tracker import CostTracker
 from cfi_ai.tools import END_TURN_TOOL_NAME, INTERVIEW_TOOL_NAME
 from cfi_ai.ui import UserInput
 
@@ -337,6 +338,7 @@ def test_run_main_loop_recovers_from_two_consecutive_expiries():
     success1.function_calls = [interview_fc]
     success1.request_id = "rid1"
     success1.log_completion = MM()
+    success1.usage_metadata = None  # CostTracker.record() skips None
 
     # Second success: end_turn alone, terminates the inner loop
     end_turn_fc = MM()
@@ -350,6 +352,7 @@ def test_run_main_loop_recovers_from_two_consecutive_expiries():
     success2.function_calls = [end_turn_fc]
     success2.request_id = "rid2"
     success2.log_completion = MM()
+    success2.usage_metadata = None
 
     mock_client = MM()
     mock_client.stream_response.side_effect = [expired1, success1, expired2, success2]
@@ -376,6 +379,7 @@ def test_run_main_loop_recovers_from_two_consecutive_expiries():
             plan_system_prompt="plan_sys",
             cache_manager=mock_cache_manager,
             session_store=MM(),
+            cost_tracker=CostTracker(model="gemini-2.5-flash"),
         )
 
     # Refresh fired exactly twice (one per expiry, proving the gate was reset

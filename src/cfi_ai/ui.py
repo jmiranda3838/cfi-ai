@@ -25,6 +25,7 @@ from rich.theme import Theme
 from cfi_ai import __version__
 
 if TYPE_CHECKING:
+    from cfi_ai.cost_tracker import CostTracker
     from cfi_ai.sessions import SessionMeta
 
 
@@ -87,6 +88,34 @@ MODE_DISPLAY = {
     "interviewing": "interview ..",
     "executing": "executing ..",
 }
+
+
+def _format_tokens(n: int) -> str:
+    """Compact token count: 950 -> '950', 12345 -> '12k', 1500000 -> '1.5M'."""
+    if n >= 1_000_000:
+        return f"{n / 1_000_000:.1f}M"
+    if n >= 1_000:
+        return f"{n / 1_000:.0f}k"
+    return str(n)
+
+
+def _format_cost_segment(tracker: "CostTracker | None") -> str:
+    """Format the bottom-toolbar context/cost readout. Empty string before
+    the first turn or when there's no tracker."""
+    if tracker is None or tracker.last_prompt_tokens == 0:
+        return ""
+
+    used = _format_tokens(tracker.last_prompt_tokens)
+    window = tracker.context_window()
+    if window:
+        pct = (tracker.last_prompt_tokens / window) * 100
+        ctx = f"ctx {used}/{_format_tokens(window)} ({pct:.0f}%)"
+    else:
+        ctx = f"ctx {used}"
+
+    if tracker.has_pricing():
+        return f"{ctx} \u2022 ${tracker.total_cost_usd:.4f}"
+    return ctx
 
 
 class StatusManager:
@@ -236,6 +265,9 @@ class UI:
         self.status = StatusManager()
         self._completer = SlashMapCompleter()
         self._plan_mode = False
+        # Set by main.py once the model is known. The bottom-toolbar callable
+        # reads from this between turns to display ctx + running cost.
+        self.cost_tracker: "CostTracker | None" = None
         history_dir = Path.home() / ".cfi-ai"
         history_dir.mkdir(exist_ok=True)
         self.session: PromptSession[str] = PromptSession(
@@ -285,18 +317,27 @@ class UI:
                 return [("class:prompt", "~ ")]
 
             def _toolbar():
+                cost_segment = _format_cost_segment(self.cost_tracker)
                 if self._plan_mode:
                     self.status.set_mode("chatting_plan")
-                    return [
+                    segments = [
                         ("class:bottom-toolbar-plan bold", " [PLAN MODE] "),
                         ("class:bottom-toolbar-plan", f"cfi-ai | {self.status.display}  "),
-                        ("class:bottom-toolbar-plan italic", "Shift+Tab to exit plan mode "),
                     ]
+                    if cost_segment:
+                        segments.append(
+                            ("class:bottom-toolbar-plan", f"{cost_segment}  ")
+                        )
+                    segments.append(
+                        ("class:bottom-toolbar-plan italic", "Shift+Tab to exit plan mode ")
+                    )
+                    return segments
                 mode = "chatting_plan" if self._plan_mode else "chatting"
                 self.status.set_mode(mode)
                 display = self.status.display
+                cost_html = f"  {cost_segment}" if cost_segment else ""
                 return HTML(
-                    f"cfi-ai | {display}"
+                    f"cfi-ai | {display}{cost_html}"
                     "  <i>Shift+Tab to toggle plan mode</i>"
                 )
 

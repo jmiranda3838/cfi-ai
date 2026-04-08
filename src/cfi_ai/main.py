@@ -6,6 +6,7 @@ import warnings
 from cfi_ai import __version__
 from cfi_ai.config import Config
 from cfi_ai.client import Client
+from cfi_ai.cost_tracker import CostTracker
 from cfi_ai.workspace import Workspace
 from cfi_ai.prompts.system import build_system_prompt
 from cfi_ai.ui import UI
@@ -169,6 +170,8 @@ def main() -> None:
     )
     client = Client(config)
     ui = UI()
+    cost_tracker = CostTracker(model=config.model)
+    ui.cost_tracker = cost_tracker
 
     # Route all log output through Rich console for Live-safe display
     _fmt = logging.Formatter("%(name)s %(levelname)s %(message)s")
@@ -193,6 +196,6 @@ def main() -> None:
         ui.print_info(update_msg)
 
     try:
-        run_agent_loop(client, ui, workspace, system_prompt, config)
+        run_agent_loop(client, ui, workspace, system_prompt, config, cost_tracker=cost_tracker)
     except KeyboardInterrupt:
         ui.print_info("\nClawdius waves goodbye.")

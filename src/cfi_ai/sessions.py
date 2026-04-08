@@ -76,6 +76,10 @@ class SessionStore:
         self._path = SESSIONS_DIR / f"{self.session_id}.json"
         self._created_at = time.time()
         self._first_user_message: str | None = None
+        # Populated by adopt() from the on-disk session payload so the agent
+        # loop can seed a fresh CostTracker after /resume. None for new
+        # sessions or sessions saved before this field existed.
+        self.usage: dict | None = None
 
     def adopt(self, session_id: str, path: Path) -> None:
         """Re-point this store at an existing session file."""
@@ -88,14 +92,17 @@ class SessionStore:
             data = json.loads(path.read_text())
             self._created_at = float(data.get("created_at", self._created_at))
             self._first_user_message = data.get("first_user_message") or None
+            self.usage = data.get("usage") or None
         except Exception:
             _log.debug("session_adopt_read_failed path=%s", path, exc_info=True)
 
-    def save(self, messages: list[types.Content]) -> None:
+    def save(self, messages: list[types.Content], usage: dict | None = None) -> None:
         """Write the current conversation state to disk.
 
         Silently no-ops if ``messages`` is empty or any error occurs — session
-        persistence must never crash the agent loop.
+        persistence must never crash the agent loop. ``usage`` is the
+        ``CostTracker.to_dict()`` payload (or ``None``) and is persisted under
+        the top-level ``"usage"`` key so /resume can restore running totals.
         """
         if not messages:
             return
@@ -118,6 +125,8 @@ class SessionStore:
                 "first_user_message": self._first_user_message or "",
                 "messages": serialized,
             }
+            if usage is not None:
+                payload["usage"] = usage
 
             SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
             tmp = self._path.with_suffix(self._path.suffix + ".tmp")
