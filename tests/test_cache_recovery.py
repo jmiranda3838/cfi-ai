@@ -375,6 +375,7 @@ def test_run_main_loop_recovers_from_two_consecutive_expiries():
             readonly_api_tools=MM(),
             plan_system_prompt="plan_sys",
             cache_manager=mock_cache_manager,
+            session_store=MM(),
         )
 
     # Refresh fired exactly twice (one per expiry, proving the gate was reset

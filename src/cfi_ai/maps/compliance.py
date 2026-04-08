@@ -9,6 +9,7 @@ from cfi_ai.maps import MapResult, build_map_message, register_map
 from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
 
 if TYPE_CHECKING:
+    from cfi_ai.sessions import SessionStore
     from cfi_ai.ui import UI
     from cfi_ai.workspace import Workspace
 
@@ -17,7 +18,12 @@ if TYPE_CHECKING:
     "compliance",
     description="Run Optum compliance check on a client's records; missing records may be surfaced as findings",
 )
-def handle_compliance(args: str | None, ui: UI, workspace: "Workspace") -> MapResult:
+def handle_compliance(
+    args: str | None,
+    ui: UI,
+    workspace: "Workspace",
+    session_store: "SessionStore",
+) -> MapResult:
     if args and args.strip():
         tokens = args.strip().split()
         if len(tokens) == 1:

@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from enum import Enum, auto
 from pathlib import Path
+from typing import TYPE_CHECKING
 
 from prompt_toolkit import PromptSession
 from prompt_toolkit.application import Application
@@ -22,6 +23,9 @@ from rich.text import Text
 from rich.theme import Theme
 
 from cfi_ai import __version__
+
+if TYPE_CHECKING:
+    from cfi_ai.sessions import SessionMeta
 
 
 @dataclass
@@ -266,6 +270,10 @@ class UI:
         self.console.print(f"[grey70]{workspace_path}[/grey70]")
         self.console.print()
         self.console.print("[muted]Ctrl+C to exit, Escape to cancel, Shift+Tab for plan mode.[/muted]")
+        self.console.print(
+            "[muted]Chats are stored locally for 30 days in ~/.config/cfi-ai/sessions/ "
+            "(use /resume to reload).[/muted]"
+        )
         self.console.print()
 
     def get_input(self) -> UserInput | None:
@@ -412,6 +420,85 @@ class UI:
         )
 
         return app.run()
+
+    def prompt_session_select(self, sessions: list[SessionMeta]) -> SessionMeta | None:
+        """Show an arrow-key menu for picking a previous chat session.
+
+        Returns the selected ``SessionMeta``, or ``None`` on Escape/Ctrl-C.
+        """
+        if not sessions:
+            return None
+
+        selected = [0]
+
+        def _fmt_row(meta, is_selected: bool) -> str:
+            from datetime import datetime as _dt
+
+            try:
+                ts = _dt.fromtimestamp(meta.updated_at).strftime("%b %d %H:%M")
+            except (ValueError, OSError):
+                ts = "???"
+            preview = (meta.first_user_message or "(no text)").replace("\n", " ")
+            if len(preview) > 70:
+                preview = preview[:67] + "..."
+            marker = "\u25b6" if is_selected else " "
+            return f"  {marker} [{ts}] ({meta.message_count} msgs) {preview}"
+
+        def _get_menu_text():
+            fragments = [("class:approval", "  resume which session?\n\n")]
+            for i, meta in enumerate(sessions):
+                is_sel = i == selected[0]
+                style = "class:approval" if is_sel else "class:muted"
+                fragments.append((style, _fmt_row(meta, is_sel) + "\n"))
+            fragments.append(("", "\n"))
+            fragments.append(("class:muted", "  \u2191/\u2193 select  enter confirm  esc cancel"))
+            return fragments
+
+        kb = KeyBindings()
+
+        @kb.add("up")
+        def _up(event):
+            selected[0] = (selected[0] - 1) % len(sessions)
+            event.app.invalidate()
+
+        @kb.add("down")
+        def _down(event):
+            selected[0] = (selected[0] + 1) % len(sessions)
+            event.app.invalidate()
+
+        @kb.add("enter")
+        def _enter(event):
+            event.app.exit(result=sessions[selected[0]])
+
+        @kb.add("escape")
+        def _escape(event):
+            event.app.exit(result=None)
+
+        @kb.add("c-c")
+        def _ctrl_c(event):
+            event.app.exit(exception=KeyboardInterrupt)
+
+        layout = Layout(
+            Window(
+                FormattedTextControl(_get_menu_text, show_cursor=False),
+                dont_extend_height=True,
+            )
+        )
+
+        app: Application = Application(
+            layout=layout,
+            key_bindings=kb,
+            style=PT_STYLE,
+            erase_when_done=True,
+            full_screen=False,
+        )
+
+        try:
+            return app.run()
+        except KeyboardInterrupt:
+            return None
+        except EOFError:
+            return None
 
     def run_interview(self, questions: list[dict]) -> list[dict] | None:
         """Present interview questions one at a time.

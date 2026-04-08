@@ -17,6 +17,7 @@ from cfi_ai.config import Config
 from cfi_ai.maps import dispatch_map, parse_map_invocation
 from cfi_ai.planner import ExecutionPlan, format_plan
 from cfi_ai.prompts.system import build_plan_mode_system_prompt
+from cfi_ai.sessions import SessionStore
 from cfi_ai.ui import UI, UserInput, PlanApproval
 from cfi_ai.workspace import Workspace
 import cfi_ai.tools as tools
@@ -653,6 +654,10 @@ def _try_recover_cache_expiry(
 
 def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: str, config: Config) -> None:
     messages: list[types.Content] = []
+    # Prune expired session files before constructing the store so stale PHI
+    # doesn't linger for users who rarely hit /resume.
+    SessionStore.prune_expired()
+    session_store = SessionStore(workspace)
     api_tools = tools.get_api_tools(enable_grounding=config.grounding_enabled)
     readonly_api_tools = tools.get_readonly_api_tools(enable_grounding=config.grounding_enabled)
     plan_system_prompt = build_plan_mode_system_prompt(
@@ -677,7 +682,7 @@ def run_agent_loop(client: Client, ui: UI, workspace: Workspace, system_prompt: 
         _run_main_loop(
             client, ui, workspace, system_prompt, config,
             messages, api_tools, readonly_api_tools, plan_system_prompt,
-            cache_manager,
+            cache_manager, session_store,
         )
     finally:
         if cache_manager is not None:
@@ -695,6 +700,7 @@ def _run_main_loop(
     readonly_api_tools: list[types.Tool],
     plan_system_prompt: str,
     cache_manager: CacheManager | None,
+    session_store: SessionStore,
 ) -> None:
     """Inner main loop, extracted so run_agent_loop can wrap with try/finally for cache cleanup."""
     while True:
@@ -719,9 +725,14 @@ def _run_main_loop(
         parsed = parse_map_invocation(user_text)
         if parsed is not None:
             map_name, map_args = parsed
-            result = dispatch_map(map_name, map_args, ui, workspace)
+            result = dispatch_map(map_name, map_args, ui, workspace, session_store)
             if result.error:
                 ui.print_error(result.error)
+                continue
+            if result.loaded_messages is not None:
+                # /resume: replace in-memory conversation with the loaded one.
+                messages.clear()
+                messages.extend(result.loaded_messages)
                 continue
             if result.handled and result.message is None and result.parts is None:
                 continue
@@ -1179,3 +1190,6 @@ def _run_main_loop(
 
         elapsed = time.monotonic() - t0 - approval_wait
         ui.print_elapsed(elapsed)
+
+        # Persist the completed turn so it can be resumed later via /resume.
+        session_store.save(messages)

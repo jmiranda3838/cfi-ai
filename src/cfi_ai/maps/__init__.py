@@ -8,6 +8,7 @@ from typing import TYPE_CHECKING, Callable
 if TYPE_CHECKING:
     from google.genai import types
 
+    from cfi_ai.sessions import SessionStore
     from cfi_ai.ui import UI
     from cfi_ai.workspace import Workspace
 
@@ -22,6 +23,7 @@ class MapResult:
     - parts set -> multipart content (e.g. text + audio), sent to LLM directly
     - handled=True + no message/parts -> map printed output, skip to next prompt
     - error set -> display error, skip to next prompt
+    - loaded_messages set -> replace in-memory conversation with these (used by /resume)
     """
 
     message: str | None = None
@@ -30,9 +32,10 @@ class MapResult:
     error: str | None = None
     map_mode: bool = False
     plan_prompt: str | None = None
+    loaded_messages: list[types.Content] | None = None
 
 
-MapHandler = Callable[["str | None", "UI", "Workspace"], MapResult]
+MapHandler = Callable[["str | None", "UI", "Workspace", "SessionStore"], MapResult]
 
 MAPS: dict[str, MapHandler] = {}
 
@@ -68,13 +71,19 @@ def parse_map_invocation(user_input: str) -> tuple[str, str | None] | None:
     return (name, args)
 
 
-def dispatch_map(name: str, args: str | None, ui: UI, workspace: Workspace) -> MapResult:
+def dispatch_map(
+    name: str,
+    args: str | None,
+    ui: UI,
+    workspace: Workspace,
+    session_store: SessionStore,
+) -> MapResult:
     """Dispatch a parsed map. Returns MapResult."""
     handler = MAPS.get(name)
     if handler is None:
         available = ", ".join(f"/{n}" for n in sorted(MAPS))
         return MapResult(error=f"Unknown map: /{name}. Available: {available}")
-    return handler(args, ui, workspace)
+    return handler(args, ui, workspace, session_store)
 
 
 def get_map_descriptions() -> dict[str, str]:
@@ -119,6 +128,7 @@ def build_map_message(
 from cfi_ai.maps import compliance as _compliance_map  # noqa: F401, E402
 from cfi_ai.maps import help as _help_map  # noqa: F401, E402
 from cfi_ai.maps import intake as _intake_map  # noqa: F401, E402
+from cfi_ai.maps import resume as _resume_map  # noqa: F401, E402
 from cfi_ai.maps import session as _session_map  # noqa: F401, E402
 from cfi_ai.maps import tp_review as _tp_review_map  # noqa: F401, E402
 from cfi_ai.maps import wellness_assessment as _wa_map  # noqa: F401, E402

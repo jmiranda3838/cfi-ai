@@ -9,6 +9,7 @@ from cfi_ai.maps import MapResult, register_map
 from cfi_ai.prompts.intake import INTAKE_PLAN_PROMPT, INTAKE_PROMPT
 
 if TYPE_CHECKING:
+    from cfi_ai.sessions import SessionStore
     from cfi_ai.ui import UI
     from cfi_ai.workspace import Workspace
 
@@ -31,7 +32,12 @@ _FILE_INPUT_TEMPLATE = (
 
 
 @register_map("intake", description="Process intake materials into TheraNest-ready clinical documents")
-def handle_intake(args: str | None, ui: UI, workspace: Workspace) -> MapResult:
+def handle_intake(
+    args: str | None,
+    ui: UI,
+    workspace: Workspace,
+    session_store: SessionStore,
+) -> MapResult:
     today = datetime.date.today().isoformat()
 
     if args and args.strip():
