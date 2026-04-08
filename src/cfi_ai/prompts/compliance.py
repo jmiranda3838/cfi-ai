@@ -1,8 +1,13 @@
 """Compliance check prompt template for the /compliance command."""
 
-from cfi_ai.prompts.shared import CRITICAL_INSTRUCTIONS, NARRATIVE_THERAPY_ORIENTATION
+from cfi_ai.prompts.shared import (
+    CRITICAL_INSTRUCTIONS,
+    NARRATIVE_THERAPY_ORIENTATION,
+    THERANEST_INTERVENTIONS,
+    indent_block,
+)
 
-COMPLIANCE_PROMPT = (
+_RAW_COMPLIANCE_PROMPT = (
     """\
 You are an Optum Treatment Record Audit compliance reviewer. The clinician practices \
 narrative therapy. Narrative therapy uses specific clinical language and interventions \
@@ -180,12 +185,24 @@ by number, with HOW each was addressed; cross-check against #12
 - #20 Tarasoff / Mandated Reporting Triggered? — Yes/No populated
 - #21 Tarasoff explanation — populated when #20 = Yes
 - #25 Therapeutic Intervention — specific clinical techniques used today, \
-mapped to TP objectives. Narrative therapy interventions (externalizing \
-conversations, re-authoring conversations, scaffolding questions, \
+mapped to TP objectives. The TP intervention field uses TheraNest's \
+predefined dropdown labels (e.g., "Narrative Therapy", "Cognitive-Behavioral \
+Therapy", "Reframing"), while progress notes describe interventions in \
+narrative-therapy prose. Map note descriptions to the appropriate TheraNest \
+label before cross-checking against the TP intervention list:
+  - Externalizing conversations, re-authoring, scaffolding questions, \
 deconstructive listening/questioning, remembering practices, definitional \
-ceremonies, outsider witness practices, therapeutic documents) are valid \
-clinical interventions — do NOT flag them as drift unless they truly differ \
-from the TP. Cross-check against TP intervention list.
+ceremonies, outsider witness practices, therapeutic documents → \
+"Narrative Therapy"
+  - Cognitive restructuring, thought records, behavioral activation → \
+"Cognitive-Behavioral Therapy"
+  - Miracle question, "3 wishes" / "magic wand" → \
+"Magic Question (3 wishes/magic wand)"
+  - Solution-focused / scaling questions → "Solution-focused Therapy"
+  - Psychoeducation about diagnosis or coping → "Psychoeducation"
+  Only flag drift when notes consistently document interventions whose closest \
+TheraNest label is NOT in the current TP intervention list. The full master \
+list is at the bottom of this prompt.
 - #26 Client's Response to Intervention — observable response THIS session: \
 engagement, willingness, insight, resistance. Distinct from #27.
 - #27 Client Progress — cumulative trajectory: externalizing ratings \
@@ -235,7 +252,10 @@ generation to trigger the one-time backfill `interview`.
 These checks apply whenever both a treatment plan and progress notes exist:
 
 - **Intervention consistency:** Do progress note interventions match treatment plan \
-interventions? Flag any interventions documented in notes but not listed in the TP.
+interventions? The TP uses TheraNest dropdown labels; notes use narrative-therapy \
+prose. Apply the label-mapping rule from the #25 check above before flagging. \
+Only flag interventions documented in notes whose closest TheraNest label is not \
+listed in the TP.
 - **Progress pattern:** Are there 3+ consecutive notes showing lack of progress on \
 the same objective? If so, flag that the TP should be modified.
 - **Goal coverage:** Are all TP goals being addressed across recent notes, or are \
@@ -287,5 +307,20 @@ Use [PASS], [FAIL], and [WARN] consistently:
 - **WARN** — technically present but weak, vague, or could be strengthened
 
 Do not infer missing clinical documentation from other records just to complete a check.
+
+---
+
+## TheraNest Intervention Master List (verbatim — used for label-mapping)
+
+The TP intervention field is restricted to the labels below. Use this list to \
+translate narrative-therapy language in progress note #25 into the correct \
+dropdown label before flagging intervention drift.
+
+__INTERVENTION_LIST__
 """
+)
+
+COMPLIANCE_PROMPT = _RAW_COMPLIANCE_PROMPT.replace(
+    "__INTERVENTION_LIST__",
+    indent_block(THERANEST_INTERVENTIONS, ""),
 )

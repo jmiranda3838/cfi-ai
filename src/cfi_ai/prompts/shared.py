@@ -1,5 +1,15 @@
 """Shared clinical specification blocks used across prompt templates."""
 
+
+def indent_block(text: str, prefix: str) -> str:
+    """Prefix each non-empty line of ``text`` with ``prefix``.
+
+    Used to nest a multi-line block (like the TheraNest intervention master
+    list) cleanly underneath a Markdown bullet that requires a specific indent.
+    """
+    return "\n".join(f"{prefix}{line}" if line else line for line in text.splitlines())
+
+
 CRITICAL_INSTRUCTIONS = """\
 ## When Executing This Workflow
 
@@ -133,7 +143,120 @@ religious consultant, accessibility needs).
 # Backwards-compat alias (was a separate, near-identical constant before merging)
 INITIAL_ASSESSMENT_GUIDANCE_FILE = INITIAL_ASSESSMENT_GUIDANCE
 
-TREATMENT_PLAN_GUIDANCE = """\
+# TheraNest's Treatment Plan tab populates the Intervention field on each
+# objective from a fixed dropdown. Master list is the single source of truth —
+# imported by tp_review.py and compliance.py so all three prompts agree on the
+# allowed vocabulary and the label-mapping rules stay in sync.
+THERANEST_INTERVENTIONS = """\
+Acceptance (of limitations/reality)
+Accountability
+ACOA Issues
+Anger Management
+Art Therapy
+Assertiveness Training
+Behavior Modification
+Best Practices for
+Bibliotherapy
+Building on Strengths
+Career Counseling
+Coaching
+Cognitive-Behavioral Therapy
+Communication Skills
+Community
+Conflict Resolution
+Couples Therapy
+Crisis Planning
+Defusing/Debriefing
+Dignity/Self-worth
+Discipline
+Drug & Alcohol Referral
+Education
+Empathy
+Empowerment
+Encouragement
+Expression of Feelings
+Fair Fighting Skills
+Family Therapy
+Feedback Loops
+Forgiveness
+Gestalt Therapy
+Getting a Job (Better Job)
+Goal Planning/Orientation
+Good Choices/Bad Choices
+Good Touch/Bad Touch
+Gratitude
+Grief/Loss/Bereavement Issues
+Homework Assignments
+Humility
+Increasing Coping Skills
+Independence
+Journaling
+Letting Go
+Life Skills Training
+Listening
+Logical Consequences of Behavior
+Magic Question (3 wishes/magic wand)
+Making Friends
+MISA/MICA Issues (Dual Dx Treatment)
+Modeling Appropriate Behaviors
+Money Management
+Monitoring of
+Motivation
+Narrative Therapy
+Normalization
+Parent Effectiveness Training/Skills
+Partializing (breaking down goals into manageable pieces)
+Past Life Regression Therapy
+Patience
+Perseverance
+Personal Hygiene
+Play Therapy
+Portion Control (Weight Control)
+Positive Self-talk
+Practice Exercises
+Primal Screams
+Priority Setting
+Processing
+Psychodrama
+Psychoeducation
+Reality Therapy
+Recognizing
+Refer to
+Reframing
+Rehearsal
+Relapse Prevention
+Relationship Issues
+Relaxation Techniques
+Responsibility for Actions
+Role Playing
+Self-care Skills
+Self-direction (Independence)
+Sexual Identity Issues
+Sexuality
+Social Skills Training
+Social-Vocational Training
+Socialization
+Solution-focused Therapy
+Spiritual Exploration
+Starting Over
+Stop-Think-Act
+Strength Focus/Listing
+Stress Inoculation
+Stress Management
+Supportive Relationships
+Talk Therapy
+Therapeutic Stories & Worksheets
+Timeouts
+Transactional Analysis (P-A-C)
+Trigger Recognition
+Twelve Step
+Values Clarification
+Verbal Communication Skills
+Weight Control/Loss
+Workbooks\
+"""
+
+_RAW_TREATMENT_PLAN_GUIDANCE = """\
 ## Treatment Plan Guidance (TheraNest Part 7)
 
 Write a treatment plan structured to match TheraNest's Treatment Plan tab. Each \
@@ -172,20 +295,26 @@ has decreased from 8/10 to 4/10 or below," "Client will identify and describe \
 framed as narrative therapy milestones (e.g., "Client will externalize the \
 problem and name it," "Client will identify 2 unique outcomes per session," \
 "Client will articulate preferred story of self in relationship to the problem")
-    - Intervention — use narrative therapy intervention language. Examples: \
-"Therapist will use externalizing conversations to help the client develop a \
-relationship with the problem that increases their sense of agency"; \
-"Therapist will facilitate re-authoring conversations to identify and thicken \
-the client's preferred story"; \
-"Therapist will use scaffolding questions to connect unique outcomes to the \
-client's values and intentions"; \
-"Therapist will employ remembering practices to reconnect the client with \
-supportive relational figures"; \
-"Therapist will use deconstructive listening to examine the influence of \
-dominant cultural narratives on the problem story"
+    - Intervention — pick one or more items VERBATIM from the TheraNest \
+intervention list below. **Strict rules:**
+      - Use the exact label as written — do not paraphrase, abbreviate, or \
+modify capitalization.
+      - Multiple items per objective are allowed; separate with commas \
+(e.g., "Narrative Therapy, Reframing, Empowerment").
+      - Do NOT add explanatory prose, parentheticals, or therapist-action \
+sentences after the labels — the Intervention field is a label list, not a \
+description. The narrative-therapy framing belongs in the Client Goal and \
+Objective Description fields above, not here.
+      - The complete allowed list:
+__INTERVENTION_LIST__
     - Target Completion Date
     - Status: In Progress
 """
+
+TREATMENT_PLAN_GUIDANCE = _RAW_TREATMENT_PLAN_GUIDANCE.replace(
+    "__INTERVENTION_LIST__",
+    indent_block(THERANEST_INTERVENTIONS, "      "),
+)
 
 INTAKE_PROGRESS_NOTE_GUIDANCE = """\
 ## Progress Note Guidance (TheraNest 30-Field Form — Intake Session)

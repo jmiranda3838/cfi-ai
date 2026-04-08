@@ -1,8 +1,13 @@
 """Treatment plan review prompt template for the /tp-review command."""
 
-from cfi_ai.prompts.shared import CRITICAL_INSTRUCTIONS, NARRATIVE_THERAPY_ORIENTATION
+from cfi_ai.prompts.shared import (
+    CRITICAL_INSTRUCTIONS,
+    NARRATIVE_THERAPY_ORIENTATION,
+    THERANEST_INTERVENTIONS,
+    indent_block,
+)
 
-TP_REVIEW_PROMPT = (
+_RAW_TP_REVIEW_PROMPT = (
     """\
 You are a clinical documentation assistant helping an Associate Marriage and Family \
 Therapist (AMFT) who practices narrative therapy review and update a client's \
@@ -107,13 +112,25 @@ on the same objective
 4. **Emerging themes** — clinical themes in #22 Subjective and #23 Session \
 Focus across notes not covered by any current TP objective
 5. **Intervention drift** — compare TP intervention list against #25 \
-Therapeutic Intervention across notes. Note: narrative therapy interventions \
-include externalizing conversations, re-authoring conversations, scaffolding \
-questions, deconstructive listening/questioning, remembering practices, \
-definitional ceremonies, outsider witness practices, and therapeutic documents \
-(letters, certificates, declarations). These are legitimate clinical \
-interventions — do not flag them as drift unless they genuinely differ from \
-the TP
+Therapeutic Intervention across notes. The TP intervention field uses \
+TheraNest's predefined dropdown labels (see master list at the bottom of \
+this prompt), while progress notes describe interventions in narrative-therapy \
+prose. Map note descriptions to the appropriate TheraNest label before flagging \
+drift:
+   - Externalizing conversations, re-authoring, scaffolding questions, \
+deconstructive listening/questioning, remembering practices, definitional \
+ceremonies, outsider witness practices, therapeutic documents → \
+"Narrative Therapy"
+   - Cognitive restructuring, thought records, behavioral activation → \
+"Cognitive-Behavioral Therapy"
+   - Miracle question, "3 wishes" / "magic wand" → \
+"Magic Question (3 wishes/magic wand)"
+   - Solution-focused / scaling questions → "Solution-focused Therapy"
+   - Psychoeducation about diagnosis or coping → "Psychoeducation"
+   Only flag genuine drift — i.e., when notes consistently document \
+interventions whose closest TheraNest label is NOT in the current TP \
+intervention list. When updating the TP, pick the new label(s) verbatim from \
+the master list at the bottom of this prompt.
 6. **Wellness Assessment trend** — if wellness assessment files are present, \
 note the GD score trend. Also check #30 Additional Notes for any WA \
 administered during a session. Declining GD supports "Complete" status; \
@@ -147,7 +164,12 @@ progress notes reference these numbers)
   - Update status: `In Progress` → `Complete`, `Closed`, or `Deferred` based on \
 note evidence
   - New goals continue numbering (if Goals 1-3 exist, new goals start at Goal 4)
-  - Update interventions to match what is actually documented in session notes
+  - Update interventions to match what is actually documented in session \
+notes. **The intervention field MUST use only verbatim items from the TheraNest \
+master list at the bottom of this prompt.** No prose, no elaboration, \
+comma-separated labels only. Apply the label-mapping rule from the Phase 1 \
+intervention drift step to translate narrative-therapy language in notes into \
+the correct dropdown label.
 
 #### File 2: `clients/{client_id}/treatment-plan/{date}-tp-review-summary.md`
 
@@ -204,5 +226,20 @@ history.
 - Do NOT change the Initiation Date.
 - If the latest treatment plan or any progress notes are missing, respond with findings \
 only and do not call `write_file`.
+
+---
+
+## TheraNest Intervention Master List (verbatim — use exact labels)
+
+When updating the TP intervention field, every entry MUST be one of these \
+labels, exactly as written. Do not paraphrase, abbreviate, or add prose. \
+Multiple labels per objective are allowed; comma-separate them.
+
+__INTERVENTION_LIST__
 """
+)
+
+TP_REVIEW_PROMPT = _RAW_TP_REVIEW_PROMPT.replace(
+    "__INTERVENTION_LIST__",
+    indent_block(THERANEST_INTERVENTIONS, ""),
 )
