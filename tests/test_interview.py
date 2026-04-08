@@ -47,14 +47,14 @@ def test_interview_not_mutating():
 def test_interview_in_readonly_tools():
     """interview is available in plan mode (readonly tool set)."""
     readonly = tools.get_readonly_api_tools()
-    names = {fd.name for fd in readonly.function_declarations}
+    names = {fd.name for fd in readonly[0].function_declarations}
     assert "interview" in names
 
 
 def test_interview_in_all_tools():
     """interview is in the full tool set."""
     all_tools = tools.get_api_tools()
-    names = {fd.name for fd in all_tools.function_declarations}
+    names = {fd.name for fd in all_tools[0].function_declarations}
     assert "interview" in names
 
 
@@ -243,3 +243,20 @@ def test_run_interview_whitespace_only_reprompts(tmp_path):
     answers = ui.run_interview(questions)
     assert answers is not None
     assert answers[0]["answer"] == "real"
+
+
+def test_run_interview_single_line_passes_multiline_false(tmp_path):
+    """Single-line questions must explicitly pass multiline=False so a prior
+    multiline question (which leaves session.multiline=True permanently) cannot
+    pollute the next single-line question's Enter handling."""
+    ui, mock_session = _make_ui(tmp_path)
+    # Simulate session state polluted by a prior multiline call
+    mock_session.multiline = True
+    mock_session.prompt.return_value = "answer"
+
+    questions = [{"id": "q1", "text": "Single-line question?"}]
+    answers = ui.run_interview(questions)
+    assert answers == [{"id": "q1", "answer": "answer"}]
+
+    _, kwargs = mock_session.prompt.call_args
+    assert kwargs.get("multiline") is False

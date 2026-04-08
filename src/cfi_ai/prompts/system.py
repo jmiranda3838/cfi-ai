@@ -82,6 +82,7 @@ def build_plan_mode_system_prompt(
     workspace_path: str,
     workspace_summary: str,
     workspace: Workspace | None = None,
+    grounding_enabled: bool = True,
 ) -> str:
     """Build the system prompt for plan mode (read-only research + structured plan)."""
     clients_section = ""
@@ -90,6 +91,14 @@ def build_plan_mode_system_prompt(
         clients_section = CLIENTS_SECTION
 
     search_cmd = "rg" if shutil.which("rg") is not None else "grep"
+
+    web_search_bullet = ""
+    if grounding_enabled:
+        web_search_bullet = (
+            "- web search: Google Search grounding is enabled. You can pull in current web "
+            "information for research-style questions (guidelines, drug interactions, recent "
+            "publications). Citations are surfaced automatically — do not invent URLs.\n"
+        )
 
     return f"""\
 You are cfi-ai in PLAN MODE. You are a clinical documentation assistant for an \
@@ -105,11 +114,12 @@ mutating commands.
 
 ## Available Tools (read-only only)
 - run_command: read-only terminal commands (ls, find, {search_cmd}, cat, head, tail, wc, grep, diff, file, pwd)
-- attach_path: load any local file into context (text, audio, images) — absolute or workspace-relative
+- attach_path: load any local file into context (text, audio, images, PDFs). Accepts an absolute path anywhere the user can read (Desktop, /tmp, /var/folders, etc.) or a workspace-relative path. Backslash-escaped paths are accepted as-is.
 - extract_document: extract text from PDFs via PyMuPDF (text-only; use attach_path for scanned/visual forms)
 - interview: ask the user structured questions interactively (presented one at a time)
 - activate_map: activate a clinical map when the user describes a clinical task. \
 Call this tool ALONE — do not combine with other tools.
+{web_search_bullet}\
 - end_turn: signal that your turn is complete and the user should review your work. Call alone.
 
 You do NOT have access to apply_patch, write_file, or mutating commands (mv, cp, mkdir, rm).
@@ -166,6 +176,7 @@ def build_system_prompt(
     workspace_path: str,
     workspace_summary: str,
     workspace: Workspace | None = None,
+    grounding_enabled: bool = True,
 ) -> str:
     clients_section = ""
     maps_section = MAPS_SECTION
@@ -173,6 +184,14 @@ def build_system_prompt(
         clients_section = CLIENTS_SECTION
 
     search_cmd = "rg" if shutil.which("rg") is not None else "grep"
+
+    web_search_bullet = ""
+    if grounding_enabled:
+        web_search_bullet = (
+            "- web search: Gemini has Google Search grounding enabled. You can answer questions "
+            "that require current web information (recent guidelines, drug interactions, news, "
+            "documentation lookups). Citations are surfaced automatically — do not invent URLs.\n"
+        )
 
     return f"""\
 You are cfi-ai, a clinical documentation assistant for an Associate Marriage and \
@@ -189,9 +208,10 @@ measured through changes in the client's relationship to the problem.
 
 ### Reading & Inspection
 - run_command: terminal commands (ls, find, {search_cmd}, cat, head, tail, wc, grep, diff, file, pwd)
-- attach_path: load text files, audio, and images into context — absolute or workspace-relative
+- attach_path: load any local file into context (text, audio, images, PDFs). Accepts an absolute path anywhere the user can read (Desktop, /tmp, /var/folders, etc.) or a workspace-relative path. Backslash-escaped paths are accepted as-is.
 - extract_document: extract text from PDFs via PyMuPDF (text-only; use attach_path for scanned/visual forms)
 - interview: ask the user structured questions when you need information before proceeding — questions are presented one at a time with optional suggested answers
+{web_search_bullet}\
 
 ### Modification (requires approval)
 - apply_patch: multi-edit search/replace on existing files

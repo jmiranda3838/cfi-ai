@@ -96,6 +96,8 @@ def main() -> None:
         print("  CFI_AI_MODEL            Model name (default: gemini-3-flash-preview)")
         print("  CFI_AI_MAX_TOKENS       Max tokens (default: 8192)")
         print("  CFI_AI_CONTEXT_CACHE    Disable context caching (set to 0 or false)")
+        print("  CFI_AI_GROUNDING_ENABLED       Disable Google Search grounding (set to 0 or false)")
+        print("  CFI_AI_GROUNDING_OPEN_BROWSER  Auto-open Vertex search-suggestions HTML in browser")
         return
     if "--update" in sys.argv:
         import shutil
@@ -147,7 +149,10 @@ def main() -> None:
             model=model_override,
             max_tokens=config.max_tokens,
             context_cache=config.context_cache,
+            grounding_open_browser=config.grounding_open_browser,
+            grounding_enabled=config.grounding_enabled,
         )
+        config.validate()
 
     warnings.filterwarnings(
         "ignore",
@@ -158,7 +163,10 @@ def main() -> None:
     _check_adc()
 
     workspace = Workspace()
-    system_prompt = build_system_prompt(str(workspace.root), workspace.summary(), workspace=workspace)
+    system_prompt = build_system_prompt(
+        str(workspace.root), workspace.summary(), workspace=workspace,
+        grounding_enabled=config.grounding_enabled,
+    )
     client = Client(config)
     ui = UI()
 

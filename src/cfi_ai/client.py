@@ -6,11 +6,37 @@ import uuid
 from typing import Generator
 
 from google import genai
+from google.genai import errors as genai_errors
 from google.genai import types
 
 from cfi_ai.config import Config
 
 _log = logging.getLogger(__name__)
+
+
+def is_cache_expired_error(exc: BaseException) -> bool:
+    """Check if an exception is caused by an expired Vertex AI context cache.
+
+    Vertex returns this as a 400 INVALID_ARGUMENT with the message
+    'Cache content {N} is expired.' We walk the cause/context chain to
+    catch wrapped exceptions raised through the lazy stream generator.
+    """
+    current: BaseException | None = exc
+    while current is not None:
+        if isinstance(current, genai_errors.APIError):
+            status = getattr(current, "status", None) or ""
+            message = getattr(current, "message", None) or ""
+            if (
+                status == "INVALID_ARGUMENT"
+                and "Cache content" in message
+                and "is expired" in message
+            ):
+                return True
+        msg = str(current)
+        if "Cache content" in msg and "is expired" in msg:
+            return True
+        current = current.__cause__ or current.__context__
+    return False
 
 
 class CacheManager:
@@ -22,13 +48,13 @@ class CacheManager:
         self._caches: dict[str, str] = {}  # key -> cache resource name
         self._all_cache_names: list[str] = []  # track all for cleanup
 
-    def create_cache(self, key: str, system: str, tools: types.Tool) -> None:
+    def create_cache(self, key: str, system: str, tools: list[types.Tool]) -> None:
         """Create a cached content entry. Raises on failure (caller should catch)."""
         cache = self._genai_client.caches.create(
             model=self._model,
             config=types.CreateCachedContentConfig(
                 system_instruction=system,
-                tools=[tools],
+                tools=tools,
                 ttl="3600s",
                 display_name=f"cfi-ai-{key}",
             ),
@@ -46,6 +72,16 @@ class CacheManager:
     def invalidate(self, key: str) -> None:
         """Remove a single cache key (e.g. after a cached call fails)."""
         self._caches.pop(key, None)
+
+    def invalidate_all(self) -> None:
+        """Forget all local cache references without deleting server-side.
+
+        Use when caches are known to be expired or gone server-side — avoids
+        wasteful delete() round-trips that would 404. Also prunes
+        _all_cache_names so shutdown's delete_all() does not retry them.
+        """
+        self._caches.clear()
+        self._all_cache_names.clear()
 
     def reset(self, new_genai_client: genai.Client) -> None:
         """Delete all caches, update the client ref, and clear state."""
@@ -127,7 +163,7 @@ class Client:
         self,
         messages: list[types.Content],
         system: str,
-        tools: types.Tool,
+        tools: list[types.Tool],
         *,
         mode: str = "normal",
     ) -> StreamResult:
@@ -167,6 +203,14 @@ class Client:
                 )
                 return StreamResult(stream, request_id=request_id)
             except Exception as e:
+                if is_cache_expired_error(e):
+                    # Let the agent loop refresh caches and retry the request.
+                    self._cache_manager.invalidate(cache_key)
+                    _log.info(
+                        "[req:%s] cache_expired key=%s, propagating for refresh",
+                        request_id, cache_key,
+                    )
+                    raise
                 _log.warning(
                     "[req:%s] cached_call_failed key=%s, falling back: %s",
                     request_id, cache_key, e,
@@ -178,7 +222,7 @@ class Client:
             contents=messages,
             config=types.GenerateContentConfig(
                 system_instruction=system,
-                tools=[tools],
+                tools=tools,
                 max_output_tokens=max_tokens,
             ),
         )
@@ -193,6 +237,7 @@ class StreamResult:
         self._parts: list[types.Part] = []
         self._finish_reason: str | None = None
         self._usage_metadata: types.GenerateContentResponseUsageMetadata | None = None
+        self._grounding_metadata: types.GroundingMetadata | None = None
         self.request_id: str = request_id
 
     def text_chunks(self) -> Generator[str, None, None]:
@@ -210,6 +255,9 @@ class StreamResult:
             candidate = chunk.candidates[0]
             if candidate.finish_reason:
                 self._finish_reason = candidate.finish_reason
+            if candidate.grounding_metadata:
+                # Gemini streams grounding metadata on the final chunk only; last writer wins.
+                self._grounding_metadata = candidate.grounding_metadata
             if not candidate.content or not candidate.content.parts:
                 _log.debug(
                     "[req:%s] chunk %d finish_reason=%s no_parts=True",
@@ -269,6 +317,10 @@ class StreamResult:
     @property
     def usage_metadata(self) -> types.GenerateContentResponseUsageMetadata | None:
         return self._usage_metadata
+
+    @property
+    def grounding_metadata(self) -> types.GroundingMetadata | None:
+        return self._grounding_metadata
 
     @property
     def finish_reason(self) -> str | None:

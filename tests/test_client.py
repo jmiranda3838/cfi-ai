@@ -19,7 +19,7 @@ def test_map_mode_raises_max_tokens():
         mock_genai.Client.return_value.models.generate_content_stream.return_value = mock_stream
 
         client.stream_response(
-            messages=[], system="test", tools=MM(), mode="map"
+            messages=[], system="test", tools=[MM()], mode="map"
         )
 
         call_kwargs = mock_genai.Client.return_value.models.generate_content_stream.call_args
@@ -45,7 +45,7 @@ def test_normal_mode_keeps_configured_tokens():
         mock_genai.Client.return_value.models.generate_content_stream.return_value = mock_stream
 
         client.stream_response(
-            messages=[], system="test", tools=MM(), mode="normal"
+            messages=[], system="test", tools=[MM()], mode="normal"
         )
 
         call_kwargs = mock_genai.Client.return_value.models.generate_content_stream.call_args
@@ -76,7 +76,7 @@ def test_stream_response_uses_cached_content():
         client.set_cache_manager(cache_mgr)
 
         client.stream_response(
-            messages=[], system="test-system", tools=MM(), mode="normal"
+            messages=[], system="test-system", tools=[MM()], mode="normal"
         )
 
         call_kwargs = mock_genai.Client.return_value.models.generate_content_stream.call_args
@@ -103,7 +103,7 @@ def test_stream_response_fallback_on_no_cache():
         mock_stream = MM()
         mock_genai.Client.return_value.models.generate_content_stream.return_value = mock_stream
 
-        tools_arg = MM()
+        tools_arg = [MM(), MM()]
         client.stream_response(
             messages=[], system="test-system", tools=tools_arg, mode="normal"
         )
@@ -111,12 +111,14 @@ def test_stream_response_fallback_on_no_cache():
         call_kwargs = mock_genai.Client.return_value.models.generate_content_stream.call_args
         config_arg = call_kwargs.kwargs.get("config") or call_kwargs[1].get("config")
         assert config_arg.system_instruction == "test-system"
-        assert config_arg.tools == [tools_arg]
+        assert config_arg.tools == tools_arg
         assert config_arg.cached_content is None
 
 
-def test_stream_response_fallback_on_cache_error():
-    """When cached call fails, should retry without cache and invalidate."""
+def test_stream_response_fallback_on_generic_cached_call_error():
+    """Non-cache-expiry errors during a cached call should invalidate the cache
+    and fall back to a non-cached call. Real `Cache content N is expired` errors
+    take a different path (re-raise) — see test_stream_response_reraises_on_real_cache_expired_error."""
     from unittest.mock import patch, MagicMock as MM
     from cfi_ai.client import Client, CacheManager
     from cfi_ai.config import Config
@@ -131,15 +133,16 @@ def test_stream_response_fallback_on_cache_error():
         client = Client(mock_config)
         mock_stream = MM()
         gen_stream = mock_genai.Client.return_value.models.generate_content_stream
-        # First call (cached) fails, second (fallback) succeeds
-        gen_stream.side_effect = [RuntimeError("cache expired"), mock_stream]
+        # First call (cached) fails with a generic error (not the cache-expired
+        # signature), second (fallback) succeeds.
+        gen_stream.side_effect = [RuntimeError("transient network blip"), mock_stream]
 
         cache_mgr = MM(spec=CacheManager)
         cache_mgr.get_cache_name.return_value = "cached-name"
         client.set_cache_manager(cache_mgr)
 
         result = client.stream_response(
-            messages=[], system="test-system", tools=MM(), mode="normal"
+            messages=[], system="test-system", tools=[MM()], mode="normal"
         )
 
         # Should have called generate_content_stream twice
@@ -150,6 +153,53 @@ def test_stream_response_fallback_on_cache_error():
         second_call = gen_stream.call_args
         config_arg = second_call.kwargs.get("config") or second_call[1].get("config")
         assert config_arg.system_instruction == "test-system"
+
+
+def test_stream_response_reraises_on_real_cache_expired_error():
+    """Real `Cache content N is expired` errors should invalidate the cache and
+    re-raise (so the agent loop can refresh both caches and retry the request)."""
+    import pytest
+    from unittest.mock import patch, MagicMock as MM
+    from google.genai import errors as genai_errors
+    from cfi_ai.client import Client, CacheManager
+    from cfi_ai.config import Config
+
+    mock_config = MM(spec=Config)
+    mock_config.project = "test-project"
+    mock_config.location = "us-central1"
+    mock_config.model = "gemini-2.5-flash"
+    mock_config.max_tokens = 8192
+
+    expired = genai_errors.ClientError(
+        code=400,
+        response_json={
+            "error": {
+                "code": 400,
+                "status": "INVALID_ARGUMENT",
+                "message": "Cache content 1 is expired.",
+            }
+        },
+    )
+
+    with patch("cfi_ai.client.genai") as mock_genai:
+        client = Client(mock_config)
+        gen_stream = mock_genai.Client.return_value.models.generate_content_stream
+        # Only one entry — the call should re-raise, not fall back.
+        gen_stream.side_effect = [expired]
+
+        cache_mgr = MM(spec=CacheManager)
+        cache_mgr.get_cache_name.return_value = "cached-name"
+        client.set_cache_manager(cache_mgr)
+
+        with pytest.raises(genai_errors.ClientError):
+            client.stream_response(
+                messages=[], system="test-system", tools=MM(), mode="normal"
+            )
+
+        # No fallback attempted — only the cached call ran.
+        assert gen_stream.call_count == 1
+        # Cache was invalidated before the re-raise.
+        cache_mgr.invalidate.assert_called_once_with("normal")
 
 
 def test_plan_mode_uses_plan_cache_key():
@@ -174,7 +224,7 @@ def test_plan_mode_uses_plan_cache_key():
         client.set_cache_manager(cache_mgr)
 
         client.stream_response(
-            messages=[], system="test-system", tools=MM(), mode="plan"
+            messages=[], system="test-system", tools=[MM()], mode="plan"
         )
 
         cache_mgr.get_cache_name.assert_called_with("plan")
@@ -189,12 +239,14 @@ def test_stream_result_captures_usage_metadata():
     chunk1.candidates = [MM()]
     chunk1.candidates[0].content.parts = [MM(text="hello", function_call=None)]
     chunk1.candidates[0].finish_reason = None
+    chunk1.candidates[0].grounding_metadata = None
     chunk1.usage_metadata = None
 
     chunk2 = MM()
     chunk2.candidates = [MM()]
     chunk2.candidates[0].content.parts = [MM(text=" world", function_call=None)]
     chunk2.candidates[0].finish_reason = "STOP"
+    chunk2.candidates[0].grounding_metadata = None
     usage = MM()
     usage.prompt_token_count = 100
     usage.cached_content_token_count = 50

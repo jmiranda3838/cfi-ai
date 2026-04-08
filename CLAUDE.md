@@ -24,10 +24,11 @@ The inner loop handles multi-turn tool-use chains. Messages are `list[types.Cont
 
 ### Tool system (`tools/`)
 
-7 tools: `run_command`, `attach_path`, `apply_patch`, `write_file`, `extract_document`, `interview`, `activate_map`.
+8 tools: `run_command`, `attach_path`, `apply_patch`, `write_file`, `extract_document`, `interview`, `activate_map`, `end_turn`.
 
 - Each tool is a `BaseTool` subclass with `definition()` returning a `ToolDefinition` and `execute(workspace, **kwargs)`.
-- `tools/__init__.py` maintains a registry. `get_api_tools()` returns a single `types.Tool` with all `FunctionDeclaration`s.
+- `tools/__init__.py` maintains a registry. `get_api_tools(enable_grounding=True)` returns a `list[types.Tool]` — the first entry is a `Tool` with all function declarations, and (when grounding is enabled) the second is a `Tool(google_search=GoogleSearch())`. `get_readonly_api_tools(enable_grounding=True)` follows the same shape for plan mode.
+- `end_turn` is a no-arg signal tool the model calls (alone) to mark its turn complete. The agent loop treats `end_turn` as a hard break and elsewhere relies on the absence of function calls to detect natural turn end.
 - Mutation classification uses `classify_mutation(name, args)` — static for `apply_patch`/`write_file`, dynamic for `run_command` (checks if command is in `MUTATING_COMMANDS`).
 - `execute()` can return `str` or `tuple[str, list[Part]]`. The tuple form signals inline binary data (e.g. audio, images) — `agent.py` appends the function response *and* the extra parts to the tool result message.
 - Tool results are sent as `Part.from_function_response(name=..., response={"result": ...})`. Rejected ops use `response={"error": ...}`.
@@ -38,7 +39,17 @@ The inner loop handles multi-turn tool-use chains. Messages are `list[types.Cont
 
 ### Streaming (`client.py`)
 
-`StreamResult` wraps `generate_content_stream()`. `text_chunks()` yields text for `ui.stream_markdown()` and accumulates all parts. After exhaustion, `.function_calls` and `.parts` are available.
+`StreamResult` wraps `generate_content_stream()`. `text_chunks()` yields text for `ui.stream_markdown()` and accumulates all parts. After exhaustion, `.function_calls`, `.parts`, and `.grounding_metadata` are available.
+
+### Google Search grounding
+
+Vertex AI Google Search grounding is enabled by default. The `GoogleSearch` tool is appended as a separate `types.Tool` entry in both the full and readonly tool sets — it is NOT a function declaration the model "calls" through the normal function-call path.
+
+- **Disable**: `[grounding] enabled = false` in `~/.config/cfi-ai/config.toml` or `CFI_AI_GROUNDING_ENABLED=0`. When disabled, `get_api_tools` / `get_readonly_api_tools` skip the grounding tool, and the system prompts drop the `web search` bullet so the model isn't told it has a capability it doesn't.
+- **Capture**: `StreamResult` reads `candidate.grounding_metadata` from the streaming chunks (last writer wins — Gemini emits it on the final chunk; see `client.py:215`).
+- **Render**: `_render_grounding_sources` in `agent.py` formats citations using sparse `[idx+1]` numbering (matches Google's recommended labeling) and surfaces the `web_search_queries` the model issued for auditability. Called only after a turn produces parts — empty/aborted turns skip rendering.
+- **Suggestions UI**: Vertex's `search_entry_point.rendered_content` HTML is written to `<tmpdir>/cfi-ai-search-suggestions.html` so the citations block can include a clickable `file://` URI. Auto-open in the browser is opt-in via `[grounding] open_browser = true` or `CFI_AI_GROUNDING_OPEN_BROWSER=1` (default off).
+- **Incompatible models**: `_is_grounding_invalid_argument` detects Vertex `INVALID_ARGUMENT` failures from combining function calling with grounding on older models (e.g. gemini-2.5) and `_report_api_error` substitutes a targeted "switch model" message instead of the raw API error.
 
 ### Key Vertex AI / Gemini gotchas
 
@@ -63,8 +74,9 @@ The inner loop handles multi-turn tool-use chains. Messages are `list[types.Cont
 
 ### Configuration
 
-- Config file: `~/.config/cfi-ai/config.toml` (created via `cfi-ai --setup` or on first run)
-- Env vars (`GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, `CFI_AI_MODEL`, `CFI_AI_MAX_TOKENS`) override config file values when set
+- Config file: `~/.config/cfi-ai/config.toml` (created via `cfi-ai --setup` or on first run). Recognized sections: `[project]`, `[model]`, `[grounding]`. Unknown sections are preserved across `--setup` re-runs.
+- Env vars override config file values when set: `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, `CFI_AI_MODEL`, `CFI_AI_MAX_TOKENS`, `CFI_AI_CONTEXT_CACHE`, `CFI_AI_GROUNDING_ENABLED`, `CFI_AI_GROUNDING_OPEN_BROWSER`.
+- `_parse_bool_env` accepts case-insensitive `0/false/no/off` as falsy. Empty / whitespace-only values fall back to the caller's `default` (so `CFI_AI_GROUNDING_ENABLED=''` doesn't accidentally flip the default-True flag to False).
 - ADC via `gcloud auth application-default login` (validated at startup with a clear error message)
 
 ### Installation (`scripts/install.sh`)

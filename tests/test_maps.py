@@ -36,6 +36,31 @@ def test_parse_map_invocation_multi_word_args():
     assert parse_map_invocation("/intake some file path.txt") == ("intake", "some file path.txt")
 
 
+def test_parse_map_invocation_absolute_path_with_text():
+    # Simplified absolute path followed by description — must NOT be parsed as a map
+    assert (
+        parse_map_invocation(
+            "/var/folders/dv/abc/Screenshot.png this is what it looks like"
+        )
+        is None
+    )
+
+
+def test_parse_map_invocation_absolute_path_only():
+    assert parse_map_invocation("/Users/jonzy/file.txt") is None
+
+
+def test_parse_map_invocation_macos_screenshot_repro():
+    # Exact shape of the user-reported failure: macOS temporary screenshot
+    # path with backslash-escaped spaces, followed by descriptive text.
+    user_input = (
+        "/var/folders/dv/y7w2n1t13lj5grgw5mpxqrvm0000gn/T/TemporaryItems/"
+        "NSIRD_screencaptureui_498Xvu/Screenshot\\ 2026-04-06\\ at\\ 3.48.08\\ PM.png"
+        " this is what it looks like"
+    )
+    assert parse_map_invocation(user_input) is None
+
+
 # --- dispatch_map tests ---
 
 def test_dispatch_unknown_map():
