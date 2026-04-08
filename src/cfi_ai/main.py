@@ -96,6 +96,7 @@ def main() -> None:
         print("  GOOGLE_CLOUD_LOCATION   Vertex AI location (default: global)")
         print("  CFI_AI_MODEL            Model name (default: gemini-3-flash-preview)")
         print("  CFI_AI_MAX_TOKENS       Max tokens (default: 8192)")
+        print("  CFI_AI_MAX_CONTEXT_TOKENS  Hard cap on input tokens; 0 disables (default: 128000)")
         print("  CFI_AI_CONTEXT_CACHE    Disable context caching (set to 0 or false)")
         print("  CFI_AI_GROUNDING_ENABLED       Disable Google Search grounding (set to 0 or false)")
         print("  CFI_AI_GROUNDING_OPEN_BROWSER  Auto-open Vertex search-suggestions HTML in browser")
@@ -149,6 +150,7 @@ def main() -> None:
             location=config.location,
             model=model_override,
             max_tokens=config.max_tokens,
+            max_context_tokens=config.max_context_tokens,
             context_cache=config.context_cache,
             grounding_open_browser=config.grounding_open_browser,
             grounding_enabled=config.grounding_enabled,
@@ -170,7 +172,10 @@ def main() -> None:
     )
     client = Client(config)
     ui = UI()
-    cost_tracker = CostTracker(model=config.model)
+    cost_tracker = CostTracker(
+        model=config.model,
+        cap_context_tokens=config.max_context_tokens,
+    )
     ui.cost_tracker = cost_tracker
 
     # Route all log output through Rich console for Live-safe display

@@ -63,7 +63,7 @@ Vertex AI Google Search grounding is enabled by default. The `GoogleSearch` tool
 - Maps are registered by importing their modules at the bottom of `__init__.py`.
 - `agent.py` intercepts slash maps between input and message append — if `parse_map_invocation` matches, `dispatch_map` runs the handler.
 - `MapResult.message` set → replaces user input sent to LLM. `MapResult.parts` set → multipart content (e.g. text + audio) sent directly. `handled=True` + no message/parts → skip to next prompt. `error` → display and skip. `map_mode=True` → uses map prompting/model mode, but turn completion still follows the standard tool-call/text rule.
-- `/help` prints available maps. `/intake` processes a session transcript (text file or pasted) or audio recording (.mp3, .wav, .m4a, etc.) into clinical intake documents. File references are passed to the LLM which uses `attach_path` to load them (handling shell escapes, spaces in paths, etc.). Pasted multi-line text is embedded directly in the prompt.
+- `/help` prints available maps. `/intake` processes a session transcript (text file or pasted) or audio recording (.mp3, .wav, .m4a, etc.) into clinical intake documents. File references are passed to the LLM which uses `attach_path` to load them (handling shell escapes, spaces in paths, etc.). Pasted multi-line text is embedded directly in the prompt. `/clear` drops in-memory history, zeros the cost tracker (mutated in place so the UI's bottom-toolbar reference stays connected), and re-points the session store at a fresh file via `SessionStore.reset()` so post-clear turns don't overwrite the prior session JSON.
 - Typing `/` in the prompt shows autocomplete for available maps via `SlashMapCompleter` (prompt-toolkit).
 
 ### Client file structure (`clients.py`)
@@ -75,7 +75,7 @@ Vertex AI Google Search grounding is enabled by default. The `GoogleSearch` tool
 ### Configuration
 
 - Config file: `~/.config/cfi-ai/config.toml` (created via `cfi-ai --setup` or on first run). Recognized sections: `[project]`, `[model]`, `[grounding]`. Unknown sections are preserved across `--setup` re-runs.
-- Env vars override config file values when set: `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, `CFI_AI_MODEL`, `CFI_AI_MAX_TOKENS`, `CFI_AI_CONTEXT_CACHE`, `CFI_AI_GROUNDING_ENABLED`, `CFI_AI_GROUNDING_OPEN_BROWSER`.
+- Env vars override config file values when set: `GOOGLE_CLOUD_PROJECT`, `GOOGLE_CLOUD_LOCATION`, `CFI_AI_MODEL`, `CFI_AI_MAX_TOKENS`, `CFI_AI_MAX_CONTEXT_TOKENS`, `CFI_AI_CONTEXT_CACHE`, `CFI_AI_GROUNDING_ENABLED`, `CFI_AI_GROUNDING_OPEN_BROWSER`.
 - `_parse_bool_env` accepts case-insensitive `0/false/no/off` as falsy. Empty / whitespace-only values fall back to the caller's `default` (so `CFI_AI_GROUNDING_ENABLED=''` doesn't accidentally flip the default-True flag to False).
 - ADC via `gcloud auth application-default login` (validated at startup with a clear error message)
 

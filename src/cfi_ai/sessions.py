@@ -81,6 +81,14 @@ class SessionStore:
         # sessions or sessions saved before this field existed.
         self.usage: dict | None = None
 
+    def reset(self, workspace: Workspace) -> None:
+        """Re-initialize this store as a brand-new session in ``workspace``.
+
+        Used by ``/clear`` so that turns after a clear write to a fresh
+        session file rather than overwriting the prior session's JSON.
+        """
+        self.__init__(workspace)
+
     def adopt(self, session_id: str, path: Path) -> None:
         """Re-point this store at an existing session file."""
         self.session_id = session_id

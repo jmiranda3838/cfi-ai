@@ -670,7 +670,10 @@ def run_agent_loop(
     SessionStore.prune_expired()
     session_store = SessionStore(workspace)
     if cost_tracker is None:
-        cost_tracker = CostTracker(model=config.model)
+        cost_tracker = CostTracker(
+            model=config.model,
+            cap_context_tokens=config.max_context_tokens,
+        )
     # Make sure the UI's bottom toolbar reads from the same instance the loop
     # writes to. main.py usually wires this up, but we re-assert here so the
     # agent loop is self-contained / testable.
@@ -747,6 +750,20 @@ def _run_main_loop(
             if result.error:
                 ui.print_error(result.error)
                 continue
+            if result.clear_conversation:
+                # /clear: drop in-memory history and zero the cost tracker.
+                # Mutate in place — the UI holds a reference to cost_tracker,
+                # so rebinding would silently disconnect the bottom toolbar.
+                messages.clear()
+                cost_tracker.last_prompt_tokens = 0
+                cost_tracker.total_input_billed = 0
+                cost_tracker.total_cached = 0
+                cost_tracker.total_output = 0
+                cost_tracker.total_cost_usd = 0.0
+                # Re-point the session store at a fresh file so post-clear
+                # turns don't overwrite the prior session's JSON.
+                session_store.reset(workspace)
+                continue
             if result.loaded_messages is not None:
                 # /resume: replace in-memory conversation with the loaded one.
                 messages.clear()
@@ -755,7 +772,11 @@ def _run_main_loop(
                 # toolbar resumes counting from where it left off rather than
                 # resetting to zero. Mutates in place — do not rebind the
                 # cost_tracker, since the UI holds the original reference.
-                restored = CostTracker.from_dict(cost_tracker.model, session_store.usage)
+                restored = CostTracker.from_dict(
+                    cost_tracker.model,
+                    session_store.usage,
+                    cap_context_tokens=cost_tracker.cap_context_tokens,
+                )
                 cost_tracker.last_prompt_tokens = restored.last_prompt_tokens
                 cost_tracker.total_input_billed = restored.total_input_billed
                 cost_tracker.total_cached = restored.total_cached
@@ -772,6 +793,26 @@ def _run_main_loop(
                 user_parts = result.parts
             elif result.message is not None:
                 user_text = result.message
+
+        # --- CONTEXT-WINDOW CAP CHECK ---
+        # Runs AFTER slash-map dispatch (so /clear is never blocked) and
+        # BEFORE messages.append (so a blocked turn leaves conversation state
+        # untouched, and no API call or session save fires). A fresh session
+        # has last_prompt_tokens=0 so cap_reached() returns False until at
+        # least one turn has been recorded.
+        if cost_tracker.cap_reached():
+            cap = cost_tracker.cap_context_tokens
+            used = cost_tracker.last_prompt_tokens
+            ui.print_error(
+                f"Conversation is full ({used:,} / {cap:,} tokens). "
+                "Long histories get expensive and slow. "
+                "Please run /clear to start a new conversation."
+            )
+            _log.debug(
+                "context_cap_reached cap=%d last_prompt_tokens=%d",
+                cap, used,
+            )
+            continue
 
         # --- PLAN MODE FLOW ---
         if is_plan_mode and (not map_mode or plan_prompt):

@@ -182,3 +182,128 @@ def test_format_cost_segment_unknown_model_drops_pct_and_cost():
     t.record(_usage(prompt=10_000, cached=0, output=1_000))
     seg = _format_cost_segment(t)
     assert seg == "ctx 10k"
+
+
+# --- context cap (cap_context_tokens) ---
+
+
+def test_context_window_cap_smaller_than_model_window_wins():
+    t = CostTracker(model="gemini-2.5-flash", cap_context_tokens=128_000)
+    assert t.context_window() == 128_000  # min(1_048_576, 128_000)
+
+
+def test_context_window_no_cap_returns_model_window():
+    t = CostTracker(model="gemini-2.5-flash", cap_context_tokens=0)
+    assert t.context_window() == 1_048_576
+
+
+def test_context_window_cap_larger_than_model_window_caps_at_model():
+    """A cap higher than the model's native window must not exceed the model's
+    actual hard limit — the API will reject anything above it."""
+    t = CostTracker(model="gemini-2.5-flash", cap_context_tokens=5_000_000)
+    assert t.context_window() == 1_048_576
+
+
+def test_context_window_unknown_model_with_cap_returns_cap():
+    """When the model has no known window, the cap stands alone."""
+    t = CostTracker(model="not-a-real-model", cap_context_tokens=128_000)
+    assert t.context_window() == 128_000
+
+
+def test_context_window_unknown_model_no_cap_returns_none():
+    t = CostTracker(model="not-a-real-model", cap_context_tokens=0)
+    assert t.context_window() is None
+
+
+def test_cap_reached_false_before_first_turn():
+    """A fresh session must always be allowed to send at least one turn."""
+    t = CostTracker(model="gemini-2.5-flash", cap_context_tokens=128_000)
+    assert not t.cap_reached()
+
+
+def test_cap_reached_false_below_cap():
+    t = CostTracker(
+        model="gemini-2.5-flash",
+        cap_context_tokens=128_000,
+        last_prompt_tokens=127_999,
+    )
+    assert not t.cap_reached()
+
+
+def test_cap_reached_true_at_exact_cap():
+    """Boundary: hitting the cap exactly counts as reached."""
+    t = CostTracker(
+        model="gemini-2.5-flash",
+        cap_context_tokens=128_000,
+        last_prompt_tokens=128_000,
+    )
+    assert t.cap_reached()
+
+
+def test_cap_reached_true_above_cap():
+    t = CostTracker(
+        model="gemini-2.5-flash",
+        cap_context_tokens=128_000,
+        last_prompt_tokens=200_000,
+    )
+    assert t.cap_reached()
+
+
+def test_cap_reached_false_when_cap_zero():
+    """A cap of 0 disables the cap entirely, regardless of token count."""
+    t = CostTracker(
+        model="gemini-2.5-flash",
+        cap_context_tokens=0,
+        last_prompt_tokens=999_999_999,
+    )
+    assert not t.cap_reached()
+
+
+def test_cap_reached_false_when_cap_negative():
+    t = CostTracker(
+        model="gemini-2.5-flash",
+        cap_context_tokens=-1,
+        last_prompt_tokens=999_999_999,
+    )
+    assert not t.cap_reached()
+
+
+def test_to_dict_omits_cap_context_tokens():
+    """The cap is a config-time value, not a per-session pin — on resume the
+    live config wins."""
+    t = CostTracker(
+        model="gemini-2.5-flash",
+        cap_context_tokens=128_000,
+        last_prompt_tokens=50_000,
+    )
+    d = t.to_dict()
+    assert "cap_context_tokens" not in d
+    assert d["last_prompt_tokens"] == 50_000
+
+
+def test_from_dict_applies_fresh_cap_not_persisted():
+    """Resuming a session under a smaller cap must immediately reflect the new
+    cap, not whatever value (if any) was in the persisted snapshot."""
+    payload = {"last_prompt_tokens": 100_000}
+    restored = CostTracker.from_dict(
+        "gemini-2.5-flash", payload, cap_context_tokens=50_000
+    )
+    assert restored.cap_context_tokens == 50_000
+    assert restored.last_prompt_tokens == 100_000
+    assert restored.cap_reached()  # 100_000 >= 50_000
+
+
+def test_from_dict_none_with_cap_returns_fresh_capped_tracker():
+    t = CostTracker.from_dict("gemini-2.5-flash", None, cap_context_tokens=128_000)
+    assert t.cap_context_tokens == 128_000
+    assert t.last_prompt_tokens == 0
+    assert not t.cap_reached()
+
+
+def test_format_cost_segment_with_cap_shows_capped_window():
+    """When a cap is configured, the toolbar denominator must reflect it."""
+    t = CostTracker(model="gemini-2.5-flash", cap_context_tokens=128_000)
+    t.record(_usage(prompt=64_000, cached=0, output=1_000))
+    seg = _format_cost_segment(t)
+    assert "ctx 64k/128k" in seg
+    assert "(50%)" in seg

@@ -24,6 +24,7 @@ class MapResult:
     - handled=True + no message/parts -> map printed output, skip to next prompt
     - error set -> display error, skip to next prompt
     - loaded_messages set -> replace in-memory conversation with these (used by /resume)
+    - clear_conversation=True -> drop in-memory history and reset cost tracker (used by /clear)
     """
 
     message: str | None = None
@@ -33,6 +34,7 @@ class MapResult:
     map_mode: bool = False
     plan_prompt: str | None = None
     loaded_messages: list[types.Content] | None = None
+    clear_conversation: bool = False
 
 
 MapHandler = Callable[["str | None", "UI", "Workspace", "SessionStore"], MapResult]
@@ -125,6 +127,7 @@ def build_map_message(
 
 
 # Import map modules to trigger registration
+from cfi_ai.maps import clear as _clear_map  # noqa: F401, E402
 from cfi_ai.maps import compliance as _compliance_map  # noqa: F401, E402
 from cfi_ai.maps import help as _help_map  # noqa: F401, E402
 from cfi_ai.maps import intake as _intake_map  # noqa: F401, E402

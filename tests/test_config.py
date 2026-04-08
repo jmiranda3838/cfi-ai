@@ -8,6 +8,7 @@ from cfi_ai.config import (
     Config,
     _load_config_file,
     _parse_bool_env,
+    _parse_int_env,
     _write_toml,
     _run_first_time_setup,
 )
@@ -169,7 +170,7 @@ def test_load_env_overrides_file(tmp_path):
 
 def test_load_triggers_setup_when_missing(tmp_path):
     cfg = tmp_path / "config.toml"
-    inputs = iter(["auto-proj", "", "", ""])
+    inputs = iter(["auto-proj", "", "", "", ""])
     with patch.dict(os.environ, {}, clear=True):
         with patch("builtins.input", side_effect=inputs):
             config = Config.load(config_path=cfg)
@@ -229,13 +230,14 @@ def test_load_allows_other_models_on_regional_endpoints(tmp_path):
 
 def test_first_run_setup(tmp_path):
     cfg = tmp_path / "config.toml"
-    inputs = iter(["my-proj", "us-central1", "gemini-2.5-pro", "4096"])
+    inputs = iter(["my-proj", "us-central1", "gemini-2.5-pro", "4096", "64000"])
     with patch("builtins.input", side_effect=inputs):
         data = _run_first_time_setup(path=cfg)
     assert data["project"]["id"] == "my-proj"
     assert data["project"]["location"] == "us-central1"
     assert data["model"]["name"] == "gemini-2.5-pro"
     assert data["model"]["max_tokens"] == 4096
+    assert data["model"]["max_context_tokens"] == 64000
     # verify file was written and is valid TOML
     parsed = tomllib.loads(cfg.read_text())
     assert parsed == data
@@ -244,13 +246,14 @@ def test_first_run_setup(tmp_path):
 def test_first_run_setup_defaults(tmp_path):
     cfg = tmp_path / "config.toml"
     # only project ID is provided; rest use defaults (empty input)
-    inputs = iter(["my-proj", "", "", ""])
+    inputs = iter(["my-proj", "", "", "", ""])
     with patch("builtins.input", side_effect=inputs):
         data = _run_first_time_setup(path=cfg)
     assert data["project"]["id"] == "my-proj"
     assert data["project"]["location"] == "global"
     assert data["model"]["name"] == "gemini-3-flash-preview"
     assert data["model"]["max_tokens"] == 8192
+    assert data["model"]["max_context_tokens"] == 128_000
 
 
 def test_setup_preserves_unknown_sections(tmp_path):
@@ -264,7 +267,7 @@ def test_setup_preserves_unknown_sections(tmp_path):
     )
     existing = _load_config_file(cfg_path)
     # Accept all defaults by pressing enter on every prompt.
-    with patch("builtins.input", side_effect=iter(["", "", "", ""])):
+    with patch("builtins.input", side_effect=iter(["", "", "", "", ""])):
         _run_first_time_setup(existing=existing, path=cfg_path)
 
     reloaded = _load_config_file(cfg_path)
@@ -430,3 +433,105 @@ def test_parse_bool_env_empty_string_falls_back_to_default(value, default, expec
     silently flipping to False. Prevents `CFI_AI_GROUNDING_ENABLED=''` from
     accidentally disabling a default-True flag."""
     assert _parse_bool_env(value, default) is expected
+
+
+# ── max_context_tokens (input cap) ──────────────────────────────────
+
+
+@pytest.mark.parametrize(
+    "value,default,expected",
+    [
+        (None, 128_000, 128_000),
+        ("", 128_000, 128_000),
+        ("   ", 128_000, 128_000),
+        ("not-a-number", 128_000, 128_000),
+        ("64000", 128_000, 64_000),
+        ("0", 128_000, 0),       # 0 disables the cap
+        ("-1", 128_000, -1),     # negative also disables
+    ],
+)
+def test_parse_int_env(value, default, expected):
+    """Empty/None/unparseable values fall back to default; well-formed values
+    parse cleanly. 0 and negative are accepted (caller treats them as
+    disabling the cap)."""
+    assert _parse_int_env(value, default) == expected
+
+
+def test_from_env_max_context_tokens_default():
+    """Without an env var, the cap defaults to 128k."""
+    with patch.dict(os.environ, {"GOOGLE_CLOUD_PROJECT": "p"}, clear=True):
+        config = Config.from_env()
+    assert config.max_context_tokens == 128_000
+
+
+def test_from_env_max_context_tokens_custom():
+    env = {"GOOGLE_CLOUD_PROJECT": "p", "CFI_AI_MAX_CONTEXT_TOKENS": "50000"}
+    with patch.dict(os.environ, env, clear=True):
+        config = Config.from_env()
+    assert config.max_context_tokens == 50_000
+
+
+def test_from_env_max_context_tokens_zero_disables():
+    env = {"GOOGLE_CLOUD_PROJECT": "p", "CFI_AI_MAX_CONTEXT_TOKENS": "0"}
+    with patch.dict(os.environ, env, clear=True):
+        config = Config.from_env()
+    assert config.max_context_tokens == 0
+
+
+def test_from_env_max_context_tokens_unparseable_falls_back():
+    env = {"GOOGLE_CLOUD_PROJECT": "p", "CFI_AI_MAX_CONTEXT_TOKENS": "not-a-number"}
+    with patch.dict(os.environ, env, clear=True):
+        config = Config.from_env()
+    assert config.max_context_tokens == 128_000
+
+
+def test_load_max_context_tokens_from_file(tmp_path):
+    cfg = tmp_path / "config.toml"
+    _write_toml(
+        cfg,
+        {
+            "project": {"id": "p", "location": "global"},
+            "model": {
+                "name": "gemini-3-flash-preview",
+                "max_tokens": 8192,
+                "max_context_tokens": 64_000,
+            },
+        },
+    )
+    with patch.dict(os.environ, {}, clear=True):
+        config = Config.load(config_path=cfg)
+    assert config.max_context_tokens == 64_000
+
+
+def test_load_max_context_tokens_env_overrides_file(tmp_path):
+    cfg = tmp_path / "config.toml"
+    _write_toml(
+        cfg,
+        {
+            "project": {"id": "p", "location": "global"},
+            "model": {
+                "name": "gemini-3-flash-preview",
+                "max_tokens": 8192,
+                "max_context_tokens": 64_000,
+            },
+        },
+    )
+    env = {"CFI_AI_MAX_CONTEXT_TOKENS": "32000"}
+    with patch.dict(os.environ, env, clear=True):
+        config = Config.load(config_path=cfg)
+    assert config.max_context_tokens == 32_000
+
+
+def test_load_max_context_tokens_default_when_absent(tmp_path):
+    """A config file with no max_context_tokens should default to 128k."""
+    cfg = tmp_path / "config.toml"
+    _write_toml(
+        cfg,
+        {
+            "project": {"id": "p", "location": "global"},
+            "model": {"name": "gemini-3-flash-preview", "max_tokens": 8192},
+        },
+    )
+    with patch.dict(os.environ, {}, clear=True):
+        config = Config.load(config_path=cfg)
+    assert config.max_context_tokens == 128_000

@@ -44,6 +44,18 @@ def _parse_bool_env(value: str | None, default: bool) -> bool:
     return value.strip().lower() not in ("0", "false", "no", "off")
 
 
+def _parse_int_env(value: str | None, default: int) -> int:
+    """Parse an integer env var. Returns default if value is None, empty,
+    whitespace-only, or unparseable. A value of 0 or negative disables any
+    associated cap (callers check for ``<= 0``)."""
+    if value is None or value.strip() == "":
+        return default
+    try:
+        return int(value.strip())
+    except ValueError:
+        return default
+
+
 def _prompt(label: str, default: str) -> str:
     """Prompt user for input with a default value."""
     suffix = f" [{default}]" if default else ""
@@ -69,12 +81,20 @@ def _run_first_time_setup(existing: dict | None = None, path: Path = CONFIG_PATH
     location = _prompt("Vertex AI location", proj_section.get("location", "global"))
     model_name = _prompt("Model", model_section.get("name", "gemini-3-flash-preview"))
     max_tokens_str = _prompt("Max tokens", str(model_section.get("max_tokens", 8192)))
+    max_context_tokens_str = _prompt(
+        "Max context tokens (0 = disable cap)",
+        str(model_section.get("max_context_tokens", 128_000)),
+    )
 
     # Preserve any unknown top-level sections (e.g. [grounding]) the user may
     # have added manually — only [project] and [model] are overwritten.
     data: dict = dict(existing) if existing else {}
     data["project"] = {"id": project_id, "location": location}
-    data["model"] = {"name": model_name, "max_tokens": int(max_tokens_str)}
+    data["model"] = {
+        "name": model_name,
+        "max_tokens": int(max_tokens_str),
+        "max_context_tokens": int(max_context_tokens_str),
+    }
     _write_toml(path, data)
     print(f"\nConfig written to {path}")
     return data
@@ -86,6 +106,7 @@ class Config:
     location: str
     model: str
     max_tokens: int
+    max_context_tokens: int = 128_000
     context_cache: bool = True
     grounding_open_browser: bool = False
     grounding_enabled: bool = True
@@ -113,6 +134,9 @@ class Config:
             location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"),
             model=os.environ.get("CFI_AI_MODEL", "gemini-3-flash-preview"),
             max_tokens=int(os.environ.get("CFI_AI_MAX_TOKENS", "8192")),
+            max_context_tokens=_parse_int_env(
+                os.environ.get("CFI_AI_MAX_CONTEXT_TOKENS"), 128_000
+            ),
             context_cache=os.environ.get("CFI_AI_CONTEXT_CACHE", "1") not in ("0", "false"),
             grounding_open_browser=_parse_bool_env(
                 os.environ.get("CFI_AI_GROUNDING_OPEN_BROWSER"), False
@@ -141,6 +165,10 @@ class Config:
         max_tokens = int(
             os.environ.get("CFI_AI_MAX_TOKENS") or model.get("max_tokens", 8192)
         )
+        max_context_tokens = _parse_int_env(
+            os.environ.get("CFI_AI_MAX_CONTEXT_TOKENS"),
+            int(model.get("max_context_tokens", 128_000)),
+        )
 
         if not project:
             print("Error: GCP project ID is not configured.", file=sys.stderr)
@@ -167,6 +195,7 @@ class Config:
             location=location,
             model=model_name,
             max_tokens=max_tokens,
+            max_context_tokens=max_context_tokens,
             context_cache=context_cache,
             grounding_open_browser=grounding_open_browser,
             grounding_enabled=grounding_enabled,
