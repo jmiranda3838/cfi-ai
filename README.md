@@ -71,6 +71,8 @@ Environment variables take precedence over the config file when set:
 | `CFI_AI_MODEL` | `gemini-3-flash-preview` | Model to use |
 | `CFI_AI_MAX_TOKENS` | `8192` | Max response tokens |
 
+`gemini-3-flash-preview` currently requires the `global` Vertex AI endpoint.
+
 ## Maps
 
 | Map | Description |

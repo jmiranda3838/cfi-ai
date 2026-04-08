@@ -177,6 +177,53 @@ def test_load_triggers_setup_when_missing(tmp_path):
     assert cfg.exists()
 
 
+def test_load_rejects_global_only_model_on_regional_endpoint(tmp_path, capsys):
+    cfg = tmp_path / "config.toml"
+    _write_toml(
+        cfg,
+        {
+            "project": {"id": "file-proj", "location": "us-central1"},
+            "model": {"name": "gemini-3-flash-preview", "max_tokens": 8192},
+        },
+    )
+    with patch.dict(os.environ, {}, clear=True):
+        with pytest.raises(SystemExit):
+            Config.load(config_path=cfg)
+    err = capsys.readouterr().err
+    assert "gemini-3-flash-preview" in err
+    assert "requires Vertex AI location 'global'" in err
+
+
+def test_load_allows_global_only_model_on_global_endpoint(tmp_path):
+    cfg = tmp_path / "config.toml"
+    _write_toml(
+        cfg,
+        {
+            "project": {"id": "file-proj", "location": "global"},
+            "model": {"name": "gemini-3-flash-preview", "max_tokens": 8192},
+        },
+    )
+    with patch.dict(os.environ, {}, clear=True):
+        config = Config.load(config_path=cfg)
+    assert config.location == "global"
+    assert config.model == "gemini-3-flash-preview"
+
+
+def test_load_allows_other_models_on_regional_endpoints(tmp_path):
+    cfg = tmp_path / "config.toml"
+    _write_toml(
+        cfg,
+        {
+            "project": {"id": "file-proj", "location": "us-central1"},
+            "model": {"name": "gemini-2.5-flash", "max_tokens": 8192},
+        },
+    )
+    with patch.dict(os.environ, {}, clear=True):
+        config = Config.load(config_path=cfg)
+    assert config.location == "us-central1"
+    assert config.model == "gemini-2.5-flash"
+
+
 # ── First-run setup ─────────────────────────────────────────────────
 
 

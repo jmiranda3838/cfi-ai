@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 CONFIG_PATH = Path.home() / ".config" / "cfi-ai" / "config.toml"
+_GLOBAL_ONLY_MODELS = {"gemini-3-flash-preview"}
 
 
 def _load_config_file(path: Path = CONFIG_PATH) -> dict | None:
@@ -89,13 +90,25 @@ class Config:
     grounding_open_browser: bool = False
     grounding_enabled: bool = True
 
+    def validate(self) -> None:
+        """Fail fast on known invalid model/location combinations."""
+        if self.model in _GLOBAL_ONLY_MODELS and self.location != "global":
+            print(
+                f"Error: Model '{self.model}' requires Vertex AI location "
+                f"'global', but the current location is '{self.location}'.\n"
+                "Run 'cfi-ai --setup', set GOOGLE_CLOUD_LOCATION=global, or edit "
+                "~/.config/cfi-ai/config.toml.",
+                file=sys.stderr,
+            )
+            sys.exit(1)
+
     @classmethod
     def from_env(cls) -> "Config":
         project = os.environ.get("GOOGLE_CLOUD_PROJECT", "")
         if not project:
             print("Error: GOOGLE_CLOUD_PROJECT environment variable is required.", file=sys.stderr)
             sys.exit(1)
-        return cls(
+        config = cls(
             project=project,
             location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"),
             model=os.environ.get("CFI_AI_MODEL", "gemini-3-flash-preview"),
@@ -108,6 +121,8 @@ class Config:
                 os.environ.get("CFI_AI_GROUNDING_ENABLED"), True
             ),
         )
+        config.validate()
+        return config
 
     @classmethod
     def load(cls, run_setup: bool = False, config_path: Path = CONFIG_PATH) -> "Config":
@@ -147,7 +162,7 @@ class Config:
         else:
             grounding_enabled = bool(grounding.get("enabled", True))
 
-        return cls(
+        config = cls(
             project=project,
             location=location,
             model=model_name,
@@ -156,3 +171,5 @@ class Config:
             grounding_open_browser=grounding_open_browser,
             grounding_enabled=grounding_enabled,
         )
+        config.validate()
+        return config

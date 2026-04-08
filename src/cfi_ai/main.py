@@ -152,6 +152,7 @@ def main() -> None:
             grounding_open_browser=config.grounding_open_browser,
             grounding_enabled=config.grounding_enabled,
         )
+        config.validate()
 
     warnings.filterwarnings(
         "ignore",

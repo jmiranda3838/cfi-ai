@@ -226,6 +226,7 @@ def test_report_api_error_uses_targeted_message_for_grounding():
     msg = ui.print_error.call_args.args[0]
     assert "gemini-2.5-flash" in msg
     assert "Google Search grounding" in msg
+    assert "global endpoint" in msg
     assert "cfi-ai --setup" in msg
 
 

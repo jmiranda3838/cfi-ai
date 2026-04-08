@@ -267,8 +267,8 @@ def _report_api_error(ui: UI, exc: Exception, config: Config) -> None:
         ui.print_error(
             f"Model '{config.model}' rejected the request because it does not "
             "support combining function calling with Google Search grounding. "
-            "Switch to gemini-3-flash-preview (or another grounding-capable "
-            "model) via 'cfi-ai --setup' or by editing "
+            "Switch to gemini-3-flash-preview on the global endpoint (or another "
+            "grounding-capable model/location pairing) via 'cfi-ai --setup' or by editing "
             "~/.config/cfi-ai/config.toml."
         )
         _log.debug("grounding_invalid_argument model=%s detail=%s", config.model, exc)
