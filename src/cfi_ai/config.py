@@ -6,6 +6,11 @@ from pathlib import Path
 
 CONFIG_PATH = Path.home() / ".config" / "cfi-ai" / "config.toml"
 _GLOBAL_ONLY_MODELS = {"gemini-3-flash-preview"}
+_DEPRECATED_MODELS: dict[str, str] = {
+    "gemini-2.5-pro": "gemini-3-flash-preview",
+    "gemini-2.5-flash": "gemini-3-flash-preview",
+    "gemini-2.5-flash-lite": "gemini-3-flash-preview",
+}
 
 
 def _load_config_file(path: Path = CONFIG_PATH) -> dict | None:
@@ -129,10 +134,17 @@ class Config:
         if not project:
             print("Error: GOOGLE_CLOUD_PROJECT environment variable is required.", file=sys.stderr)
             sys.exit(1)
+        model_name = os.environ.get("CFI_AI_MODEL", "gemini-3-flash-preview")
+        if model_name in _DEPRECATED_MODELS:
+            print(
+                f"Warning: CFI_AI_MODEL='{model_name}' is deprecated (sunset June 2026). "
+                f"Consider switching to '{_DEPRECATED_MODELS[model_name]}'.",
+                file=sys.stderr,
+            )
         config = cls(
             project=project,
             location=os.environ.get("GOOGLE_CLOUD_LOCATION", "global"),
-            model=os.environ.get("CFI_AI_MODEL", "gemini-3-flash-preview"),
+            model=model_name,
             max_tokens=int(os.environ.get("CFI_AI_MAX_TOKENS", "8192")),
             max_context_tokens=_parse_int_env(
                 os.environ.get("CFI_AI_MAX_CONTEXT_TOKENS"), 128_000
@@ -162,6 +174,30 @@ class Config:
         project = os.environ.get("GOOGLE_CLOUD_PROJECT") or proj.get("id", "")
         location = os.environ.get("GOOGLE_CLOUD_LOCATION") or proj.get("location", "global")
         model_name = os.environ.get("CFI_AI_MODEL") or model.get("name", "gemini-3-flash-preview")
+
+        # ── Auto-migrate deprecated models from config file ─────────
+        model_from_env = os.environ.get("CFI_AI_MODEL")
+        if not model_from_env and model_name in _DEPRECATED_MODELS:
+            replacement = _DEPRECATED_MODELS[model_name]
+            old_model = model_name
+            model_name = replacement
+
+            location_from_env = os.environ.get("GOOGLE_CLOUD_LOCATION")
+            if replacement in _GLOBAL_ONLY_MODELS and location != "global" and not location_from_env:
+                location = "global"
+
+            file_data.setdefault("model", {})["name"] = model_name
+            file_data.setdefault("project", {})["location"] = location
+            _write_toml(config_path, file_data)
+
+            print(
+                f"Notice: Model '{old_model}' is deprecated (sunset June 2026). "
+                f"Your config has been updated to '{model_name}'"
+                + (f" with location='global'" if location == "global" else "")
+                + f".\nEdit {config_path} or set CFI_AI_MODEL to override.",
+                file=sys.stderr,
+            )
+
         max_tokens = int(
             os.environ.get("CFI_AI_MAX_TOKENS") or model.get("max_tokens", 8192)
         )

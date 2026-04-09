@@ -6,6 +6,7 @@ from unittest.mock import patch
 
 from cfi_ai.config import (
     Config,
+    _DEPRECATED_MODELS,
     _load_config_file,
     _parse_bool_env,
     _parse_int_env,
@@ -110,15 +111,15 @@ def test_load_from_file(tmp_path):
     _write_toml(
         cfg,
         {
-            "project": {"id": "file-proj", "location": "eu-west1"},
-            "model": {"name": "gemini-2.5-pro", "max_tokens": 2048},
+            "project": {"id": "file-proj", "location": "global"},
+            "model": {"name": "gemini-3-flash-preview", "max_tokens": 2048},
         },
     )
     with patch.dict(os.environ, {}, clear=True):
         config = Config.load(config_path=cfg)
     assert config.project == "file-proj"
-    assert config.location == "eu-west1"
-    assert config.model == "gemini-2.5-pro"
+    assert config.location == "global"
+    assert config.model == "gemini-3-flash-preview"
     assert config.max_tokens == 2048
 
 
@@ -216,13 +217,13 @@ def test_load_allows_other_models_on_regional_endpoints(tmp_path):
         cfg,
         {
             "project": {"id": "file-proj", "location": "us-central1"},
-            "model": {"name": "gemini-2.5-flash", "max_tokens": 8192},
+            "model": {"name": "some-regional-model", "max_tokens": 8192},
         },
     )
     with patch.dict(os.environ, {}, clear=True):
         config = Config.load(config_path=cfg)
     assert config.location == "us-central1"
-    assert config.model == "gemini-2.5-flash"
+    assert config.model == "some-regional-model"
 
 
 # ── First-run setup ─────────────────────────────────────────────────
@@ -535,3 +536,138 @@ def test_load_max_context_tokens_default_when_absent(tmp_path):
     with patch.dict(os.environ, {}, clear=True):
         config = Config.load(config_path=cfg)
     assert config.max_context_tokens == 128_000
+
+
+# ── Deprecated model migration ─────────────────────────────────────
+
+
+def test_load_migrates_deprecated_model_and_location(tmp_path, capsys):
+    cfg = tmp_path / "config.toml"
+    _write_toml(
+        cfg,
+        {
+            "project": {"id": "my-proj", "location": "us-central1"},
+            "model": {"name": "gemini-2.5-flash", "max_tokens": 8192},
+        },
+    )
+    with patch.dict(os.environ, {}, clear=True):
+        config = Config.load(config_path=cfg)
+    assert config.model == "gemini-3-flash-preview"
+    assert config.location == "global"
+    # File was rewritten
+    reloaded = _load_config_file(cfg)
+    assert reloaded["model"]["name"] == "gemini-3-flash-preview"
+    assert reloaded["project"]["location"] == "global"
+    # Notice was printed
+    err = capsys.readouterr().err
+    assert "deprecated" in err
+    assert "gemini-2.5-flash" in err
+
+
+def test_load_migrates_deprecated_model_already_global(tmp_path, capsys):
+    cfg = tmp_path / "config.toml"
+    _write_toml(
+        cfg,
+        {
+            "project": {"id": "my-proj", "location": "global"},
+            "model": {"name": "gemini-2.5-pro", "max_tokens": 4096},
+        },
+    )
+    with patch.dict(os.environ, {}, clear=True):
+        config = Config.load(config_path=cfg)
+    assert config.model == "gemini-3-flash-preview"
+    assert config.location == "global"
+    err = capsys.readouterr().err
+    assert "gemini-2.5-pro" in err
+
+
+def test_load_no_migration_when_env_var_overrides(tmp_path, capsys):
+    cfg = tmp_path / "config.toml"
+    _write_toml(
+        cfg,
+        {
+            "project": {"id": "my-proj", "location": "us-central1"},
+            "model": {"name": "gemini-2.5-flash", "max_tokens": 8192},
+        },
+    )
+    env = {"CFI_AI_MODEL": "gemini-2.5-pro"}
+    with patch.dict(os.environ, env, clear=True):
+        config = Config.load(config_path=cfg)
+    assert config.model == "gemini-2.5-pro"
+    # File was NOT rewritten
+    reloaded = _load_config_file(cfg)
+    assert reloaded["model"]["name"] == "gemini-2.5-flash"
+
+
+def test_load_migration_preserves_other_sections(tmp_path):
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        '[project]\nid = "my-proj"\nlocation = "eu-west1"\n\n'
+        '[model]\nname = "gemini-2.5-flash-lite"\nmax_tokens = 8192\n\n'
+        '[grounding]\nopen_browser = true\nenabled = false\n'
+    )
+    with patch.dict(os.environ, {}, clear=True):
+        config = Config.load(config_path=cfg)
+    assert config.model == "gemini-3-flash-preview"
+    reloaded = _load_config_file(cfg)
+    assert reloaded["grounding"]["open_browser"] is True
+    assert reloaded["grounding"]["enabled"] is False
+
+
+@pytest.mark.parametrize("old_model", ["gemini-2.5-pro", "gemini-2.5-flash", "gemini-2.5-flash-lite"])
+def test_load_migrates_all_deprecated_models(tmp_path, old_model):
+    cfg = tmp_path / "config.toml"
+    _write_toml(
+        cfg,
+        {
+            "project": {"id": "p", "location": "us-central1"},
+            "model": {"name": old_model, "max_tokens": 8192},
+        },
+    )
+    with patch.dict(os.environ, {}, clear=True):
+        config = Config.load(config_path=cfg)
+    assert config.model == "gemini-3-flash-preview"
+    assert config.location == "global"
+
+
+def test_load_migration_idempotent_on_second_run(tmp_path, capsys):
+    cfg = tmp_path / "config.toml"
+    _write_toml(
+        cfg,
+        {
+            "project": {"id": "p", "location": "us-central1"},
+            "model": {"name": "gemini-2.5-flash", "max_tokens": 8192},
+        },
+    )
+    with patch.dict(os.environ, {}, clear=True):
+        Config.load(config_path=cfg)
+    capsys.readouterr()  # consume first-run output
+
+    with patch.dict(os.environ, {}, clear=True):
+        config = Config.load(config_path=cfg)
+    assert config.model == "gemini-3-flash-preview"
+    err = capsys.readouterr().err
+    assert "deprecated" not in err
+
+
+def test_from_env_warns_on_deprecated_model(capsys):
+    env = {
+        "GOOGLE_CLOUD_PROJECT": "my-project",
+        "GOOGLE_CLOUD_LOCATION": "us-central1",
+        "CFI_AI_MODEL": "gemini-2.5-flash",
+    }
+    with patch.dict(os.environ, env, clear=True):
+        config = Config.from_env()
+    assert config.model == "gemini-2.5-flash"
+    err = capsys.readouterr().err
+    assert "deprecated" in err.lower()
+    assert "gemini-2.5-flash" in err
+
+
+def test_from_env_no_warning_for_current_model(capsys):
+    env = {"GOOGLE_CLOUD_PROJECT": "my-project"}
+    with patch.dict(os.environ, env, clear=True):
+        config = Config.from_env()
+    assert config.model == "gemini-3-flash-preview"
+    err = capsys.readouterr().err
+    assert "deprecated" not in err.lower()
