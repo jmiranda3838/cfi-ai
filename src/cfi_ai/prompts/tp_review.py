@@ -101,11 +101,15 @@ preferred story development (thin → thick description), behavioral indicators 
 of living from the preferred story
    - **#26 Client's Response to Intervention** — per-session response data \
 (engagement, insight demonstrated, skill use, breakthrough moments)
-   - **#15 Functional Impairment** — concrete impairment by domain across \
-notes; declining impairment is a strong "Complete" signal, persistent or \
-worsening impairment supports "Stalled" or TP modification
+   - **#15 Functional Impairment** — present-tense snapshot of concrete \
+impairment by domain in each note; use as raw data for trajectory analysis
+   - **#27 functional trajectory** — domain-by-domain change over time \
+(documented in the "Functional trajectory" bullet of #27); declining \
+impairment is a strong "Complete" signal, persistent or worsening impairment \
+supports "Stalled" or TP modification
 2. **Completed objectives** — target met and sustained across 2+ sessions \
-(look for consistent improvement in #27 and reduced impairment in #15)
+(look for consistent improvement in #27 — including functional trajectory — \
+and current impairment snapshots in #15)
 3. **Stalled objectives** — 3+ consecutive notes (check #13 Goals/Objectives \
 Addressed This Session and #27 Client Progress) without measurable progress \
 on the same objective

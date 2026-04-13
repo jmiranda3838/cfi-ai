@@ -400,11 +400,12 @@ as a markdown table with checkbox notation the clinician can paste:
 
 #### 15. Functional Impairment [REQUIRED]
 **This field is critical for medical necessity — do NOT skip or boilerplate.**
-Document concrete impairment by domain: work/school, relationships, self-care, \
-ADLs (activities of daily living). Specify whether impairment has improved, \
-worsened, or remained stable since last session. Example: "Client missed 1 \
-day of work this week (down from 3 last week); resumed weekly social outing \
-with friend on Saturday; still avoiding grocery shopping due to anxiety in \
+Document a **present-tense snapshot** of concrete impairment by domain: \
+work/school, relationships, self-care, ADLs (activities of daily living). \
+Describe current functioning only — do NOT include trajectory language \
+(improved/worsened/stable) here; trajectory belongs in #27 Client Progress. \
+Example: "Client reports missing 1 day of work this week; attended one social \
+outing with a friend; currently avoids grocery shopping due to anxiety in \
 crowds."
 
 ---
@@ -498,7 +499,12 @@ this week, up from 0-1 in early sessions"
 - **Preferred story development** — e.g., "Preferred story of being a \
 'reliable friend' is now richly described and connected to two recent \
 behavioral instances"
-- **Functional indicators** — referenced in #15 above
+- **Functional trajectory** — domain-by-domain change over time, drawn from \
+#15 snapshots across sessions. State direction (improved/stable/worsened) per \
+domain. Example: "Work attendance improved from missing 3 days/week at intake \
+to 1 day/week currently; social engagement improved — attending weekly outing \
+vs. complete isolation at baseline; grocery shopping avoidance remains stable \
+since last session."
 
 ---
 

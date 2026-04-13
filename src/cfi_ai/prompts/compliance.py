@@ -176,8 +176,9 @@ Audit each field of the new TheraNest 30-field form:
 - #13 Goals/Objectives Addressed This Session — explicit golden-thread linkage \
 by number, with HOW each was addressed; cross-check against #12
 - #14 Mental Status — 13-domain grid populated
-- #15 Functional Impairment — concrete impairment by domain; trajectory \
-(improved/stable/worsened) since last session noted; flag boilerplate or absence
+- #15 Functional Impairment — present-tense snapshot of concrete impairment \
+by domain (work/school/relationships/self-care/ADLs); flag boilerplate, \
+absence, or trajectory language (trajectory belongs in #27)
 - #16 Risk Assessment — SI / HI / Risk Notes grid present
 - #17 Risk Level — populated
 - #18 Protective Factors — present even when Risk = None
@@ -207,9 +208,11 @@ list is at the bottom of this prompt.
 engagement, willingness, insight, resistance. Distinct from #27.
 - #27 Client Progress — cumulative trajectory: externalizing ratings \
 ("client rates anxiety's influence at 5/10, down from 8/10"), unique outcome \
-frequency, preferred story development. Flag only vague language without \
-specifics ("client is doing better", "making progress"). Narrative-therapy \
-metrics ARE measurable when documented with specifics.
+frequency, preferred story development, and **functional trajectory** \
+(domain-by-domain change drawn from #15 snapshots: direction per domain such \
+as "work attendance improved from 3 absences to 1"). Flag only vague language \
+without specifics ("client is doing better", "making progress"). \
+Narrative-therapy metrics ARE measurable when documented with specifics.
 - #28 Medical Necessity Statement — explicit tie to active diagnosis, current \
 symptoms / functional impairment from #15, treatment goals from #13, and why \
 continued care is indicated. Flag boilerplate or template phrases.
