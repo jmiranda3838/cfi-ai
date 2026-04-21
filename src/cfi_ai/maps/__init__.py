@@ -12,9 +12,6 @@ if TYPE_CHECKING:
     from cfi_ai.ui import UI
     from cfi_ai.workspace import Workspace
 
-from cfi_ai.clients import list_clients
-
-
 @dataclass
 class MapResult:
     """Result of a slash map execution.
@@ -93,37 +90,11 @@ def get_map_descriptions() -> dict[str, str]:
     return dict(_MAP_DESCRIPTIONS)
 
 
-def build_map_message(
-    map_name: str,
-    description: str,
-    user_input: str | None,
-    workspace: Workspace,
-) -> str:
-    """Build an LLM-facing intent message for the slash-map path.
-
-    Instead of hard-erroring when args are missing/ambiguous, slash maps
-    return this message so the LLM can resolve ambiguity via interview and
-    activate_map.
-    """
-    parts = [f"[MAP: {map_name}]", f"The user wants to {description}."]
-
-    if user_input and user_input.strip():
-        parts.append(f'\nUser input: "{user_input.strip()}"')
-
-    clients = list_clients(workspace)
-    if clients:
-        parts.append(f"\nAvailable clients: {', '.join(clients)}")
-    else:
-        parts.append("\nNo clients exist yet.")
-
-    parts.append(
-        "\nIf the user hasn't provided the information you need "
-        "(client ID, session transcript, file path, etc.), use `interview` to "
-        "ask them first. Then call `activate_map` with "
-        f'`map="{map_name}"`, `source="slash"`, and the resolved parameters.'
-    )
-
-    return "\n".join(parts)
+def invocation_preface(map_name: str, args: str | None) -> str:
+    """Build the 'User invoked /<map>' preface prepended to a dispatched map message."""
+    if args and args.strip():
+        return f"User invoked /{map_name} with input: {args.strip()!r}\n\n"
+    return f"User invoked /{map_name} with no arguments.\n\n"
 
 
 # Import map modules to trigger registration

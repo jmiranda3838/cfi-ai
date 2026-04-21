@@ -40,21 +40,41 @@ question first, then ask whether they'd like to run the workflow.
 """
     + CRITICAL_INSTRUCTIONS
     + """
-{intake_input}
+## Processing Intake Inputs
 
-### Expected Inputs
 The intake map typically involves some combination of:
 - **Session audio** (.m4a, .mp3, .wav, etc.) — the recorded intake session
-- **Intake questionnaire** (PDF) — client-completed intake form with demographics, \
-history, presenting concerns
+- **Intake questionnaire** (PDF) — client-completed intake form
 - **Wellness assessment** (PDF or paper scan) — Optum Form G22E02
-- **Other assessments** (PDFs, images) — any additional clinical measures
+- **Other assessments** (PDFs, images)
 - **Pasted transcript** — session transcript already in the conversation
+
+Inspect what the user has provided and process each accordingly:
+
+- **File paths**: extract each path from the user's input. If a path contains \
+shell escape characters (backslashes before spaces, quotes), interpret them \
+as a shell would — e.g. `Bristol\\ St\\ 4.m4a` means `Bristol St 4.m4a`.
+  - Audio files (.m4a, .mp3, .wav, etc.): `attach_path(path=...)` to load \
+into context, then transcribe directly.
+  - PDF files (.pdf): `extract_document(path=...)` for text. If the extracted \
+text only contains form labels without response data, fall back to \
+`attach_path(path=...)` to read the PDF visually.
+  - Other files: `attach_path(path=...)`.
+  Process one file at a time. After processing, you'll have text content for \
+each input.
+- **Pasted transcript or response text**: use it directly as the intake content.
+- **Nothing provided yet**: call `interview` alone to ask what intake materials \
+the user has (session recording, questionnaire PDF, wellness assessment) and \
+where the files are located. Do not proceed to client identification or \
+document writing until you have materials.
+
+When transcribing audio, transcribe as accurately as possible — do not omit or \
+embellish content.
 
 ## Wellness Assessment Scoring (if G22E02 data is present)
 
-If the intake materials include a completed Wellness Assessment (G22E02), calculate \
-and use the scores as follows:
+If the intake materials include a completed Wellness Assessment (G22E02), \
+calculate and use the scores as follows:
 
 ### Scoring
 - **GD Score**: Sum items 1-15. Range 0-45.
@@ -72,29 +92,10 @@ baseline for the problem's impact (externalized framing)
 - **Progress Note Data**: Document GD score, severity, and CAGE-AID result explicitly
 - **Medical Necessity**: GD at/above cutoff (12+) supports medical necessity
 
-If the input contains file paths, extract each path. If the path contains shell \
-escape characters (backslashes before spaces, quotes, etc.), interpret them as a \
-shell would — e.g. `Bristol\\\\ St\\\\ 4.m4a` means `Bristol St 4.m4a`.
-
-If the input looks like raw transcript text rather than file paths, treat it as \
-the transcript directly and skip the file-loading step.
-
 ## Map
 
-If intake materials are not yet available, call `interview` alone first — do not \
-proceed to Phase 1 until you have materials.
-
 ### Phase 1: Process Input, Identify & Summarize
-1. **Process files** step by step using the appropriate tool for each:
-   - **Audio files** (.m4a, .mp3, .wav, etc.): call `attach_path(path=...)` to load the audio into context. Transcribe and process the audio directly.
-   - **PDF files** (.pdf): call `extract_document(path=...)` to extract text. If the \
-extracted text is incomplete or only contains form labels without response data, use \
-`attach_path(path=...)` to load the PDF visually and read the content directly.
-   - **Other files**: call `attach_path(path=...)` to load into context
-Process one file at a time. After all files are processed, you will have text \
-content for each input. Use this text for all subsequent document generation. \
-When transcribing audio, transcribe as accurately as possible — do not omit or \
-embellish content.
+1. **Process all intake input** per the "Processing Intake Inputs" section above.
 2. **Identify the client**: If the user explicitly provides a client name \
 in their input, use that name for the `client-id` slug. Otherwise, identify \
 the client from the session content. Generate a `client-id` slug \
@@ -111,13 +112,14 @@ stop after the summary text.
 ### Phase 2: Write Documents
 5. **Save ALL files in a single response** — call `write_file` once for EACH of \
 these 5 documents (or 6 if Wellness Assessment data is available) in the same turn:
-   - `intake/<YYYY-MM-DD>-initial-assessment.md`
-   - `treatment-plan/<YYYY-MM-DD>-treatment-plan.md`
-   - `sessions/<YYYY-MM-DD>-progress-note.md`
-   - `sessions/<YYYY-MM-DD>-intake-transcript.md`
-   - `profile/<YYYY-MM-DD>-profile.md`
-   - `wellness-assessments/<YYYY-MM-DD>-wellness-assessment.md` (ONLY if WA data \
-was provided — structured scores with GD calculation and severity level)
+   - `clients/<client-id>/intake/{date}-initial-assessment.md`
+   - `clients/<client-id>/treatment-plan/{date}-treatment-plan.md`
+   - `clients/<client-id>/sessions/{date}-progress-note.md`
+   - `clients/<client-id>/sessions/{date}-intake-transcript.md`
+   - `clients/<client-id>/profile/{date}-profile.md`
+   - `clients/<client-id>/wellness-assessments/{date}-wellness-assessment.md` \
+(ONLY if WA data was provided — structured scores with GD calculation and \
+severity level)
 
 Emit all `write_file` calls together. Do NOT stop after writing one file. \
 The user will review and approve all writes at once. For audio sources, the \
@@ -166,8 +168,6 @@ writing the profile and progress note.
 INTAKE_PLAN_PROMPT = """\
 You are planning the clinical Intake Map. Today's date is {date}.
 
-{intake_input}
-
 ## Instructions
 
 Create a structured execution plan for the Intake Map. \
@@ -190,10 +190,12 @@ most recent profile and treatment plan for context.
 (6 if WA data present).
 
 4. **Include execution steps**: During execution, you should:
-   1. Call `attach_path` for each audio file to load it into context
-   2. Call `extract_document` for each PDF (use `attach_path` if text is incomplete)
-   3. Identify the client from the extracted content
-   4. Write all documents in a single batch
+   1. Process any user-provided files (`attach_path` for audio/other, \
+`extract_document` for PDFs; `attach_path` fallback if extraction is incomplete)
+   2. Use pasted transcript text directly if provided
+   3. If neither, `interview` the user to collect materials first
+   4. Identify the client from the extracted content
+   5. Write all documents in a single batch
 
 ## File Structure
 

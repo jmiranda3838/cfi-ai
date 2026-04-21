@@ -699,7 +699,7 @@ Use this format:
 ```
 # Wellness Assessment (G22E02)
 
-- **Client ID:** {client_id}
+- **Client ID:** [client-id slug]
 - **Date:** {date}
 - **Administration:** [Initial | Re-administration (#N)]
 - **Visit #:** [number]

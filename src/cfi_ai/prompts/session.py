@@ -35,136 +35,47 @@ question first, then ask whether they'd like to run the workflow.
 """
     + CRITICAL_INSTRUCTIONS
     + """
-<transcript>
-{transcript}
-</transcript>
+## Resolving Client Context
 
-## Client Context
+If the user hasn't named a client, ask via `interview`. If the name is \
+ambiguous or misspelled, run `run_command ls clients/` to see which client \
+directories exist, and use `interview` to disambiguate when needed.
 
-Client ID: `{client_id}`
+Once you have a confirmed client-id slug, load the client's most recent profile \
+and treatment plan:
 
-Use `run_command ls clients/{client_id}/profile/` and \
-`run_command ls clients/{client_id}/treatment-plan/` to find the most recent \
-files (latest `YYYY-MM-DD` prefix), then `attach_path` to load them.
+1. `run_command ls clients/<client-id>/profile/` — find the latest \
+`YYYY-MM-DD` prefix, then `attach_path` to load it.
+2. `run_command ls clients/<client-id>/treatment-plan/` — find the latest \
+treatment plan, then `attach_path` to load it.
+
+## Processing Session Input
+
+The user may provide session input in several forms. Pick the appropriate path:
+
+- **File paths** (audio `.m4a`/`.mp3`/`.wav`, PDFs, images): process each file with \
+the right tool:
+  - Audio → `attach_path(path=...)` to load into context, then transcribe directly.
+  - PDF → `extract_document(path=...)` for text. If the extracted text is \
+incomplete or only contains form labels, fall back to `attach_path(path=...)` \
+to read the PDF visually.
+  - Other files → `attach_path(path=...)`.
+  If a path contains shell escape characters (backslashes before spaces, quotes), \
+interpret them as a shell would — e.g. `Bristol\\ St\\ 4.m4a` means \
+`Bristol St 4.m4a`.
+- **Pasted transcript text**: use it directly as the session transcript.
+- **Neither provided**: call `interview` to ask what form the session content \
+is in and where to find it. Do not proceed to Phase 2 without a transcript or \
+audio.
+
+When transcribing audio, transcribe as accurately as possible — do not omit or \
+embellish content.
 
 ## Map
 
 ### Phase 1: Load Context & Summarize
-1. Load the client's most recent profile and treatment plan (see above).
-2. **Check the loaded profile for a "Billing & Provider Information" section.** \
-If it is missing or incomplete (no Payer, no Default Modality, no Supervised \
-flag, etc.), call `interview` ONCE to collect: payer, authorization number \
-(if EAP/EWS), total authorized sessions, authorization period, default \
-modality (In-Person/Video/Phone), supervised (Y/N), supervisor name + license \
-+ NPI if supervised, supervision format, service setting/POS. The new note \
-CANNOT be generated without this data — billing fields #4–#8 depend on it. \
-After collecting the answers, plan to `write_file` (overwrite=true) the \
-updated profile in the same Phase 2 batch as the progress note. This is a \
-ONE-TIME backfill — subsequent sessions will read the section directly.
-3. Review the transcript and client context.
-4. **State** a 1-2 sentence clinical summary of this session, then \
-**immediately proceed to Phase 2 tool calls in the same response** — do NOT \
-stop after the summary text.
-
-### Phase 2: Write Documents
-5. **Save ALL files in a single response** — call `write_file` once for EACH:
-   - `sessions/{date}-progress-note.md`
-   - `sessions/{date}-session-transcript.md`
-   - `profile/{date}-profile.md` (ONLY if you backfilled the Billing & \
-Provider section in Phase 1 step 2 — use overwrite=true and include the full \
-existing profile content with the new billing section appended)
-
-Emit all `write_file` calls together. The user will review and approve.
-
-## File Structure
-
-Save files under `clients/{client_id}/` using this layout:
-
-```
-clients/{client_id}/
-  sessions/{date}-progress-note.md      (TheraNest 30-field progress note)
-  sessions/{date}-session-transcript.md  (verbatim transcript)
-```
-
-{progress_note_guidance}
-
-## Session Transcript
-
-Save the transcript verbatim with a brief header noting the date and session type.
-"""
-)
-
-SESSION_FILE_MAP_PROMPT = (
-    """\
-You are generating an Optum-compliant progress note for an ongoing therapy session \
-based on one or more files provided by the user. Today's date is {date}.
-
-## How to Use This Map
-
-This map contains reference information and workflow steps for ongoing-session \
-progress notes. Loading this map does not mean you must execute the workflow. The \
-Phase blocks, "Save ALL files" instructions, and any "immediately proceed" \
-directives below are the workflow — they apply only when execution is the intent.
-
-- **Execution mode** — Use this when the user clearly asked you to produce or \
-update a session progress note (e.g., "write the session note," "do a progress \
-note for today's session," or any slash command that maps to this workflow). \
-Follow the phases below in order, including the client-context loading steps and \
-the file writes.
-- **Reference mode** — Use this when the user is asking a question, comparing \
-options, or thinking through a decision related to session notes. Answer the \
-user's actual question using the content below as reference. You MAY still load \
-specific client files with `attach_path` or `run_command` if you need them to \
-answer well (e.g., to look up the current treatment plan or a recent note). \
-What you MUST NOT do in reference mode: auto-execute the canned phase sequence, \
-bulk-load every file the workflow normally touches, or call \
-`write_file`/`apply_patch` unless the user explicitly confirms they want the \
-documents produced.
-
-When in doubt about which mode applies, default to reference mode: answer the \
-question first, then ask whether they'd like to run the workflow.
-
-"""
-    + CRITICAL_INSTRUCTIONS
-    + """
-The user wants to process a session from one or more files. The input is: \
-`{file_reference}`
-
-### Expected Inputs
-- **Session audio** (.m4a, .mp3, .wav, etc.) — the recorded session
-- **Other files** (PDFs, images) — any additional session-related documents
-
-Extract each file path from the input. If the input looks like raw transcript \
-text rather than file paths, treat it as the transcript directly and skip the \
-file-loading step.
-
-If the path contains shell escape characters (backslashes before spaces, quotes, \
-etc.), interpret them as a shell would — e.g. `Bristol\\ St\\ 4.m4a` means \
-`Bristol St 4.m4a`.
-
-## Client Context
-
-Client ID: `{client_id}`
-
-Use `run_command ls clients/{client_id}/profile/` and \
-`run_command ls clients/{client_id}/treatment-plan/` to find the most recent \
-files (latest `YYYY-MM-DD` prefix), then `attach_path` to load them.
-
-## Map
-
-### Phase 1: Process Input Files & Summarize
-1. **Process files** step by step using the appropriate tool for each:
-   - **Audio files** (.m4a, .mp3, .wav, etc.): call `attach_path(path=...)` \
-to load the audio into context. Transcribe and process the audio directly.
-   - **PDF files** (.pdf): call `extract_document(path=...)` to extract text. If the \
-extracted text is incomplete or only contains form labels without response data, use \
-`attach_path(path=...)` to load the PDF visually and read the content directly.
-   - **Other files**: call `attach_path(path=...)` to load into context
-Process one file at a time. After all files are processed, you will have text \
-content for each input. \
-When transcribing audio, transcribe as accurately as possible — do not omit or \
-embellish content.
-2. Load the client's most recent profile and treatment plan (see Client Context above).
+1. Resolve the client and load profile + treatment plan (see above).
+2. Process the session input to produce session content (see above).
 3. **Check the loaded profile for a "Billing & Provider Information" section.** \
 If it is missing or incomplete (no Payer, no Default Modality, no Supervised \
 flag, etc.), call `interview` ONCE to collect: payer, authorization number \
@@ -175,67 +86,68 @@ CANNOT be generated without this data — billing fields #4–#8 depend on it. \
 After collecting the answers, plan to `write_file` (overwrite=true) the \
 updated profile in the same Phase 2 batch as the progress note. This is a \
 ONE-TIME backfill — subsequent sessions will read the section directly.
-4. Review all processed content and client context.
+4. Review the session content and client context.
 5. **State** a 1-2 sentence clinical summary of this session, then \
 **immediately proceed to Phase 2 tool calls in the same response** — do NOT \
 stop after the summary text.
 
 ### Phase 2: Write Documents
 6. **Save ALL files in a single response** — call `write_file` once for EACH:
-   - `sessions/{date}-progress-note.md`
-   - `sessions/{date}-session-transcript.md`
-   - `profile/{date}-profile.md` (ONLY if you backfilled the Billing & \
-Provider section in Phase 1 step 3 — use overwrite=true and include the full \
-existing profile content with the new billing section appended)
+   - `clients/<client-id>/sessions/{date}-progress-note.md`
+   - `clients/<client-id>/sessions/{date}-session-transcript.md`
+   - `clients/<client-id>/profile/{date}-profile.md` (ONLY if you backfilled \
+the Billing & Provider section in Phase 1 step 3 — use overwrite=true and \
+include the full existing profile content with the new billing section \
+appended)
 
 Emit all `write_file` calls together. The user will review and approve. \
 For audio sources, the session transcript should include speaker labels \
 (e.g. "Therapist:", "Client:") — capture dialogue faithfully including filler \
 words, pauses noted in brackets, and emotional tone observations in brackets \
-where clinically relevant.
+where clinically relevant. If the source was an audio file, the transcript \
+file should note that it was transcribed from audio in its header.
 
 ## File Structure
 
-Save files under `clients/{client_id}/` using this layout:
+Save files under `clients/<client-id>/` using this layout:
 
 ```
-clients/{client_id}/
-  sessions/{date}-progress-note.md      (TheraNest 30-field progress note)
-  sessions/{date}-session-transcript.md  (verbatim or transcribed session)
+clients/<client-id>/
+  sessions/<YYYY-MM-DD>-progress-note.md      (TheraNest 30-field progress note)
+  sessions/<YYYY-MM-DD>-session-transcript.md (verbatim or transcribed session)
 ```
-
-If the source was an audio file, the sessions/ transcript file should note that \
-it was transcribed from audio in its header.
 
 {progress_note_guidance}
 """
 )
 
-SESSION_FILE_PLAN_PROMPT = """\
+SESSION_PLAN_PROMPT = """\
 You are planning the Session Map. Today's date is {date}.
-
-The user has provided one or more files for session processing: \
-`{file_reference}`
-
-Client ID: `{client_id}`
-
-During execution, use `run_command ls` to find and `attach_path` to load \
-the client's most recent profile and treatment plan for context.
 
 ## Instructions
 
 Create a structured execution plan for the Session Map. \
-Do NOT load or process the files — you will do that during execution.
+Do NOT load or process the session input yet — you will do that during execution.
 
-1. **List all files** to create with their full paths and quality criteria:
-   - `clients/{client_id}/sessions/{date}-progress-note.md`
-   - `clients/{client_id}/sessions/{date}-session-transcript.md`
+If the user has not yet specified which client or provided session content \
+(file or pasted text), include a first step to resolve those via `interview` \
+and `run_command ls clients/` during execution.
 
-2. **Include execution steps**: During execution, you should:
-   1. Load client's most recent profile and treatment plan
-   2. Call `attach_path` for each audio file to load it into context
-   3. Call `extract_document` for each PDF (use `attach_path` if text is incomplete)
-   4. Write both documents in a single batch
+1. **Resolve client-id** — during execution, use `run_command ls clients/` to \
+list existing clients, then `interview` if ambiguous.
+
+2. **List all files** to create with their full paths and quality criteria:
+   - `clients/<client-id>/sessions/{date}-progress-note.md`
+   - `clients/<client-id>/sessions/{date}-session-transcript.md`
+   - `clients/<client-id>/profile/{date}-profile.md` (only if the Billing & \
+Provider section is missing and will be backfilled)
+
+3. **Include execution steps**: During execution, you should:
+   1. Confirm client-id and load the client's most recent profile and treatment plan
+   2. Process any user-provided files (`attach_path` for audio/other, \
+`extract_document` for PDFs; `attach_path` fallback if extraction is incomplete)
+   3. Use pasted transcript text directly if provided
+   4. Write both/all documents in a single batch
    5. User reviews and approves
 
 ## Document Criteria

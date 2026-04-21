@@ -66,11 +66,9 @@ Vertex AI Google Search grounding is enabled by default. The `GoogleSearch` tool
 - `/help` prints available maps. `/intake` processes a session transcript (text file or pasted) or audio recording (.mp3, .wav, .m4a, etc.) into clinical intake documents. File references are passed to the LLM which uses `attach_path` to load them (handling shell escapes, spaces in paths, etc.). Pasted multi-line text is embedded directly in the prompt. `/clear` drops in-memory history, zeros the cost tracker (mutated in place so the UI's bottom-toolbar reference stays connected), and re-points the session store at a fresh file via `SessionStore.reset()` so post-clear turns don't overwrite the prior session JSON.
 - Typing `/` in the prompt shows autocomplete for available maps via `SlashMapCompleter` (prompt-toolkit).
 
-### Client file structure (`clients.py`)
+### Client file resolution
 
-- `list_clients(workspace)` → sorted client-id slugs from `clients/` subdirs.
-- `load_client_context(workspace, client_id)` → reads `profile/current.md` + `treatment-plan/current.md`.
-- `sanitize_client_id(name)` → slug conversion ("Jane Doe" → "jane-doe").
+Client profile / treatment-plan / session files are NOT pre-loaded into the system prompt or message list, and there is no Python-side client-id registry. The system prompt includes the `clients/<client-id>/…` directory convention as reference boilerplate (see `prompts/system.py`), and each clinical map prompt has a "Resolving Client Context" section that instructs the LLM to discover clients via `run_command ls clients/` and disambiguate via `interview` at runtime. When a user mentions a client, the LLM pulls files in via `attach_path` or `run_command`, or activates a map (e.g. `session`, `tp-review`) whose prompt drives the load.
 
 ### Configuration
 

@@ -119,12 +119,12 @@ def test_prompts_no_code_centric_language():
     assert "function signatures" not in plan_prompt
 
 
+# --- Clinical map prompt rendering ---
+
 def test_intake_prompt_formats():
     """INTAKE_PROMPT assembles without unreplaced placeholders."""
     from cfi_ai.prompts.intake import INTAKE_PROMPT
-    result = INTAKE_PROMPT.format(
-        intake_input="Test intake input", date="2026-03-18",
-    )
+    result = INTAKE_PROMPT.format(date="2026-03-18")
     _assert_no_unreplaced_placeholders(result)
     assert "Risk Assessment" in result
     assert "Diagnostic Impressions" in result
@@ -135,9 +135,7 @@ def test_intake_prompt_formats():
 def test_intake_plan_prompt_formats():
     """INTAKE_PLAN_PROMPT assembles without unreplaced placeholders."""
     from cfi_ai.prompts.intake import INTAKE_PLAN_PROMPT
-    result = INTAKE_PLAN_PROMPT.format(
-        intake_input="session.m4a", date="2026-03-18",
-    )
+    result = INTAKE_PLAN_PROMPT.format(date="2026-03-18")
     _assert_no_unreplaced_placeholders(result)
     assert "Initial Assessment" in result
     assert "current.md" not in result
@@ -147,34 +145,20 @@ def test_session_map_prompt_formats():
     from cfi_ai.prompts.session import PROGRESS_NOTE_GUIDANCE, SESSION_MAP_PROMPT
     note_guidance = PROGRESS_NOTE_GUIDANCE.format(date="2026-03-18")
     result = SESSION_MAP_PROMPT.format(
-        transcript="Test", date="2026-03-18", client_id="jane-doe",
+        date="2026-03-18",
         progress_note_guidance=note_guidance,
     )
     _assert_no_unreplaced_placeholders(result)
     assert "TheraNest 30-Field Form" in result
     assert "run_command ls" in result
-
-
-def test_session_file_map_prompt_formats():
-    from cfi_ai.prompts.session import PROGRESS_NOTE_GUIDANCE, SESSION_FILE_MAP_PROMPT
-    note_guidance = PROGRESS_NOTE_GUIDANCE.format(date="2026-03-18")
-    result = SESSION_FILE_MAP_PROMPT.format(
-        file_reference="session.m4a", date="2026-03-18", client_id="jane-doe",
-        progress_note_guidance=note_guidance,
-    )
-    _assert_no_unreplaced_placeholders(result)
+    # Single consolidated prompt handles both file and non-file inputs
     assert "attach_path" in result
-    assert "run_command ls" in result
 
 
-def test_session_file_plan_prompt_formats():
-    from cfi_ai.prompts.session import (
-        SESSION_FILE_PLAN_PROMPT, PROGRESS_NOTE_GUIDANCE, PROGRESS_NOTE_PLAN_CRITERIA,
-    )
-    note_guidance = PROGRESS_NOTE_GUIDANCE.format(date="2026-03-18")
-    result = SESSION_FILE_PLAN_PROMPT.format(
-        file_reference="session.m4a", date="2026-03-18", client_id="jane-doe",
-        progress_note_guidance=note_guidance,
+def test_session_plan_prompt_formats():
+    from cfi_ai.prompts.session import SESSION_PLAN_PROMPT, PROGRESS_NOTE_PLAN_CRITERIA
+    result = SESSION_PLAN_PROMPT.format(
+        date="2026-03-18",
         progress_note_plan_criteria=PROGRESS_NOTE_PLAN_CRITERIA,
     )
     _assert_no_unreplaced_placeholders(result)
@@ -182,7 +166,7 @@ def test_session_file_plan_prompt_formats():
 
 def test_compliance_prompt_formats():
     from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
-    result = COMPLIANCE_PROMPT.format(date="2026-03-18", client_id="jane-doe")
+    result = COMPLIANCE_PROMPT.format(date="2026-03-18")
     _assert_no_unreplaced_placeholders(result)
     assert "run_command ls" in result
     assert "current.md" not in result
@@ -199,7 +183,7 @@ def test_compliance_prompt_reports_missing_records_as_findings():
 
 def test_tp_review_prompt_formats():
     from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
-    result = TP_REVIEW_PROMPT.format(date="2026-03-18", client_id="jane-doe")
+    result = TP_REVIEW_PROMPT.format(date="2026-03-18")
     _assert_no_unreplaced_placeholders(result)
     assert "run_command ls" in result
     assert "current.md" not in result
@@ -217,23 +201,13 @@ def test_tp_review_prompt_stops_writes_when_prereqs_missing():
 
 def test_wa_map_prompt_formats():
     from cfi_ai.prompts.wellness_assessment import WA_MAP_PROMPT
-    result = WA_MAP_PROMPT.format(
-        date="2026-03-18", client_id="jane-doe", wa_input="test data",
-    )
+    result = WA_MAP_PROMPT.format(date="2026-03-18")
     _assert_no_unreplaced_placeholders(result)
     assert "0-45" in result
     assert "run_command ls" in result
-
-
-def test_wa_file_map_prompt_formats():
-    from cfi_ai.prompts.wellness_assessment import WA_FILE_MAP_PROMPT
-    result = WA_FILE_MAP_PROMPT.format(
-        date="2026-03-18", client_id="jane-doe",
-        file_reference="wa.pdf",
-    )
-    _assert_no_unreplaced_placeholders(result)
+    # Consolidated prompt handles both file and pasted inputs
     assert "extract_document" in result
-    assert "run_command ls" in result
+    assert "attach_path" in result
 
 
 def test_shared_constants_importable():
@@ -264,57 +238,51 @@ def test_shared_constants_importable():
 
 
 def test_map_prompts_have_reference_loading_wrapper():
-    """All map prompts must clarify that loading != executing."""
+    """All clinical map prompts must clarify that loading != executing."""
     from cfi_ai.prompts.intake import INTAKE_PROMPT
-    from cfi_ai.prompts.session import SESSION_MAP_PROMPT, SESSION_FILE_MAP_PROMPT
+    from cfi_ai.prompts.session import SESSION_MAP_PROMPT
     from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
     from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
-    from cfi_ai.prompts.wellness_assessment import WA_MAP_PROMPT, WA_FILE_MAP_PROMPT
+    from cfi_ai.prompts.wellness_assessment import WA_MAP_PROMPT
 
     marker = "Loading this map does not mean you must execute the workflow"
     for name, prompt in [
         ("INTAKE_PROMPT", INTAKE_PROMPT),
         ("SESSION_MAP_PROMPT", SESSION_MAP_PROMPT),
-        ("SESSION_FILE_MAP_PROMPT", SESSION_FILE_MAP_PROMPT),
         ("COMPLIANCE_PROMPT", COMPLIANCE_PROMPT),
         ("TP_REVIEW_PROMPT", TP_REVIEW_PROMPT),
         ("WA_MAP_PROMPT", WA_MAP_PROMPT),
-        ("WA_FILE_MAP_PROMPT", WA_FILE_MAP_PROMPT),
     ]:
         assert marker in prompt, f"{name} missing reference-loading wrapper"
 
 
 def test_critical_instructions_in_all_map_prompts():
-    """CRITICAL_INSTRUCTIONS text appears in all map prompts."""
+    """CRITICAL_INSTRUCTIONS text appears in all clinical map prompts."""
     from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
     from cfi_ai.prompts.intake import INTAKE_PROMPT
-    from cfi_ai.prompts.session import SESSION_FILE_MAP_PROMPT, SESSION_MAP_PROMPT
+    from cfi_ai.prompts.session import SESSION_MAP_PROMPT
     from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
-    from cfi_ai.prompts.wellness_assessment import WA_FILE_MAP_PROMPT, WA_MAP_PROMPT
+    from cfi_ai.prompts.wellness_assessment import WA_MAP_PROMPT
     marker = "Do NOT narrate the map"
-    for prompt in (INTAKE_PROMPT,
-                   SESSION_MAP_PROMPT, SESSION_FILE_MAP_PROMPT,
-                   COMPLIANCE_PROMPT, TP_REVIEW_PROMPT,
-                   WA_MAP_PROMPT, WA_FILE_MAP_PROMPT):
+    for prompt in (INTAKE_PROMPT, SESSION_MAP_PROMPT,
+                   COMPLIANCE_PROMPT, TP_REVIEW_PROMPT, WA_MAP_PROMPT):
         assert marker in prompt
 
 
 def test_reference_mode_forbids_writes():
-    """All map prompts must explicitly forbid write_file/apply_patch in reference mode."""
+    """All clinical map prompts must explicitly forbid write_file/apply_patch in reference mode."""
     from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
     from cfi_ai.prompts.intake import INTAKE_PROMPT
-    from cfi_ai.prompts.session import SESSION_FILE_MAP_PROMPT, SESSION_MAP_PROMPT
+    from cfi_ai.prompts.session import SESSION_MAP_PROMPT
     from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
-    from cfi_ai.prompts.wellness_assessment import WA_FILE_MAP_PROMPT, WA_MAP_PROMPT
+    from cfi_ai.prompts.wellness_assessment import WA_MAP_PROMPT
 
     for name, prompt in [
         ("INTAKE_PROMPT", INTAKE_PROMPT),
         ("SESSION_MAP_PROMPT", SESSION_MAP_PROMPT),
-        ("SESSION_FILE_MAP_PROMPT", SESSION_FILE_MAP_PROMPT),
         ("COMPLIANCE_PROMPT", COMPLIANCE_PROMPT),
         ("TP_REVIEW_PROMPT", TP_REVIEW_PROMPT),
         ("WA_MAP_PROMPT", WA_MAP_PROMPT),
-        ("WA_FILE_MAP_PROMPT", WA_FILE_MAP_PROMPT),
     ]:
         assert "MUST NOT" in prompt, f"{name} missing reference-mode prohibition"
         assert "write_file" in prompt, f"{name} missing write_file prohibition"
@@ -341,19 +309,17 @@ def test_interview_in_system_prompts():
     assert "interview" in plan
 
 
-def test_interview_in_wellness_assessment_prompts():
-    """Wellness assessment prompts reference interview tool for ambiguous items."""
-    from cfi_ai.prompts.wellness_assessment import WA_FILE_MAP_PROMPT, WA_MAP_PROMPT
-    for prompt in (WA_MAP_PROMPT, WA_FILE_MAP_PROMPT):
-        assert "interview tool" in prompt
+def test_interview_in_wellness_assessment_prompt():
+    """Wellness assessment prompt references interview tool for ambiguous items."""
+    from cfi_ai.prompts.wellness_assessment import WA_MAP_PROMPT
+    assert "interview" in WA_MAP_PROMPT
 
 
-def test_map_instruction_in_maps_section():
-    """build_system_prompt() contains the [MAP: ...] handling instruction."""
+def test_maps_section_references_slash_invocation_format():
+    """System prompt tells the LLM how to recognize slash invocations."""
     prompt = build_system_prompt("summary")
-    assert "[MAP:" in prompt
     assert "activate_map" in prompt
-    assert 'source="implicit"' in prompt
+    assert "User invoked /" in prompt
 
 
 def test_measuring_progress_only_in_evaluation_prompts():
@@ -492,9 +458,8 @@ def test_tp_review_references_new_field_names():
 
 
 def test_session_map_phase1_backfills_billing_section():
-    """Both session map prompts must instruct interview-driven billing backfill."""
-    from cfi_ai.prompts.session import SESSION_FILE_MAP_PROMPT, SESSION_MAP_PROMPT
-    for prompt in (SESSION_MAP_PROMPT, SESSION_FILE_MAP_PROMPT):
-        assert "Billing & Provider Information" in prompt
-        assert "interview" in prompt
-        assert "overwrite=true" in prompt
+    """Session map prompt must instruct interview-driven billing backfill."""
+    from cfi_ai.prompts.session import SESSION_MAP_PROMPT
+    assert "Billing & Provider Information" in SESSION_MAP_PROMPT
+    assert "interview" in SESSION_MAP_PROMPT
+    assert "overwrite=true" in SESSION_MAP_PROMPT

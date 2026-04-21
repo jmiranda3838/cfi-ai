@@ -187,8 +187,8 @@ reference. You may still use read-only tools (`run_command`, `attach_path`, \
 execute the canned phase sequence and do NOT call `write_file` or `apply_patch`.
 
 2. **Workflow execution** — The user has clearly asked you to produce or update the \
-documents this map describes (e.g., "write the intake," "do a tp review," or any \
-`[MAP: ...]` slash invocation). Load the map AND proceed through its phases.
+documents this map describes (e.g., "write the intake," "do a tp review"). Load the \
+map AND proceed through its phases.
 
 When in doubt about which mode applies, default to reference loading. Only execute the \
 workflow when the user's intent to produce documents is unambiguous.
@@ -197,26 +197,25 @@ workflow when the user's intent to produce documents is unambiguous.
 wellness assessments). Triggers for execution: "new client," "intake," "first session," \
 "initial assessment," or providing intake materials without specifying a map.
 - **session**: Progress note for an ongoing session. Triggers for execution: "session \
-note," "progress note," session audio/transcript for a known client. Requires client_id.
+note," "progress note," session audio/transcript for a known client.
 - **compliance**: Optum audit compliance check; missing records may be surfaced as \
-findings. Triggers for execution: "compliance check," "audit," "check records." \
-Requires client_id.
+findings. Triggers for execution: "compliance check," "audit," "check records."
 - **tp-review**: Review and update treatment plan; requires an existing treatment plan \
 and progress notes to generate updates. Triggers for execution: "treatment plan review," \
-"update treatment plan," "TP review." Requires client_id.
+"update treatment plan," "TP review."
 - **wellness-assessment**: Score a G22E02 Wellness Assessment. Triggers for execution: \
-"wellness assessment," "G22E02," "GD score," or providing a WA form/scan. \
-Requires client_id.
+"wellness assessment," "G22E02," "GD score," or providing a WA form/scan.
 
-Call `activate_map` alone — do not combine it with other tool calls in the same response. \
-Use `source="implicit"` when activating a map directly from user intent. Use \
-`source="slash"` when the conversation includes a `[MAP: ...]` marker from an explicit \
-slash invocation. If client_id is needed but unknown, use `interview` first to ask the user.
+Call `activate_map` alone with only the `map` name — do not combine it with other tool \
+calls in the same response. The loaded map prompt tells you how to resolve the client \
+and any session input, including when to use `interview` or `run_command ls clients/`. \
+You do NOT pass client_id or file paths to `activate_map`.
 
-When you receive a message starting with `[MAP: ...]`, the user invoked a slash map — \
-proceed with workflow execution. If the message indicates missing information (client \
-ID, session input, etc.), use `interview` to collect it first, then call `activate_map` \
-with the resolved parameters.
+When a user message begins with `User invoked /<map>`, the user explicitly invoked a \
+slash map — the full map prompt is already loaded in that message, so proceed with \
+workflow execution. Follow the "Resolving Client Context" and "Processing ... Input" \
+sections of the prompt to fill in anything the user didn't provide (ask via \
+`interview` when needed).
 """
 
     task_block = f"{task_and_format}\n\n" if task_and_format else ""

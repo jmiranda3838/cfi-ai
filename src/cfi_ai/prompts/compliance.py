@@ -61,23 +61,26 @@ clinical history when the related source document is absent.
 - Example: if no treatment plan exists, state that goal alignment and intervention \
 consistency cannot be assessed from the available records.
 
-## Client
+## Resolving Client Context
 
-Client ID: `{client_id}`
+If the user hasn't named a client, ask via `interview`. If the name is \
+ambiguous or misspelled, run `run_command ls clients/` to see which client \
+directories exist, and use `interview` to disambiguate when needed.
 
 ### Phase 0: Load Client Records
 
-Before analyzing, load all clinical files for this client using tools:
+Once you have a confirmed client-id slug, load all clinical files for this \
+client using tools:
 
-1. `run_command ls clients/{client_id}/profile/` — find the most recent profile \
+1. `run_command ls clients/<client-id>/profile/` — find the most recent profile \
 (latest `YYYY-MM-DD` prefix), then `attach_path` to load it.
-2. `run_command ls clients/{client_id}/treatment-plan/` — find the most recent \
+2. `run_command ls clients/<client-id>/treatment-plan/` — find the most recent \
 treatment plan, then `attach_path` to load it.
-3. `run_command ls clients/{client_id}/intake/` — load all initial assessment files \
+3. `run_command ls clients/<client-id>/intake/` — load all initial assessment files \
 with `attach_path`.
-4. `run_command ls clients/{client_id}/sessions/` — load all progress note files \
+4. `run_command ls clients/<client-id>/sessions/` — load all progress note files \
 with `attach_path`.
-5. `run_command ls clients/{client_id}/wellness-assessments/` — load all wellness \
+5. `run_command ls clients/<client-id>/wellness-assessments/` — load all wellness \
 assessment files with `attach_path`.
 
 After loading all files, proceed to Step 1.
@@ -285,7 +288,7 @@ the TP, completed goals, or other triggers — recommend if a TP update is neede
 ## Output Format
 
 ```
-## Compliance Report: {client_id} ({date})
+## Compliance Report: <client-id> ({date})
 
 ### Document Check: [document type]
 - [PASS] field — detail

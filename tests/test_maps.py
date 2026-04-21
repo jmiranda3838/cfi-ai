@@ -1,8 +1,6 @@
 from unittest.mock import MagicMock
 
-from cfi_ai.maps import MapResult, build_map_message, dispatch_map, parse_map_invocation
-from cfi_ai.prompts.intake import INTAKE_PROMPT
-from cfi_ai.tools.activate_map import ActivateMapTool
+from cfi_ai.maps import MapResult, dispatch_map, parse_map_invocation
 from cfi_ai.workspace import Workspace
 
 
@@ -111,194 +109,92 @@ def test_map_result_parts_default():
     assert result.plan_prompt is None
 
 
-# --- File map prompt tests ---
+# --- Clinical map dispatch: prompt loaded directly, with invocation preface ---
 
-def test_intake_prompt_has_placeholders():
-    """INTAKE_PROMPT formats without error."""
-    formatted = INTAKE_PROMPT.format(
-        date="2026-03-13",
-        intake_input="The user wants to process: `session.mp3`",
-    )
-    assert "2026-03-13" in formatted
-    assert "session.mp3" in formatted
-    assert "{intake_input}" not in formatted
-    assert "{date}" not in formatted
-
-
-# --- build_map_message tests ---
-
-def test_build_map_message_basic(tmp_path):
+def test_session_dispatch_loads_prompt(tmp_path):
+    """/session dispatch loads the full map prompt with map_mode=True and plan_prompt set."""
+    ui = MagicMock()
     ws = Workspace(str(tmp_path))
-    msg = build_map_message("compliance", "run a compliance check", None, ws)
-    assert "[MAP: compliance]" in msg
-    assert "run a compliance check" in msg
-    assert "activate_map" in msg
-    assert 'source="slash"' in msg
-    assert "interview" in msg
+    result = dispatch_map("session", None, ui, ws, MagicMock())
+    assert result.error is None
+    assert result.map_mode is True
+    assert result.plan_prompt is not None  # session has a plan variant
+    assert "User invoked /session" in result.message
+    # The prompt content itself should be loaded (not an intent shim)
+    assert "Progress Note Guidance" in result.message
+    assert "Resolving Client Context" in result.message
 
 
-def test_build_map_message_with_user_input(tmp_path):
+def test_session_dispatch_preserves_user_args(tmp_path):
+    ui = MagicMock()
     ws = Workspace(str(tmp_path))
-    msg = build_map_message("compliance", "run a check", "check jane's records", ws)
-    assert "check jane's records" in msg
+    result = dispatch_map("session", "jane recording.m4a", ui, ws, MagicMock())
+    assert result.error is None
+    assert "jane recording.m4a" in result.message
 
 
-def test_build_map_message_lists_clients(tmp_path):
-    (tmp_path / "clients" / "alice").mkdir(parents=True)
-    (tmp_path / "clients" / "bob").mkdir(parents=True)
+def test_session_dispatch_no_args_preface(tmp_path):
+    ui = MagicMock()
     ws = Workspace(str(tmp_path))
-    msg = build_map_message("session", "generate a note", None, ws)
-    assert "alice" in msg
-    assert "bob" in msg
+    result = dispatch_map("session", None, ui, ws, MagicMock())
+    assert "User invoked /session with no arguments" in result.message
 
 
-def test_build_map_message_no_clients(tmp_path):
-    ws = Workspace(str(tmp_path))
-    msg = build_map_message("compliance", "run a compliance check", None, ws)
-    assert "No clients exist" in msg
-
-
-# --- /compliance fast path and map path ---
-
-def test_compliance_fast_path(tmp_path):
-    """Valid single-token client-id -> fast path with formatted prompt, map_mode=True."""
-    (tmp_path / "clients" / "jane-doe").mkdir(parents=True)
+def test_compliance_dispatch_loads_prompt(tmp_path):
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
     result = dispatch_map("compliance", "jane-doe", ui, ws, MagicMock())
     assert result.error is None
-    assert result.message is not None
-    assert "jane-doe" in result.message
     assert result.map_mode is True
-    assert "[MAP:" not in result.message
+    assert result.plan_prompt is None  # compliance has no plan variant
+    assert "User invoked /compliance" in result.message
+    assert "jane-doe" in result.message
+    assert "Compliance Report" in result.message
 
 
-def test_compliance_no_args_map_path(tmp_path):
-    """No args -> map path, no error."""
-    ui = MagicMock()
-    ws = Workspace(str(tmp_path))
-    result = dispatch_map("compliance", None, ui, ws, MagicMock())
-    assert result.error is None
-    assert "[MAP: compliance]" in result.message
-
-
-def test_compliance_invalid_client_map_path(tmp_path):
-    """Invalid client -> map path, no error."""
-    ui = MagicMock()
-    ws = Workspace(str(tmp_path))
-    result = dispatch_map("compliance", "nonexistent", ui, ws, MagicMock())
-    assert result.error is None
-    assert "[MAP: compliance]" in result.message
-
-
-def test_compliance_natural_language_map_path(tmp_path):
-    """Multi-word args -> map path with user input preserved."""
-    (tmp_path / "clients" / "jane-doe").mkdir(parents=True)
-    ui = MagicMock()
-    ws = Workspace(str(tmp_path))
-    result = dispatch_map("compliance", "check jane's records", ui, ws, MagicMock())
-    assert result.error is None
-    assert "[MAP: compliance]" in result.message
-    assert "check jane's records" in result.message
-    assert "jane-doe" in result.message  # available clients listed
-
-
-# --- /tp-review fast path and map path ---
-
-def test_tp_review_fast_path(tmp_path):
-    """Valid client -> fast path with prompt, map_mode=True."""
-    (tmp_path / "clients" / "bob").mkdir(parents=True)
+def test_tp_review_dispatch_loads_prompt(tmp_path):
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
     result = dispatch_map("tp-review", "bob", ui, ws, MagicMock())
     assert result.error is None
     assert result.map_mode is True
-    assert "[MAP:" not in result.message
+    assert result.plan_prompt is None
+    assert "User invoked /tp-review" in result.message
     assert "bob" in result.message
+    assert "Treatment Plan Review Summary" in result.message
 
 
-def test_tp_review_no_args_map_path(tmp_path):
-    ui = MagicMock()
-    ws = Workspace(str(tmp_path))
-    result = dispatch_map("tp-review", None, ui, ws, MagicMock())
-    assert result.error is None
-    assert "[MAP: tp-review]" in result.message
-
-
-# --- /session fast path and map path ---
-
-def test_session_fast_path(tmp_path):
-    """Valid client + file remainder -> fast path with plan_prompt."""
-    (tmp_path / "clients" / "alice").mkdir(parents=True)
-    ui = MagicMock()
-    ws = Workspace(str(tmp_path))
-    result = dispatch_map("session", "alice recording.m4a", ui, ws, MagicMock())
-    assert result.error is None
-    assert result.map_mode is True
-    assert result.plan_prompt is not None
-    assert "recording.m4a" in result.message
-    assert "recording.m4a" in result.plan_prompt
-    assert "[MAP:" not in result.message
-
-
-def test_session_fast_path_has_tool_discovery(tmp_path):
-    """Fast path tells LLM to load client context via tools."""
-    (tmp_path / "clients" / "alice").mkdir(parents=True)
-    ui = MagicMock()
-    ws = Workspace(str(tmp_path))
-    result = dispatch_map("session", "alice recording.m4a", ui, ws, MagicMock())
-    assert "run_command ls" in result.message
-
-
-def test_session_fast_path_matches_activate_map_prompt(tmp_path):
-    """Slash-map fast path and activate_map share the same execution prompt."""
-    (tmp_path / "clients" / "alice").mkdir(parents=True)
-    ui = MagicMock()
-    ws = Workspace(str(tmp_path))
-
-    command_result = dispatch_map("session", "alice recording.m4a", ui, ws, MagicMock())
-    tool_result = ActivateMapTool().execute(
-        ws, map="session", source="slash", client_id="alice", file_reference="recording.m4a"
-    )
-
-    assert command_result.message == tool_result
-
-
-def test_session_no_args_map_path(tmp_path):
-    ui = MagicMock()
-    ws = Workspace(str(tmp_path))
-    result = dispatch_map("session", None, ui, ws, MagicMock())
-    assert result.error is None
-    assert "[MAP: session]" in result.message
-
-
-def test_session_client_only_map_path(tmp_path):
-    """Client-id but no remainder -> map path."""
-    (tmp_path / "clients" / "alice").mkdir(parents=True)
-    ui = MagicMock()
-    ws = Workspace(str(tmp_path))
-    result = dispatch_map("session", "alice", ui, ws, MagicMock())
-    assert result.error is None
-    assert "[MAP: session]" in result.message
-
-
-# --- /wellness-assessment fast path and map path ---
-
-def test_wa_fast_path(tmp_path):
-    """Valid client + file remainder -> fast path."""
-    (tmp_path / "clients" / "carol").mkdir(parents=True)
+def test_wa_dispatch_loads_prompt(tmp_path):
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
     result = dispatch_map("wellness-assessment", "carol wa-scan.pdf", ui, ws, MagicMock())
     assert result.error is None
     assert result.map_mode is True
-    assert "wa-scan.pdf" in result.message
-    assert "[MAP:" not in result.message
+    assert result.plan_prompt is None
+    assert "User invoked /wellness-assessment" in result.message
+    assert "carol wa-scan.pdf" in result.message
+    assert "GD Score" in result.message or "GD score" in result.message
 
 
-def test_wa_no_args_map_path(tmp_path):
+def test_intake_dispatch_loads_prompt(tmp_path):
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
-    result = dispatch_map("wellness-assessment", None, ui, ws, MagicMock())
+    result = dispatch_map("intake", "session.mp3", ui, ws, MagicMock())
     assert result.error is None
-    assert "[MAP: wellness-assessment]" in result.message
+    assert result.map_mode is True
+    assert result.plan_prompt is not None  # intake has a plan variant
+    assert "User invoked /intake" in result.message
+    assert "session.mp3" in result.message
+    assert "Processing Intake Inputs" in result.message
+
+
+def test_clinical_maps_do_not_preload_clients(tmp_path):
+    """Dispatched prompts do not contain a pre-loaded `Available clients:` line."""
+    (tmp_path / "clients" / "alice").mkdir(parents=True)
+    (tmp_path / "clients" / "bob").mkdir(parents=True)
+    ui = MagicMock()
+    ws = Workspace(str(tmp_path))
+    for name in ("session", "compliance", "tp-review", "wellness-assessment", "intake"):
+        result = dispatch_map(name, None, ui, ws, MagicMock())
+        assert "Available clients:" not in result.message, f"{name} leaked client list"
+        assert "[MAP:" not in result.message, f"{name} still emits [MAP:] marker"

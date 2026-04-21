@@ -487,13 +487,13 @@ def _run_plan_mode(
                     )
                     continue
 
-                # Success: look up the plan prompt variant
+                # Success: look up the plan prompt variant. All activate_map
+                # calls are implicit — slash invocations render the map prompt
+                # directly in the handler and never call this tool.
                 map_name = fc_args.pop("map", "")
-                source = fc_args.get("source", "implicit")
-                map_plan_prompt = _get_map_plan_prompt(map_name, workspace, **fc_args)
+                map_plan_prompt = _get_map_plan_prompt(map_name, **fc_args)
                 map_mode = True
-                if source == "implicit":
-                    ui.print_info(f"Starting the {_display_map_name(map_name)} Map.")
+                ui.print_info(f"Starting the {_display_map_name(map_name)} Map.")
 
                 # Cancel co-occurring tool calls
                 cancel_parts: list[types.Part] = [
@@ -1132,8 +1132,7 @@ def _run_main_loop(
                 if not result_text.startswith("Error:"):
                     map_name = fc_args.get("map", "")
                     map_mode = True
-                    if fc_args.get("source") == "implicit":
-                        ui.print_info(f"Starting the {_display_map_name(map_name)} Map.")
+                    ui.print_info(f"Starting the {_display_map_name(map_name)} Map.")
                     _log.debug("activate_map %s map_mode=%s", map_name, map_mode)
 
                 parts = [types.Part.from_function_response(

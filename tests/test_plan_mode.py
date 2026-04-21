@@ -167,14 +167,14 @@ def test_plan_mode_activate_map_pops_map_before_get_map_plan_prompt():
     # Build a mock StreamResult whose .function_calls returns one activate_map call
     mock_fc = MagicMock()
     mock_fc.name = "activate_map"
-    mock_fc.args = {"map": "intake", "source": "implicit", "file_reference": "/tmp/test.txt"}
+    mock_fc.args = {"map": "intake"}
 
     mock_stream = MagicMock()
     mock_stream.text_chunks.return_value = iter([])
     mock_stream.parts = [
         types.Part.from_function_call(
             name="activate_map",
-            args={"map": "intake", "source": "implicit", "file_reference": "/tmp/test.txt"},
+            args={"map": "intake"},
         )
     ]
     mock_stream.function_calls = [mock_fc]
@@ -216,11 +216,8 @@ def test_plan_mode_activate_map_pops_map_before_get_map_plan_prompt():
     # _get_map_plan_prompt receives map as positional arg, NOT in **kwargs
     mock_get_plan.assert_called_once()
     plan_args, plan_kwargs = mock_get_plan.call_args
-    assert plan_args[0] == "intake"  # map positional
-    assert plan_args[1] is mock_workspace  # workspace positional
+    assert plan_args == ("intake",)  # map is the only positional; workspace must not be passed
     assert "map" not in plan_kwargs  # must NOT appear as kwarg
-    assert plan_kwargs["source"] == "implicit"
-    assert plan_kwargs["file_reference"] == "/tmp/test.txt"
 
     # Result carries the map outputs
     assert result.map_execution_prompt == execution_prompt
@@ -231,14 +228,14 @@ def test_plan_mode_activate_map_pops_map_before_get_map_plan_prompt():
 def test_plan_mode_implicit_map_activation_announces_map():
     mock_fc = MagicMock()
     mock_fc.name = "activate_map"
-    mock_fc.args = {"map": "intake", "source": "implicit", "file_reference": "/tmp/test.txt"}
+    mock_fc.args = {"map": "intake"}
 
     mock_stream = MagicMock()
     mock_stream.text_chunks.return_value = iter([])
     mock_stream.parts = [
         types.Part.from_function_call(
             name="activate_map",
-            args={"map": "intake", "source": "implicit", "file_reference": "/tmp/test.txt"},
+            args={"map": "intake"},
         )
     ]
     mock_stream.function_calls = [mock_fc]
@@ -270,50 +267,6 @@ def test_plan_mode_implicit_map_activation_announces_map():
         )
 
     mock_ui.print_info.assert_any_call("Starting the Intake Map.")
-
-
-def test_plan_mode_slash_map_activation_skips_announcement():
-    mock_fc = MagicMock()
-    mock_fc.name = "activate_map"
-    mock_fc.args = {"map": "intake", "source": "slash", "file_reference": "/tmp/test.txt"}
-
-    mock_stream = MagicMock()
-    mock_stream.text_chunks.return_value = iter([])
-    mock_stream.parts = [
-        types.Part.from_function_call(
-            name="activate_map",
-            args={"map": "intake", "source": "slash", "file_reference": "/tmp/test.txt"},
-        )
-    ]
-    mock_stream.function_calls = [mock_fc]
-
-    mock_stream.request_id = "test"
-    mock_stream.log_completion = MagicMock()
-    mock_stream.grounding_metadata = None
-
-    mock_client = MagicMock()
-    mock_client.stream_response.return_value = mock_stream
-
-    mock_ui = MagicMock()
-    mock_ui.stream_markdown.return_value = ""
-    mock_workspace = MagicMock()
-
-    with (
-        patch("cfi_ai.agent.tools.execute", return_value="Map activated."),
-        patch("cfi_ai.agent._get_map_plan_prompt", return_value=None),
-    ):
-        _run_plan_mode(
-            client=mock_client,
-            ui=mock_ui,
-            workspace=mock_workspace,
-            plan_system_prompt="system",
-            readonly_tools=MagicMock(),
-            messages=[types.Content(role="user", parts=[types.Part.from_text(text="test")])],
-            config=_test_config(),
-            allow_map_activation=True,
-        )
-
-    assert "Starting the Intake Map." not in [call.args[0] for call in mock_ui.print_info.call_args_list]
 
 
 def test_set_plan_mode_method():
