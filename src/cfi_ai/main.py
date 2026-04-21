@@ -167,7 +167,7 @@ def main() -> None:
 
     workspace = Workspace()
     system_prompt = build_system_prompt(
-        str(workspace.root), workspace.summary(), workspace=workspace,
+        workspace.summary(),
         grounding_enabled=config.grounding_enabled,
     )
     client = Client(config)

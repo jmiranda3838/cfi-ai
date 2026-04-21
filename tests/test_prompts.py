@@ -1,7 +1,6 @@
 from unittest.mock import patch
 
-from cfi_ai.prompts.system import build_system_prompt, build_plan_mode_system_prompt, CLIENTS_SECTION
-from cfi_ai.workspace import Workspace
+from cfi_ai.prompts.system import build_system_prompt
 
 import re
 
@@ -13,7 +12,7 @@ def _assert_no_unreplaced_placeholders(text: str) -> None:
 
 
 def test_build_system_prompt():
-    prompt = build_system_prompt("/home/user/project", "Workspace: /home/user/project\nContents:\n  src/")
+    prompt = build_system_prompt("Workspace: /home/user/project\nContents:\n  src/")
     assert "cfi-ai" in prompt
     assert "/home/user/project" in prompt
     assert "run_command" in prompt
@@ -31,103 +30,88 @@ def test_build_system_prompt():
 
 def test_prompt_includes_workspace_summary():
     summary = "Workspace: /tmp/test\nContents:\n  foo.py\n  bar.js\nDetected project type(s): Python (pyproject.toml)"
-    prompt = build_system_prompt("/tmp/test", summary)
+    prompt = build_system_prompt(summary)
     assert "foo.py" in prompt
     assert "Python" in prompt
 
 
-def test_prompt_includes_clients_section_when_dir_exists(tmp_path):
-    (tmp_path / "clients").mkdir()
-    ws = Workspace(str(tmp_path))
-    prompt = build_system_prompt(str(tmp_path), ws.summary(), workspace=ws)
+def test_prompt_includes_clients_section():
+    prompt = build_system_prompt("summary")
     assert "Client File Structure" in prompt
     assert "/intake" in prompt
 
 
-def test_prompt_excludes_clients_section_when_no_dir(tmp_path):
-    ws = Workspace(str(tmp_path))
-    prompt = build_system_prompt(str(tmp_path), ws.summary(), workspace=ws)
-    assert "Client File Structure" not in prompt
-
-
-def test_prompt_excludes_clients_section_when_no_workspace():
-    prompt = build_system_prompt("/tmp/test", "summary")
-    assert "Client File Structure" not in prompt
-
-
 def test_prompt_without_rg():
     with patch("cfi_ai.prompts.system.shutil.which", return_value=None):
-        prompt = build_system_prompt("/tmp/test", "summary")
+        prompt = build_system_prompt("summary")
     assert "grep" in prompt
     # rg should not appear as a standalone command recommendation
-    assert "rg" not in prompt
+    # (word-boundary check — substrings like "organize" legitimately contain "rg")
+    assert not re.search(r"\brg\b", prompt)
 
 
 def test_prompt_with_rg():
     with patch("cfi_ai.prompts.system.shutil.which", return_value="/usr/local/bin/rg"):
-        prompt = build_system_prompt("/tmp/test", "summary")
+        prompt = build_system_prompt("summary")
     assert "rg" in prompt
 
 
 def test_clients_section_contains_integrate_guidance():
-    assert "integrate" in CLIENTS_SECTION.lower()
-    assert "rewrite the document" in CLIENTS_SECTION
-
-
-def test_system_prompt_inherits_integrate_guidance(tmp_path):
-    (tmp_path / "clients").mkdir()
-    ws = Workspace(str(tmp_path))
-    prompt = build_system_prompt(str(tmp_path), ws.summary(), workspace=ws)
+    prompt = build_system_prompt("summary")
+    assert "integrate" in prompt.lower()
     assert "rewrite the document" in prompt
 
 
 def test_plan_mode_prompt_conciseness_guideline():
-    prompt = build_plan_mode_system_prompt("/tmp/ws", "Test workspace.")
+    prompt = build_system_prompt("Test workspace.", plan_mode=True)
     assert "Do NOT include full document content" in prompt
 
 
-def test_plan_mode_prompt_completeness_guideline(tmp_path):
-    (tmp_path / "clients").mkdir()
-    ws = Workspace(str(tmp_path))
-    prompt = build_plan_mode_system_prompt(str(tmp_path), ws.summary(), workspace=ws)
+def test_plan_mode_prompt_completeness_guideline():
+    prompt = build_system_prompt("summary", plan_mode=True)
     assert "ALL affected document types" in prompt
 
 
 def test_plan_mode_prompt_clinical_identity():
-    prompt = build_plan_mode_system_prompt("/workspace", "summary")
+    prompt = build_system_prompt("summary", plan_mode=True)
     assert "clinical documentation assistant" in prompt
 
 
 def test_plan_mode_prompt_verify_before_claiming():
-    prompt = build_plan_mode_system_prompt("/workspace", "summary")
+    prompt = build_system_prompt("summary", plan_mode=True)
     assert "never claim something is unaffected without verifying" in prompt.lower()
 
 
 def test_plan_mode_prompt_end_turn():
-    prompt = build_plan_mode_system_prompt("/workspace", "summary")
+    prompt = build_system_prompt("summary", plan_mode=True)
     assert "end_turn" in prompt
 
 
+def test_plan_mode_prompt_includes_clients_section():
+    prompt = build_system_prompt("summary", plan_mode=True)
+    assert "Client File Structure" in prompt
+
+
 def test_prompts_no_narrate_guideline():
-    exec_prompt = build_system_prompt("/workspace", "summary")
-    plan_prompt = build_plan_mode_system_prompt("/workspace", "summary")
+    exec_prompt = build_system_prompt("summary")
+    plan_prompt = build_system_prompt("summary", plan_mode=True)
     assert "do not narrate" in exec_prompt
     assert "do not narrate" in plan_prompt
 
 
 def test_execution_prompt_clinical_identity():
-    prompt = build_system_prompt("/workspace", "summary")
+    prompt = build_system_prompt("summary")
     assert "clinical documentation assistant" in prompt
 
 
 def test_execution_prompt_ripple_effect_guideline():
-    prompt = build_system_prompt("/workspace", "summary")
+    prompt = build_system_prompt("summary")
     assert "search for all references" in prompt.lower()
 
 
 def test_prompts_no_code_centric_language():
-    plan_prompt = build_plan_mode_system_prompt("/workspace", "summary")
-    exec_prompt = build_system_prompt("/workspace", "summary")
+    plan_prompt = build_system_prompt("summary", plan_mode=True)
+    exec_prompt = build_system_prompt("summary")
     for prompt in (plan_prompt, exec_prompt):
         assert "codebase" not in prompt
         assert "code paths" not in prompt
@@ -344,16 +328,15 @@ def test_cage_aid_in_unified_intake_prompt():
 
 
 def test_maps_section_describes_missing_record_contract():
-    from cfi_ai.prompts.system import MAPS_SECTION
-
-    assert "missing records may be surfaced as findings" in MAPS_SECTION
-    assert "requires an existing treatment plan and progress notes to generate updates" in MAPS_SECTION
+    prompt = build_system_prompt("summary")
+    assert "missing records may be surfaced as findings" in prompt
+    assert "requires an existing treatment plan and progress notes to generate updates" in prompt
 
 
 def test_interview_in_system_prompts():
     """interview tool is referenced in both normal and plan mode system prompts."""
-    normal = build_system_prompt("/workspace", "summary")
-    plan = build_plan_mode_system_prompt("/workspace", "summary")
+    normal = build_system_prompt("summary")
+    plan = build_system_prompt("summary", plan_mode=True)
     assert "interview" in normal
     assert "interview" in plan
 
@@ -366,11 +349,11 @@ def test_interview_in_wellness_assessment_prompts():
 
 
 def test_map_instruction_in_maps_section():
-    """MAPS_SECTION contains the [MAP: ...] handling instruction."""
-    from cfi_ai.prompts.system import MAPS_SECTION
-    assert "[MAP:" in MAPS_SECTION
-    assert "activate_map" in MAPS_SECTION
-    assert 'source="implicit"' in MAPS_SECTION
+    """build_system_prompt() contains the [MAP: ...] handling instruction."""
+    prompt = build_system_prompt("summary")
+    assert "[MAP:" in prompt
+    assert "activate_map" in prompt
+    assert 'source="implicit"' in prompt
 
 
 def test_measuring_progress_only_in_evaluation_prompts():

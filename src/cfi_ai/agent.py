@@ -17,7 +17,7 @@ from cfi_ai.config import Config
 from cfi_ai.cost_tracker import CostTracker
 from cfi_ai.maps import dispatch_map, parse_map_invocation
 from cfi_ai.planner import ExecutionPlan, format_plan
-from cfi_ai.prompts.system import build_plan_mode_system_prompt
+from cfi_ai.prompts.system import build_system_prompt
 from cfi_ai.sessions import SessionStore
 from cfi_ai.ui import UI, UserInput, PlanApproval
 from cfi_ai.workspace import Workspace
@@ -680,8 +680,9 @@ def run_agent_loop(
     ui.cost_tracker = cost_tracker
     api_tools = tools.get_api_tools(enable_grounding=config.grounding_enabled)
     readonly_api_tools = tools.get_readonly_api_tools(enable_grounding=config.grounding_enabled)
-    plan_system_prompt = build_plan_mode_system_prompt(
-        str(workspace.root), workspace.summary(), workspace=workspace,
+    plan_system_prompt = build_system_prompt(
+        workspace.summary(),
+        plan_mode=True,
         grounding_enabled=config.grounding_enabled,
     )
 

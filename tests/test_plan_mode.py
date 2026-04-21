@@ -7,7 +7,7 @@ from google.genai import types
 from cfi_ai.agent import PlanModeResult, _run_plan_mode
 from cfi_ai.ui import UserInput, MODE_DISPLAY, PlanApproval, PT_STYLE, UI
 from cfi_ai.tools import get_readonly_api_tools
-from cfi_ai.prompts.system import build_plan_mode_system_prompt
+from cfi_ai.prompts.system import build_system_prompt
 
 
 def test_user_input_dataclass():
@@ -32,7 +32,7 @@ def test_get_readonly_api_tools():
 
 def test_plan_mode_system_prompt():
     """Plan-mode prompt instructs read-only research and structured plan output."""
-    prompt = build_plan_mode_system_prompt("/tmp/ws", "Test workspace.")
+    prompt = build_system_prompt("Test workspace.", plan_mode=True)
     assert "PLAN MODE" in prompt
     assert "read-only" in prompt.lower()
     assert "run_command" in prompt
@@ -47,13 +47,9 @@ def test_plan_mode_system_prompt():
     assert "do NOT have access to apply_patch" in prompt
 
 
-def test_plan_mode_system_prompt_with_clients(tmp_path):
-    """Plan-mode prompt includes clients section when clients/ dir exists."""
-    from cfi_ai.workspace import Workspace
-
-    (tmp_path / "clients").mkdir()
-    ws = Workspace(path=str(tmp_path))
-    prompt = build_plan_mode_system_prompt(str(tmp_path), ws.summary(), workspace=ws)
+def test_plan_mode_system_prompt_includes_clients_section():
+    """Plan-mode prompt always includes the clients section."""
+    prompt = build_system_prompt("summary", plan_mode=True)
     assert "Client File Structure" in prompt
 
 
@@ -67,7 +63,7 @@ def test_mode_display_plan_modes():
 
 def test_plan_mode_prompt_batch_mutations_guideline():
     """Plan-mode prompt instructs model to batch mutations in a single response."""
-    prompt = build_plan_mode_system_prompt("/tmp/ws", "Test workspace.")
+    prompt = build_system_prompt("Test workspace.", plan_mode=True)
     assert "emit all file modifications" in prompt
     assert "minimize approval prompts" in prompt
 
