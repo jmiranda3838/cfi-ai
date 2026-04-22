@@ -37,26 +37,12 @@ def test_registry():
     assert names == {"activate_map", "apply_patch", "attach_path", "end_turn", "extract_document", "interview", "run_command", "write_file"}
 
 
-def test_end_turn_in_readonly_tools():
-    readonly = tools.get_readonly_api_tools()
-    names = {fd.name for fd in readonly[0].function_declarations}
-    assert "end_turn" in names
-
-
 def test_get_api_tools_includes_google_search():
     api_tools = tools.get_api_tools()
     assert isinstance(api_tools, list)
     assert len(api_tools) == 2
     assert api_tools[0].function_declarations
     assert api_tools[1].google_search is not None
-
-
-def test_get_readonly_api_tools_includes_google_search():
-    readonly = tools.get_readonly_api_tools()
-    assert isinstance(readonly, list)
-    assert len(readonly) == 2
-    assert readonly[0].function_declarations
-    assert readonly[1].google_search is not None
 
 
 def test_get_api_tools_excludes_google_search_when_disabled():
@@ -67,15 +53,6 @@ def test_get_api_tools_excludes_google_search_when_disabled():
     # Function declarations are still present and complete; only the grounding entry is dropped.
     names = {fd.name for fd in api_tools[0].function_declarations}
     assert "write_file" in names
-
-
-def test_get_readonly_api_tools_excludes_google_search_when_disabled():
-    readonly = tools.get_readonly_api_tools(enable_grounding=False)
-    assert isinstance(readonly, list)
-    assert len(readonly) == 1
-    assert readonly[0].function_declarations
-    names = {fd.name for fd in readonly[0].function_declarations}
-    assert "run_command" in names
 
 
 def test_end_turn_not_mutating():

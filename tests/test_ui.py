@@ -2,7 +2,7 @@ from unittest.mock import patch
 
 from prompt_toolkit.document import Document
 
-from cfi_ai.ui import PlanApproval, SlashMapCompleter, UI
+from cfi_ai.ui import SlashMapCompleter, UI
 
 
 def _get_completions(completer, text):
@@ -74,45 +74,6 @@ def _make_ui(tmp_path):
          patch("cfi_ai.ui.PromptSession") as mock_session_cls:
         ui = UI()
     return ui, mock_session_cls.return_value
-
-
-class TestPromptPlanApproval:
-    """Test prompt_plan_approval() interactive menu."""
-
-    def test_bypass(self, tmp_path):
-        ui, _ = _make_ui(tmp_path)
-        ui._run_plan_approval_app = lambda: PlanApproval.BYPASS
-        assert ui.prompt_plan_approval() == PlanApproval.BYPASS
-
-    def test_approve(self, tmp_path):
-        ui, _ = _make_ui(tmp_path)
-        ui._run_plan_approval_app = lambda: PlanApproval.APPROVE
-        assert ui.prompt_plan_approval() == PlanApproval.APPROVE
-
-    def test_reject(self, tmp_path):
-        ui, _ = _make_ui(tmp_path)
-        ui._run_plan_approval_app = lambda: PlanApproval.REJECT
-        assert ui.prompt_plan_approval() == PlanApproval.REJECT
-
-    def test_eof_returns_reject(self, tmp_path):
-        from unittest.mock import Mock
-        ui, _ = _make_ui(tmp_path)
-        ui._run_plan_approval_app = Mock(side_effect=EOFError)
-        assert ui.prompt_plan_approval() == PlanApproval.REJECT
-
-    def test_keyboard_interrupt_propagates(self, tmp_path):
-        import pytest
-        from unittest.mock import Mock
-        ui, _ = _make_ui(tmp_path)
-        ui._run_plan_approval_app = Mock(side_effect=KeyboardInterrupt)
-        with pytest.raises(KeyboardInterrupt):
-            ui.prompt_plan_approval()
-
-
-def test_approval_options_covers_all_enum_values():
-    from cfi_ai.ui import _APPROVAL_OPTIONS, PlanApproval
-    option_values = {opt[0] for opt in _APPROVAL_OPTIONS}
-    assert option_values == set(PlanApproval)
 
 
 class TestPromptApproval:
@@ -232,12 +193,11 @@ class TestGetInput:
         event.current_buffer.insert_text.assert_called_once_with("\n")
 
     def test_chat_key_bindings_preserves_existing(self):
-        """Existing bindings (Escape cancel, Ctrl+D disabled, Shift+Tab plan
-        toggle) must still resolve to handlers after adding the new ones."""
+        """Existing bindings (Escape cancel, Ctrl+D disabled) must still resolve
+        to handlers after adding the new ones."""
         from prompt_toolkit.keys import Keys
         from cfi_ai.ui import _chat_key_bindings
 
         kb = _chat_key_bindings()
         assert kb.get_bindings_for_keys((Keys.Escape,)), "Escape must still be bound"
         assert kb.get_bindings_for_keys((Keys.ControlD,)), "Ctrl+D must still be bound"
-        assert kb.get_bindings_for_keys((Keys.BackTab,)), "Shift+Tab must still be bound"

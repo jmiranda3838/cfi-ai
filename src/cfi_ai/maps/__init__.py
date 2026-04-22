@@ -29,7 +29,6 @@ class MapResult:
     handled: bool = False
     error: str | None = None
     map_mode: bool = False
-    plan_prompt: str | None = None
     loaded_messages: list[types.Content] | None = None
     clear_conversation: bool = False
 

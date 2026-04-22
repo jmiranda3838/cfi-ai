@@ -182,17 +182,16 @@ class Client:
         for line in _summarize_contents(messages):
             _log.debug("[req:%s] %s", request_id, line)
 
-        # Try cached call first if a cache exists for this mode
-        cache_key = "plan" if mode == "plan" else "normal"
+        # Try cached call first if a cache exists
         cache_name = (
-            self._cache_manager.get_cache_name(cache_key)
+            self._cache_manager.get_cache_name("normal")
             if self._cache_manager
             else None
         )
 
         if cache_name:
             try:
-                _log.debug("[req:%s] using cached_content key=%s", request_id, cache_key)
+                _log.debug("[req:%s] using cached_content", request_id)
                 stream = self._client.models.generate_content_stream(
                     model=self._model,
                     contents=messages,
@@ -205,17 +204,17 @@ class Client:
             except Exception as e:
                 if is_cache_expired_error(e):
                     # Let the agent loop refresh caches and retry the request.
-                    self._cache_manager.invalidate(cache_key)
+                    self._cache_manager.invalidate("normal")
                     _log.info(
-                        "[req:%s] cache_expired key=%s, propagating for refresh",
-                        request_id, cache_key,
+                        "[req:%s] cache_expired, propagating for refresh",
+                        request_id,
                     )
                     raise
                 _log.warning(
-                    "[req:%s] cached_call_failed key=%s, falling back: %s",
-                    request_id, cache_key, e,
+                    "[req:%s] cached_call_failed, falling back: %s",
+                    request_id, e,
                 )
-                self._cache_manager.invalidate(cache_key)
+                self._cache_manager.invalidate("normal")
 
         stream = self._client.models.generate_content_stream(
             model=self._model,

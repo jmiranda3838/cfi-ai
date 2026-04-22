@@ -106,19 +106,17 @@ def test_map_result_parts_default():
     assert result.handled is False
     assert result.error is None
     assert result.map_mode is False
-    assert result.plan_prompt is None
 
 
 # --- Clinical map dispatch: prompt loaded directly, with invocation preface ---
 
 def test_session_dispatch_loads_prompt(tmp_path):
-    """/session dispatch loads the full map prompt with map_mode=True and plan_prompt set."""
+    """/session dispatch loads the full map prompt with map_mode=True."""
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
     result = dispatch_map("session", None, ui, ws, MagicMock())
     assert result.error is None
     assert result.map_mode is True
-    assert result.plan_prompt is not None  # session has a plan variant
     assert "User invoked /session" in result.message
     # The prompt content itself should be loaded (not an intent shim)
     assert "Progress Note Guidance" in result.message
@@ -146,7 +144,6 @@ def test_compliance_dispatch_loads_prompt(tmp_path):
     result = dispatch_map("compliance", "jane-doe", ui, ws, MagicMock())
     assert result.error is None
     assert result.map_mode is True
-    assert result.plan_prompt is None  # compliance has no plan variant
     assert "User invoked /compliance" in result.message
     assert "jane-doe" in result.message
     assert "Compliance Report" in result.message
@@ -158,7 +155,6 @@ def test_tp_review_dispatch_loads_prompt(tmp_path):
     result = dispatch_map("tp-review", "bob", ui, ws, MagicMock())
     assert result.error is None
     assert result.map_mode is True
-    assert result.plan_prompt is None
     assert "User invoked /tp-review" in result.message
     assert "bob" in result.message
     assert "Treatment Plan Review Summary" in result.message
@@ -170,7 +166,6 @@ def test_wa_dispatch_loads_prompt(tmp_path):
     result = dispatch_map("wellness-assessment", "carol wa-scan.pdf", ui, ws, MagicMock())
     assert result.error is None
     assert result.map_mode is True
-    assert result.plan_prompt is None
     assert "User invoked /wellness-assessment" in result.message
     assert "carol wa-scan.pdf" in result.message
     assert "GD Score" in result.message or "GD score" in result.message
@@ -182,7 +177,6 @@ def test_intake_dispatch_loads_prompt(tmp_path):
     result = dispatch_map("intake", "session.mp3", ui, ws, MagicMock())
     assert result.error is None
     assert result.map_mode is True
-    assert result.plan_prompt is not None  # intake has a plan variant
     assert "User invoked /intake" in result.message
     assert "session.mp3" in result.message
     assert "Processing Intake Inputs" in result.message

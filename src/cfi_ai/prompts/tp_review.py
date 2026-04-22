@@ -1,11 +1,8 @@
 """Treatment plan review prompt template for the /tp-review command."""
 
-from cfi_ai.prompts.shared import (
-    CRITICAL_INSTRUCTIONS,
-    NARRATIVE_THERAPY_ORIENTATION,
-    THERANEST_INTERVENTIONS,
-    indent_block,
-)
+from cfi_ai.prompts.narrative_therapy import NARRATIVE_THERAPY_ORIENTATION
+from cfi_ai.prompts.shared import CRITICAL_INSTRUCTIONS, indent_block
+from cfi_ai.prompts.treatment_plan import THERANEST_INTERVENTIONS
 
 _RAW_TP_REVIEW_PROMPT = (
     """\

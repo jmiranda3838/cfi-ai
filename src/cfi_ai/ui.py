@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 from dataclasses import dataclass
-from enum import Enum, auto
 from pathlib import Path
 from typing import TYPE_CHECKING
 
@@ -31,21 +30,9 @@ if TYPE_CHECKING:
 
 @dataclass
 class UserInput:
-    """Result from get_input() carrying the text and which mode was active."""
+    """Result from get_input() carrying the user's text."""
     text: str
-    plan_mode: bool = False
 
-
-class PlanApproval(Enum):
-    BYPASS = auto()    # Approve plan, auto-approve all edits
-    APPROVE = auto()   # Approve plan, confirm each edit
-    REJECT = auto()    # Reject, keep iterating
-
-_APPROVAL_OPTIONS: list[tuple[PlanApproval, str]] = [
-    (PlanApproval.BYPASS,  "Approve + bypass permissions"),
-    (PlanApproval.APPROVE, "Approve + review each edit"),
-    (PlanApproval.REJECT,  "Reject (keep iterating)"),
-]
 
 CFI_THEME = Theme({
     "primary": "dark_cyan",
@@ -71,18 +58,14 @@ TAGLINE = "terminal clarity, one prompt at a time."
 
 PT_STYLE = PTStyle.from_dict({
     "prompt": "#5f8787",
-    "prompt-plan": "#af8700",
     "bottom-toolbar": "bg:#1c1c1c #585858",
-    "bottom-toolbar-plan": "bg:#6b5300 #ffffff",
     "approval": "#af8700",
     "muted": "#9e9e9e",
 })
 
 MODE_DISPLAY = {
     "chatting": "ready",
-    "chatting_plan": "PLAN MODE",
     "thinking": "thinking ..",
-    "thinking_plan": "researching ..",
     "planning": "planning ..",
     "awaiting_approval": "awaiting approval",
     "interviewing": "interview ..",
@@ -134,14 +117,13 @@ class StatusManager:
         return MODE_DISPLAY.get(self._mode, self._mode)
 
 
-def _chat_key_bindings(on_toggle_plan=None) -> KeyBindings:
+def _chat_key_bindings() -> KeyBindings:
     """Key bindings for the main multi-line chat prompt.
 
     Enter        → submit the buffer
     Alt+Enter    → insert a literal newline (compose multi-line messages)
     Escape       → cancel (return "")
     Ctrl+D       → disabled (no-op)
-    Shift+Tab    → toggle plan mode (if callback provided)
     Ctrl+C raises KeyboardInterrupt by default; get_input() catches it to exit.
 
     The prompt runs with multiline=True so pasted multi-line content stays
@@ -165,12 +147,6 @@ def _chat_key_bindings(on_toggle_plan=None) -> KeyBindings:
     @kb.add("c-d")
     def _ctrl_d(event):
         pass  # disabled
-
-    @kb.add("s-tab")
-    def _shift_tab(event):
-        if on_toggle_plan is not None:
-            on_toggle_plan()
-            event.app.invalidate()
 
     return kb
 
@@ -264,7 +240,6 @@ class UI:
         self.console = Console(theme=CFI_THEME)
         self.status = StatusManager()
         self._completer = SlashMapCompleter()
-        self._plan_mode = False
         # Set by main.py once the model is known. The bottom-toolbar callable
         # reads from this between turns to display ctx + running cost.
         self.cost_tracker: "CostTracker | None" = None
@@ -275,18 +250,6 @@ class UI:
             style=PT_STYLE,
             completer=self._completer,
         )
-
-    @property
-    def plan_mode(self) -> bool:
-        return self._plan_mode
-
-    def toggle_plan_mode(self) -> None:
-        self.set_plan_mode(not self._plan_mode)
-
-    def set_plan_mode(self, active: bool) -> None:
-        self._plan_mode = active
-        mode = "chatting_plan" if active else "chatting"
-        self.status.set_mode(mode)
 
     def set_maps(self, maps: dict[str, str]) -> None:
         """Set the available slash maps for autocomplete."""
@@ -301,7 +264,7 @@ class UI:
         )
         self.console.print(f"[grey70]{workspace_path}[/grey70]")
         self.console.print()
-        self.console.print("[muted]Ctrl+C to exit, Escape to cancel, Shift+Tab for plan mode.[/muted]")
+        self.console.print("[muted]Ctrl+C to exit, Escape to cancel.[/muted]")
         self.console.print(
             "[muted]Chats are stored locally for 30 days in ~/.config/cfi-ai/sessions/ "
             "(use /resume to reload).[/muted]"
@@ -311,43 +274,20 @@ class UI:
     def get_input(self) -> UserInput | None:
         """Prompt the user for input. Returns UserInput or None on Ctrl+C (exit)."""
         try:
-            def _prompt_message():
-                if self._plan_mode:
-                    return [("class:prompt-plan bold", "@ ")]
-                return [("class:prompt", "~ ")]
-
             def _toolbar():
                 cost_segment = _format_cost_segment(self.cost_tracker)
-                if self._plan_mode:
-                    self.status.set_mode("chatting_plan")
-                    segments = [
-                        ("class:bottom-toolbar-plan bold", " [PLAN MODE] "),
-                        ("class:bottom-toolbar-plan", f"cfi-ai | {self.status.display}  "),
-                    ]
-                    if cost_segment:
-                        segments.append(
-                            ("class:bottom-toolbar-plan", f"{cost_segment}  ")
-                        )
-                    segments.append(
-                        ("class:bottom-toolbar-plan italic", "Shift+Tab to exit plan mode ")
-                    )
-                    return segments
-                mode = "chatting_plan" if self._plan_mode else "chatting"
-                self.status.set_mode(mode)
+                self.status.set_mode("chatting")
                 display = self.status.display
                 cost_html = f"  {cost_segment}" if cost_segment else ""
-                return HTML(
-                    f"cfi-ai | {display}{cost_html}"
-                    "  <i>Shift+Tab to toggle plan mode</i>"
-                )
+                return HTML(f"cfi-ai | {display}{cost_html}")
 
             text = self.session.prompt(
-                _prompt_message,
+                [("class:prompt", "~ ")],
                 bottom_toolbar=_toolbar,
                 multiline=True,
-                key_bindings=_chat_key_bindings(on_toggle_plan=self.toggle_plan_mode),
+                key_bindings=_chat_key_bindings(),
             )
-            return UserInput(text=text, plan_mode=self._plan_mode)
+            return UserInput(text=text)
         except (EOFError, KeyboardInterrupt):
             return None
 
@@ -395,72 +335,6 @@ class UI:
                 padding=(1, 2),
             )
         )
-
-    def prompt_plan_approval(self) -> PlanApproval:
-        """Prompt user to approve or reject a plan with an interactive menu."""
-        self.status.set_mode("awaiting_approval")
-        try:
-            return self._run_plan_approval_app()
-        except KeyboardInterrupt:
-            raise
-        except EOFError:
-            return PlanApproval.REJECT
-
-    def _run_plan_approval_app(self) -> PlanApproval:
-        """Run an interactive arrow-key selection menu for plan approval."""
-        selected = [0]
-
-        def _get_menu_text():
-            fragments = [("class:approval", "  execute plan?\n\n")]
-            for i, (_, label) in enumerate(_APPROVAL_OPTIONS):
-                if i == selected[0]:
-                    fragments.append(("class:approval", f"    \u25b6 {label}\n"))
-                else:
-                    fragments.append(("class:muted", f"      {label}\n"))
-            fragments.append(("", "\n"))
-            fragments.append(("class:muted", "  \u2191/\u2193 select  enter confirm  esc reject"))
-            return fragments
-
-        kb = KeyBindings()
-
-        @kb.add("up")
-        def _up(event):
-            selected[0] = (selected[0] - 1) % len(_APPROVAL_OPTIONS)
-            event.app.invalidate()
-
-        @kb.add("down")
-        def _down(event):
-            selected[0] = (selected[0] + 1) % len(_APPROVAL_OPTIONS)
-            event.app.invalidate()
-
-        @kb.add("enter")
-        def _enter(event):
-            event.app.exit(result=_APPROVAL_OPTIONS[selected[0]][0])
-
-        @kb.add("escape")
-        def _escape(event):
-            event.app.exit(result=PlanApproval.REJECT)
-
-        @kb.add("c-c")
-        def _ctrl_c(event):
-            event.app.exit(exception=KeyboardInterrupt)
-
-        layout = Layout(
-            Window(
-                FormattedTextControl(_get_menu_text, show_cursor=False),
-                dont_extend_height=True,
-            )
-        )
-
-        app: Application[PlanApproval] = Application(
-            layout=layout,
-            key_bindings=kb,
-            style=PT_STYLE,
-            erase_when_done=True,
-            full_screen=False,
-        )
-
-        return app.run()
 
     def prompt_session_select(self, sessions: list[SessionMeta]) -> SessionMeta | None:
         """Show an arrow-key menu for picking a previous chat session.

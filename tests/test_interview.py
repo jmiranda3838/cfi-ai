@@ -44,13 +44,6 @@ def test_interview_not_mutating():
     assert "interview" not in tools.MUTATING_TOOLS
 
 
-def test_interview_in_readonly_tools():
-    """interview is available in plan mode (readonly tool set)."""
-    readonly = tools.get_readonly_api_tools()
-    names = {fd.name for fd in readonly[0].function_declarations}
-    assert "interview" in names
-
-
 def test_interview_in_all_tools():
     """interview is in the full tool set."""
     all_tools = tools.get_api_tools()

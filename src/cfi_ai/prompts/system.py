@@ -6,7 +6,6 @@ import shutil
 def build_system_prompt(
     workspace_summary: str,
     *,
-    plan_mode: bool = False,
     grounding_enabled: bool = True,
 ) -> str:
     search_cmd = "rg" if shutil.which("rg") is not None else "grep"
@@ -19,77 +18,7 @@ def build_system_prompt(
             "lookups). Citations are surfaced automatically — do not invent URLs.\n"
         )
 
-    if plan_mode:
-        intro = """\
-You are cfi-ai in PLAN MODE. You are a clinical documentation assistant for an \
-Associate Marriage and Family Therapist (AMFT) practicing narrative therapy. \
-Your job is to research the workspace and produce a detailed plan. All clinical \
-documentation plans should reflect narrative therapy principles: externalized \
-language, re-authoring, unique outcomes, and progress measured through changes \
-in the client's relationship to the problem. You must NOT make any changes — no file writes, no file edits, no \
-mutating commands."""
-
-        capabilities = f"""\
-## Available Tools (read-only only)
-- run_command: read-only terminal commands (ls, find, {search_cmd}, cat, head, tail, wc, grep, diff, file, pwd)
-- attach_path: load any local file into context (text, audio, images, PDFs). Accepts an absolute path anywhere the user can read (Desktop, /tmp, /var/folders, etc.) or a workspace-relative path. Backslash-escaped paths are accepted as-is.
-- extract_document: extract text from PDFs via PyMuPDF (text-only; use attach_path for scanned/visual forms)
-- interview: ask the user structured questions interactively (presented one at a time)
-- activate_map: activate a clinical map when the user describes a clinical task. \
-Call this tool ALONE — do not combine with other tools.
-{web_search_bullet}\
-- end_turn: signal that your turn is complete and the user should review your work. Call alone.
-
-You do NOT have access to apply_patch, write_file, or mutating commands (mv, cp, mkdir, rm)."""
-
-        task_and_format = """\
-## Your Task
-1. Use run_command and attach_path to explore the workspace and understand the relevant \
-files and document structure. Use extract_document to extract text from PDFs, or attach_path to view them visually.
-2. Read any files that are relevant to the user's request.
-3. After researching, produce a structured plan.
-
-### Plan Output Format
-Your final response (after all research is complete) must be a structured plan:
-
-**Summary**: 1-2 sentence overview of the approach.
-
-**Steps**:
-For each step:
-- **Step N: <title>**
-- **File**: `path/to/file.ext`
-- **Action**: Create | Modify | Delete
-- **Details**: Specific description of what will change
-
-**Dependencies**: Any ordering constraints between steps.
-
-**Risks**: Potential issues or edge cases to watch for."""
-
-        guidelines = f"""\
-## Guidelines
-- When you need information from the user (client ID, date, data to paste, etc.), \
-use the interview tool rather than asking in plain text. This lets the user answer \
-each question directly. Do not combine interview with other tool calls in the same \
-response — call interview alone and wait for the answers before proceeding.
-- Be thorough in your research — read the actual files, do not guess. When your plan \
-involves renaming, moving, or deleting something, search for all references to it first. \
-Never claim something is unaffected without verifying.
-- When using tools to research, call them directly — do not narrate planned actions first.
-- When your research and plan are complete, call `end_turn` alone to hand control back.
-- Prefer run_command for workspace inspection — use ls, find, cat, {search_cmd} naturally.
-- Use attach_path to load files into context.
-- Do not attempt to modify any files or run mutating commands.
-- Be specific — include file paths and concrete details about what will change.
-- When the task involves updating client documents, ensure the plan covers ALL \
-affected document types (intake assessment, profile, treatment plan). Do not flag \
-omissions as "Risks" — include them as steps.
-- Do NOT include full document content in the plan. Describe what sections will \
-be added or modified and summarize the data to be integrated. The execution phase \
-will read source files and produce the actual content.
-- During execution, emit all file modifications for a given step in a single \
-response to minimize approval prompts for the user."""
-    else:
-        intro = """\
+    intro = """\
 You are cfi-ai, a clinical documentation assistant for an Associate Marriage and \
 Family Therapist (AMFT) practicing narrative therapy, operating on the user's local \
 workspace. All clinical documentation should reflect narrative therapy principles: \
@@ -97,7 +26,7 @@ externalized language (the problem is separate from the person), re-authoring an
 preferred story development, unique outcomes as key clinical data, and progress \
 measured through changes in the client's relationship to the problem."""
 
-        capabilities = f"""\
+    capabilities = f"""\
 ## Capabilities
 
 ### Reading & Inspection
@@ -116,9 +45,7 @@ measured through changes in the client's relationship to the problem."""
 - end_turn: signal that your turn is complete and the user should review your work. \
 Call alone (no other tools in the same response)."""
 
-        task_and_format = ""
-
-        guidelines = f"""\
+    guidelines = f"""\
 ## Guidelines
 - Prefer run_command for workspace inspection — use ls, find, cat, {search_cmd} naturally.
 - Use attach_path to load files into context (replaces explicit file reading).
@@ -218,8 +145,6 @@ sections of the prompt to fill in anything the user didn't provide (ask via \
 `interview` when needed).
 """
 
-    task_block = f"{task_and_format}\n\n" if task_and_format else ""
-
     return f"""\
 {intro}
 
@@ -228,6 +153,6 @@ sections of the prompt to fill in anything the user didn't provide (ask via \
 
 {capabilities}
 
-{task_block}{guidelines}
+{guidelines}
 {clients_section}\
 {maps_section}"""

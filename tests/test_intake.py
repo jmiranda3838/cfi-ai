@@ -42,18 +42,6 @@ def test_handle_intake_map_mode(tmp_path):
     assert result.map_mode is True
 
 
-def test_handle_intake_file_sets_plan_prompt(tmp_path):
-    """File intake sets a plan_prompt instructing the LLM not to load files yet."""
-    ui = MagicMock()
-    ws = Workspace(str(tmp_path))
-    result = handle_intake("recording.m4a", ui, ws, MagicMock())
-    assert result.plan_prompt is not None
-    assert "Do NOT load" in result.plan_prompt
-    # The raw file reference is carried in the message (user invocation preface),
-    # not baked into the plan prompt — the LLM resolves inputs at execution time.
-    assert "recording.m4a" in result.message
-
-
 # --- handle_intake skill path tests ---
 
 def test_handle_intake_no_args_direct_prompt(tmp_path):
@@ -64,7 +52,6 @@ def test_handle_intake_no_args_direct_prompt(tmp_path):
     assert result.message is not None
     assert result.error is None
     assert result.map_mode is True
-    assert result.plan_prompt is not None
     assert "interview" in result.message
     assert "Diagnostic Impressions" in result.message
 

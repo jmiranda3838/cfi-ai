@@ -1,13 +1,11 @@
 """Clinical prompt templates for the /intake map."""
 
-from cfi_ai.prompts.shared import (
-    CRITICAL_INSTRUCTIONS,
-    NARRATIVE_THERAPY_PRINCIPLES,
-    INITIAL_ASSESSMENT_GUIDANCE,
-    TREATMENT_PLAN_GUIDANCE,
-    INTAKE_PROGRESS_NOTE_GUIDANCE,
-    CLIENT_PROFILE_GUIDANCE,
-)
+from cfi_ai.prompts.client_profile import CLIENT_PROFILE_GUIDANCE
+from cfi_ai.prompts.initial_assessment import INITIAL_ASSESSMENT_GUIDANCE
+from cfi_ai.prompts.narrative_therapy import NARRATIVE_THERAPY_PRINCIPLES
+from cfi_ai.prompts.progress_note import INTAKE_PROGRESS_NOTE_GUIDANCE
+from cfi_ai.prompts.shared import CRITICAL_INSTRUCTIONS
+from cfi_ai.prompts.treatment_plan import TREATMENT_PLAN_GUIDANCE
 
 INTAKE_PROMPT = (
     """\
@@ -164,69 +162,3 @@ writing the profile and progress note.
     + CLIENT_PROFILE_GUIDANCE
     + "\n"
 )
-
-INTAKE_PLAN_PROMPT = """\
-You are planning the clinical Intake Map. Today's date is {date}.
-
-## Instructions
-
-Create a structured execution plan for the Intake Map. \
-Do NOT load or process any files — you will do that during execution.
-
-If materials have not been provided yet, include a first step to collect them \
-from the user via `interview` before any file processing.
-
-1. **Determine the client-id**: If the user explicitly provides a client name \
-in their input (e.g., "clients name is james"), use that name for the \
-client-id slug (e.g., "james"). Otherwise, derive a placeholder client-id \
-from the filename (e.g., "Bristol St 4.m4a" → "bristol-st-4"). Note that \
-the actual client identity will be confirmed from the source material during execution.
-
-2. **Check existing clients**: Use `run_command ls clients/` \
-to discover existing clients. If the subject matches an existing client, load their \
-most recent profile and treatment plan for context.
-
-3. **List all 5-6 files** to create with their full paths and quality criteria \
-(6 if WA data present).
-
-4. **Include execution steps**: During execution, you should:
-   1. Process any user-provided files (`attach_path` for audio/other, \
-`extract_document` for PDFs; `attach_path` fallback if extraction is incomplete)
-   2. Use pasted transcript text directly if provided
-   3. If neither, `interview` the user to collect materials first
-   4. Identify the client from the extracted content
-   5. Write all documents in a single batch
-
-## File Structure
-
-```
-clients/<client-id>/
-  intake/<YYYY-MM-DD>-initial-assessment.md   (TheraNest Initial Assessment fields)
-  profile/<YYYY-MM-DD>-profile.md             (internal reference, includes Billing & Provider section)
-  treatment-plan/<YYYY-MM-DD>-treatment-plan.md  (TheraNest Treatment Plan fields)
-  sessions/<YYYY-MM-DD>-progress-note.md      (TheraNest 30-field progress note)
-  sessions/<YYYY-MM-DD>-intake-transcript.md
-  wellness-assessments/<YYYY-MM-DD>-wellness-assessment.md  (G22E02 structured scores, if WA data provided)
-```
-
-Use today's date ({date}) for all dated filenames.
-
-## Documents to Create
-
-Each document follows the detailed guidance in the execution prompt. The plan should \
-list files with paths and brief descriptions:
-
-1. **Initial Assessment** — TheraNest Part 6 format (14 fields: Diagnostic Impressions through Educational/Vocational)
-2. **Treatment Plan** — TheraNest Part 7 format (numbered goals/objectives with interventions)
-3. **Progress Note** — TheraNest 30-field form, CPT 90791 for intake
-4. **Session Transcript** — verbatim with speaker labels, from audio if applicable
-5. **Client Profile** — internal reference (demographics, presenting problems, psychosocial, strengths)
-6. **Wellness Assessment** — G22E02 scoring (GD score + severity) — only if WA data present
-
-## Plan Format
-
-Use the standard plan format:
-- **Summary**: 1-2 sentence overview
-- **Steps**: numbered, with File path, Action (Create), and Details for each
-- **Note**: emit all write_file calls in a single response during execution
-"""

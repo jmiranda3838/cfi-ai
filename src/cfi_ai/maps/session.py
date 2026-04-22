@@ -6,7 +6,7 @@ import datetime
 from typing import TYPE_CHECKING
 
 from cfi_ai.maps import MapResult, invocation_preface, register_map
-from cfi_ai.prompts.render import render_map_plan_prompt, render_map_prompt
+from cfi_ai.prompts.render import render_map_prompt
 
 if TYPE_CHECKING:
     from cfi_ai.sessions import SessionStore
@@ -24,5 +24,4 @@ def handle_session(
     today = datetime.date.today().isoformat()
     ui.print_info(f"Starting session progress note ({today}).")
     message = invocation_preface("session", args) + render_map_prompt("session", date=today)
-    plan_prompt = render_map_plan_prompt("session", date=today)
-    return MapResult(message=message, map_mode=True, plan_prompt=plan_prompt)
+    return MapResult(message=message, map_mode=True)

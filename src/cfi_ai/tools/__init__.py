@@ -44,23 +44,6 @@ def get_api_tools(enable_grounding: bool = True) -> list[types.Tool]:
     return result
 
 
-_READONLY_TOOL_NAMES = {"run_command", "attach_path", "extract_document", "interview", "activate_map", "end_turn"}
-
-
-def get_readonly_api_tools(enable_grounding: bool = True) -> list[types.Tool]:
-    """Return only read-only tool declarations (for plan mode). When
-    enable_grounding is True (default), append a Google Search grounding tool."""
-    declarations = [
-        cls().definition().to_function_declaration()
-        for name, cls in _REGISTRY.items()
-        if name in _READONLY_TOOL_NAMES
-    ]
-    result: list[types.Tool] = [types.Tool(function_declarations=declarations)]
-    if enable_grounding:
-        result.append(types.Tool(google_search=types.GoogleSearch()))
-    return result
-
-
 def execute(name: str, workspace, client=None, **kwargs) -> str | tuple[str, list]:
     """Execute a tool by name. Returns a string or (string, [Part]) tuple."""
     cls = _REGISTRY.get(name)
@@ -82,7 +65,6 @@ def classify_mutation(name: str, args: dict) -> bool:
 __all__ = [
     "ToolDefinition",
     "get_api_tools",
-    "get_readonly_api_tools",
     "execute",
     "classify_mutation",
     "MUTATING_TOOLS",

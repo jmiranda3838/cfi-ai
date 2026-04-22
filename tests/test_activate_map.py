@@ -4,7 +4,7 @@ import datetime
 from pathlib import Path
 
 import cfi_ai.tools as tools
-from cfi_ai.tools.activate_map import ActivateMapTool, get_map_plan_prompt
+from cfi_ai.tools.activate_map import ActivateMapTool
 from cfi_ai.workspace import Workspace
 
 
@@ -25,12 +25,6 @@ def test_tool_in_registry():
 def test_tool_not_mutating():
     tool = ActivateMapTool()
     assert tool.mutating is False
-
-
-def test_tool_in_readonly_set():
-    readonly = tools.get_readonly_api_tools()
-    names = {fd.name for fd in readonly[0].function_declarations}
-    assert "activate_map" in names
 
 
 def test_tool_schema_only_has_map_param():
@@ -110,25 +104,3 @@ def test_activate_map_description_no_client_context():
     defn = tool.definition()
     assert "client context" not in defn.description
     assert "instructions" in defn.description
-
-
-# --- Plan prompts: only intake and session have them ---
-
-def test_get_map_plan_prompt_intake():
-    result = get_map_plan_prompt("intake", date="2025-06-01")
-    assert result is not None
-    assert "Intake Map" in result
-    assert "2025-06-01" in result
-
-
-def test_get_map_plan_prompt_session():
-    result = get_map_plan_prompt("session", date="2025-06-01")
-    assert result is not None
-    assert "Session Map" in result
-    assert "2025-06-01" in result
-
-
-def test_get_map_plan_prompt_returns_none_for_others():
-    assert get_map_plan_prompt("compliance") is None
-    assert get_map_plan_prompt("tp-review") is None
-    assert get_map_plan_prompt("wellness-assessment") is None

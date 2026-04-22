@@ -76,12 +76,12 @@ def test_invalidate_all_clears_all_state():
     mgr = CacheManager(genai, model="m")
     with _PATCH_CONFIG:
         mgr.create_cache("normal", system="s", tools=MM())
-        mgr.create_cache("plan", system="s2", tools=MM())
+        mgr.create_cache("second", system="s2", tools=MM())
 
     mgr.invalidate_all()
 
     assert mgr.get_cache_name("normal") is None
-    assert mgr.get_cache_name("plan") is None
+    assert mgr.get_cache_name("second") is None
     # Crucial: does NOT call server-side delete (server already expired them)
     genai.caches.delete.assert_not_called()
     # And shutdown's delete_all() must be a no-op afterward
@@ -102,7 +102,7 @@ def test_delete_all_calls_delete():
     mgr = CacheManager(genai, model="m")
     with _PATCH_CONFIG:
         mgr.create_cache("normal", system="s", tools=[MM()])
-        mgr.create_cache("plan", system="s2", tools=[MM()])
+        mgr.create_cache("second", system="s2", tools=[MM()])
 
     mgr.delete_all()
 
@@ -110,7 +110,7 @@ def test_delete_all_calls_delete():
     genai.caches.delete.assert_any_call(name="cache-1")
     genai.caches.delete.assert_any_call(name="cache-2")
     assert mgr.get_cache_name("normal") is None
-    assert mgr.get_cache_name("plan") is None
+    assert mgr.get_cache_name("second") is None
 
 
 def test_delete_all_handles_errors():
@@ -126,7 +126,7 @@ def test_delete_all_handles_errors():
     mgr = CacheManager(genai, model="m")
     with _PATCH_CONFIG:
         mgr.create_cache("normal", system="s", tools=[MM()])
-        mgr.create_cache("plan", system="s2", tools=[MM()])
+        mgr.create_cache("second", system="s2", tools=[MM()])
 
     # First delete fails, second should still be called
     genai.caches.delete.side_effect = [RuntimeError("fail"), None]

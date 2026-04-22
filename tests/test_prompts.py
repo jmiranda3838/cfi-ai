@@ -62,41 +62,9 @@ def test_clients_section_contains_integrate_guidance():
     assert "rewrite the document" in prompt
 
 
-def test_plan_mode_prompt_conciseness_guideline():
-    prompt = build_system_prompt("Test workspace.", plan_mode=True)
-    assert "Do NOT include full document content" in prompt
-
-
-def test_plan_mode_prompt_completeness_guideline():
-    prompt = build_system_prompt("summary", plan_mode=True)
-    assert "ALL affected document types" in prompt
-
-
-def test_plan_mode_prompt_clinical_identity():
-    prompt = build_system_prompt("summary", plan_mode=True)
-    assert "clinical documentation assistant" in prompt
-
-
-def test_plan_mode_prompt_verify_before_claiming():
-    prompt = build_system_prompt("summary", plan_mode=True)
-    assert "never claim something is unaffected without verifying" in prompt.lower()
-
-
-def test_plan_mode_prompt_end_turn():
-    prompt = build_system_prompt("summary", plan_mode=True)
-    assert "end_turn" in prompt
-
-
-def test_plan_mode_prompt_includes_clients_section():
-    prompt = build_system_prompt("summary", plan_mode=True)
-    assert "Client File Structure" in prompt
-
-
 def test_prompts_no_narrate_guideline():
     exec_prompt = build_system_prompt("summary")
-    plan_prompt = build_system_prompt("summary", plan_mode=True)
     assert "do not narrate" in exec_prompt
-    assert "do not narrate" in plan_prompt
 
 
 def test_execution_prompt_clinical_identity():
@@ -110,13 +78,9 @@ def test_execution_prompt_ripple_effect_guideline():
 
 
 def test_prompts_no_code_centric_language():
-    plan_prompt = build_system_prompt("summary", plan_mode=True)
     exec_prompt = build_system_prompt("summary")
-    for prompt in (plan_prompt, exec_prompt):
-        assert "codebase" not in prompt
-        assert "code paths" not in prompt
-    assert "function names, parameter types" not in plan_prompt
-    assert "function signatures" not in plan_prompt
+    assert "codebase" not in exec_prompt
+    assert "code paths" not in exec_prompt
 
 
 # --- Clinical map prompt rendering ---
@@ -132,17 +96,9 @@ def test_intake_prompt_formats():
     assert "current.md" not in result
 
 
-def test_intake_plan_prompt_formats():
-    """INTAKE_PLAN_PROMPT assembles without unreplaced placeholders."""
-    from cfi_ai.prompts.intake import INTAKE_PLAN_PROMPT
-    result = INTAKE_PLAN_PROMPT.format(date="2026-03-18")
-    _assert_no_unreplaced_placeholders(result)
-    assert "Initial Assessment" in result
-    assert "current.md" not in result
-
-
 def test_session_map_prompt_formats():
-    from cfi_ai.prompts.session import PROGRESS_NOTE_GUIDANCE, SESSION_MAP_PROMPT
+    from cfi_ai.prompts.progress_note import PROGRESS_NOTE_GUIDANCE
+    from cfi_ai.prompts.session import SESSION_MAP_PROMPT
     note_guidance = PROGRESS_NOTE_GUIDANCE.format(date="2026-03-18")
     result = SESSION_MAP_PROMPT.format(
         date="2026-03-18",
@@ -153,15 +109,6 @@ def test_session_map_prompt_formats():
     assert "run_command ls" in result
     # Single consolidated prompt handles both file and non-file inputs
     assert "attach_path" in result
-
-
-def test_session_plan_prompt_formats():
-    from cfi_ai.prompts.session import SESSION_PLAN_PROMPT, PROGRESS_NOTE_PLAN_CRITERIA
-    result = SESSION_PLAN_PROMPT.format(
-        date="2026-03-18",
-        progress_note_plan_criteria=PROGRESS_NOTE_PLAN_CRITERIA,
-    )
-    _assert_no_unreplaced_placeholders(result)
 
 
 def test_compliance_prompt_formats():
@@ -210,28 +157,32 @@ def test_wa_map_prompt_formats():
     assert "attach_path" in result
 
 
-def test_shared_constants_importable():
-    """All shared constants exist and are non-empty strings."""
-    from cfi_ai.prompts.shared import (
-        CRITICAL_INSTRUCTIONS,
+def test_per_document_constants_importable():
+    """Each per-document module exposes its constants as non-empty strings."""
+    from cfi_ai.prompts.shared import CRITICAL_INSTRUCTIONS
+    from cfi_ai.prompts.narrative_therapy import (
         NARRATIVE_THERAPY_PRINCIPLES,
         NARRATIVE_THERAPY_PROGRESS,
         NARRATIVE_THERAPY_ORIENTATION,
-        INITIAL_ASSESSMENT_GUIDANCE,
-        INITIAL_ASSESSMENT_GUIDANCE_FILE,
-        TREATMENT_PLAN_GUIDANCE,
-        INTAKE_PROGRESS_NOTE_GUIDANCE,
-        CLIENT_PROFILE_GUIDANCE,
-        WA_SCORING_RULES,
-        WA_OUTPUT_FORMAT,
     )
+    from cfi_ai.prompts.initial_assessment import INITIAL_ASSESSMENT_GUIDANCE
+    from cfi_ai.prompts.treatment_plan import (
+        THERANEST_INTERVENTIONS,
+        TREATMENT_PLAN_GUIDANCE,
+    )
+    from cfi_ai.prompts.progress_note import (
+        PROGRESS_NOTE_GUIDANCE,
+        INTAKE_PROGRESS_NOTE_GUIDANCE,
+    )
+    from cfi_ai.prompts.client_profile import CLIENT_PROFILE_GUIDANCE
+    from cfi_ai.prompts.wellness_assessment import WA_SCORING_RULES, WA_OUTPUT_FORMAT
     for const in (
         CRITICAL_INSTRUCTIONS,
         NARRATIVE_THERAPY_PRINCIPLES, NARRATIVE_THERAPY_PROGRESS,
         NARRATIVE_THERAPY_ORIENTATION,
         INITIAL_ASSESSMENT_GUIDANCE,
-        INITIAL_ASSESSMENT_GUIDANCE_FILE,
-        TREATMENT_PLAN_GUIDANCE, INTAKE_PROGRESS_NOTE_GUIDANCE,
+        THERANEST_INTERVENTIONS, TREATMENT_PLAN_GUIDANCE,
+        PROGRESS_NOTE_GUIDANCE, INTAKE_PROGRESS_NOTE_GUIDANCE,
         CLIENT_PROFILE_GUIDANCE, WA_SCORING_RULES, WA_OUTPUT_FORMAT,
     ):
         assert isinstance(const, str) and len(const) > 50
@@ -302,11 +253,9 @@ def test_maps_section_describes_missing_record_contract():
 
 
 def test_interview_in_system_prompts():
-    """interview tool is referenced in both normal and plan mode system prompts."""
+    """interview tool is referenced in the system prompt."""
     normal = build_system_prompt("summary")
-    plan = build_system_prompt("summary", plan_mode=True)
     assert "interview" in normal
-    assert "interview" in plan
 
 
 def test_interview_in_wellness_assessment_prompt():
@@ -326,7 +275,7 @@ def test_measuring_progress_only_in_evaluation_prompts():
     """Part B (Measuring Progress) appears in compliance/tp-review but not session/intake."""
     from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
     from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
-    from cfi_ai.prompts.session import PROGRESS_NOTE_GUIDANCE
+    from cfi_ai.prompts.progress_note import PROGRESS_NOTE_GUIDANCE
     from cfi_ai.prompts.intake import INTAKE_PROMPT
 
     marker = "Measuring Progress in Narrative Therapy"
@@ -340,7 +289,7 @@ def test_measuring_progress_only_in_evaluation_prompts():
 
 def test_orientation_alias_equals_split():
     """Backwards-compat alias equals the two split constants combined."""
-    from cfi_ai.prompts.shared import (
+    from cfi_ai.prompts.narrative_therapy import (
         NARRATIVE_THERAPY_ORIENTATION,
         NARRATIVE_THERAPY_PRINCIPLES,
         NARRATIVE_THERAPY_PROGRESS,
@@ -385,7 +334,7 @@ THERANEST_FIELD_MARKERS = [
 
 def test_progress_note_guidance_covers_all_30_fields():
     """Ongoing-session progress note guidance must cover every TheraNest field."""
-    from cfi_ai.prompts.session import PROGRESS_NOTE_GUIDANCE
+    from cfi_ai.prompts.progress_note import PROGRESS_NOTE_GUIDANCE
     for marker in THERANEST_FIELD_MARKERS:
         assert marker in PROGRESS_NOTE_GUIDANCE, (
             f"PROGRESS_NOTE_GUIDANCE missing field marker: {marker!r}"
@@ -394,7 +343,7 @@ def test_progress_note_guidance_covers_all_30_fields():
 
 def test_intake_progress_note_guidance_covers_all_30_fields():
     """Intake-session progress note guidance must cover every TheraNest field."""
-    from cfi_ai.prompts.shared import INTAKE_PROGRESS_NOTE_GUIDANCE
+    from cfi_ai.prompts.progress_note import INTAKE_PROGRESS_NOTE_GUIDANCE
     for marker in THERANEST_FIELD_MARKERS:
         assert marker in INTAKE_PROGRESS_NOTE_GUIDANCE, (
             f"INTAKE_PROGRESS_NOTE_GUIDANCE missing field marker: {marker!r}"
@@ -403,7 +352,7 @@ def test_intake_progress_note_guidance_covers_all_30_fields():
 
 def test_progress_note_guidance_has_compliance_validation_block():
     """Ongoing-session prompt must include the COMPLIANCE WARNING validation rules."""
-    from cfi_ai.prompts.session import PROGRESS_NOTE_GUIDANCE
+    from cfi_ai.prompts.progress_note import PROGRESS_NOTE_GUIDANCE
     assert "COMPLIANCE WARNING" in PROGRESS_NOTE_GUIDANCE
     assert "HJ" in PROGRESS_NOTE_GUIDANCE
     assert "U5" in PROGRESS_NOTE_GUIDANCE
@@ -414,7 +363,7 @@ def test_progress_note_guidance_has_compliance_validation_block():
 
 def test_intake_progress_note_guidance_has_compliance_validation_block():
     """Intake prompt must also include COMPLIANCE WARNING validation rules."""
-    from cfi_ai.prompts.shared import INTAKE_PROGRESS_NOTE_GUIDANCE
+    from cfi_ai.prompts.progress_note import INTAKE_PROGRESS_NOTE_GUIDANCE
     assert "COMPLIANCE WARNING" in INTAKE_PROGRESS_NOTE_GUIDANCE
     assert "HJ" in INTAKE_PROGRESS_NOTE_GUIDANCE
     assert "U5" in INTAKE_PROGRESS_NOTE_GUIDANCE
@@ -423,7 +372,7 @@ def test_intake_progress_note_guidance_has_compliance_validation_block():
 
 def test_client_profile_guidance_has_billing_section():
     """Client profile guidance must include the Billing & Provider section."""
-    from cfi_ai.prompts.shared import CLIENT_PROFILE_GUIDANCE
+    from cfi_ai.prompts.client_profile import CLIENT_PROFILE_GUIDANCE
     assert "Billing & Provider Information" in CLIENT_PROFILE_GUIDANCE
     assert "Payer" in CLIENT_PROFILE_GUIDANCE
     assert "Authorization Number" in CLIENT_PROFILE_GUIDANCE

@@ -4,16 +4,11 @@ from __future__ import annotations
 
 from typing import TYPE_CHECKING
 
-from cfi_ai.prompts.render import VALID_MAPS, render_map_plan_prompt, render_map_prompt
+from cfi_ai.prompts.render import VALID_MAPS, render_map_prompt
 from cfi_ai.tools.base import BaseTool, ToolDefinition
 
 if TYPE_CHECKING:
     from cfi_ai.workspace import Workspace
-
-
-def get_map_plan_prompt(map_name: str, **kwargs: str) -> str | None:
-    """Return the plan-mode-specific prompt for a map, or None if none exists."""
-    return render_map_plan_prompt(map_name, date=kwargs.get("date"))
 
 
 class ActivateMapTool(BaseTool):

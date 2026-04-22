@@ -27,7 +27,7 @@ The inner loop handles multi-turn tool-use chains. Messages are `list[types.Cont
 8 tools: `run_command`, `attach_path`, `apply_patch`, `write_file`, `extract_document`, `interview`, `activate_map`, `end_turn`.
 
 - Each tool is a `BaseTool` subclass with `definition()` returning a `ToolDefinition` and `execute(workspace, **kwargs)`.
-- `tools/__init__.py` maintains a registry. `get_api_tools(enable_grounding=True)` returns a `list[types.Tool]` — the first entry is a `Tool` with all function declarations, and (when grounding is enabled) the second is a `Tool(google_search=GoogleSearch())`. `get_readonly_api_tools(enable_grounding=True)` follows the same shape for plan mode.
+- `tools/__init__.py` maintains a registry. `get_api_tools(enable_grounding=True)` returns a `list[types.Tool]` — the first entry is a `Tool` with all function declarations, and (when grounding is enabled) the second is a `Tool(google_search=GoogleSearch())`.
 - `end_turn` is a no-arg signal tool the model calls (alone) to mark its turn complete. The agent loop treats `end_turn` as a hard break and elsewhere relies on the absence of function calls to detect natural turn end.
 - Mutation classification uses `classify_mutation(name, args)` — static for `apply_patch`/`write_file`, dynamic for `run_command` (checks if command is in `MUTATING_COMMANDS`).
 - `execute()` can return `str` or `tuple[str, list[Part]]`. The tuple form signals inline binary data (e.g. audio, images) — `agent.py` appends the function response *and* the extra parts to the tool result message.
@@ -43,9 +43,9 @@ The inner loop handles multi-turn tool-use chains. Messages are `list[types.Cont
 
 ### Google Search grounding
 
-Vertex AI Google Search grounding is enabled by default. The `GoogleSearch` tool is appended as a separate `types.Tool` entry in both the full and readonly tool sets — it is NOT a function declaration the model "calls" through the normal function-call path.
+Vertex AI Google Search grounding is enabled by default. The `GoogleSearch` tool is appended as a separate `types.Tool` entry in the tool set — it is NOT a function declaration the model "calls" through the normal function-call path.
 
-- **Disable**: `[grounding] enabled = false` in `~/.config/cfi-ai/config.toml` or `CFI_AI_GROUNDING_ENABLED=0`. When disabled, `get_api_tools` / `get_readonly_api_tools` skip the grounding tool, and the system prompts drop the `web search` bullet so the model isn't told it has a capability it doesn't.
+- **Disable**: `[grounding] enabled = false` in `~/.config/cfi-ai/config.toml` or `CFI_AI_GROUNDING_ENABLED=0`. When disabled, `get_api_tools` skips the grounding tool, and the system prompts drop the `web search` bullet so the model isn't told it has a capability it doesn't.
 - **Capture**: `StreamResult` reads `candidate.grounding_metadata` from the streaming chunks (last writer wins — Gemini emits it on the final chunk; see `client.py:215`).
 - **Render**: `_render_grounding_sources` in `agent.py` formats citations using sparse `[idx+1]` numbering (matches Google's recommended labeling) and surfaces the `web_search_queries` the model issued for auditability. Called only after a turn produces parts — empty/aborted turns skip rendering.
 - **Suggestions UI**: Vertex's `search_entry_point.rendered_content` HTML is written to `<tmpdir>/cfi-ai-search-suggestions.html` so the citations block can include a clickable `file://` URI. Auto-open in the browser is opt-in via `[grounding] open_browser = true` or `CFI_AI_GROUNDING_OPEN_BROWSER=1` (default off).

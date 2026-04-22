@@ -1,6 +1,130 @@
-"""Clinical prompt templates for the /wellness-assessment map (G22E02)."""
+"""Clinical prompt templates for the /wellness-assessment map (G22E02).
 
-from cfi_ai.prompts.shared import CRITICAL_INSTRUCTIONS, WA_SCORING_RULES, WA_OUTPUT_FORMAT
+Also the single source of truth for the WA scoring rules and output format —
+moved from `prompts/shared.py` since they're used exclusively by this map.
+"""
+
+from cfi_ai.prompts.shared import CRITICAL_INSTRUCTIONS
+
+WA_SCORING_RULES = """\
+## Scoring Rules
+
+### Global Distress (GD) Scale — Items 1-15
+- Sum all 15 items. Range: 0-45.
+- **Items 1-11** (symptom burden): Not at All=0, A Little=1, Somewhat=2, A Lot=3
+- **Items 12-15** (wellbeing — already reverse-aligned on the form):
+  Strongly Agree=0, Agree=1, Disagree=2, Strongly Disagree=3
+- All items are scored so that higher = more distress. No manual reversal needed.
+
+### Severity Thresholds
+| Range | Severity | Clinical Significance |
+|-------|----------|----------------------|
+| 0-11 | Low | Below clinical cutoff |
+| 12-24 | Moderate | At or above cutoff |
+| 25-38 | Severe | Significant distress |
+| 39-45 | Very Severe | Acute distress |
+
+Clinical cutoff: **12** (GD >= 12 indicates clinically significant distress).
+
+### CAGE-AID Screen (Items 22-24) — Initial Administration Only
+- Count "Yes" responses. Range: 0-3.
+- Any "Yes" = positive screen (flag substance use risk).
+
+### Item 16 — Alcohol Use
+- Number of drinks in past week. Document but do not formally score.
+
+### Items 17-24 — Initial Administration Only
+- Items 17-21: Health and workplace functioning. Document in table.
+- Items 22-24: CAGE-AID (scored above).
+- Re-administrations use items 1-16 only.
+
+### Missing Data
+- Up to 3 missing items on GD scale: impute score of 1 for each missing item.
+- More than 3 missing items: mark GD score as **Invalid** and note which items \
+are missing.
+- If the form is partially completed, note which items are missing.
+"""
+
+WA_OUTPUT_FORMAT = """\
+Use this format:
+
+```
+# Wellness Assessment (G22E02)
+
+- **Client ID:** [client-id slug]
+- **Date:** {date}
+- **Administration:** [Initial | Re-administration (#N)]
+- **Visit #:** [number]
+
+## Global Distress (GD) Scale — Items 1-15
+
+| # | Item | Response | Score |
+|---|------|----------|-------|
+| 1 | Nervousness or shakiness | [text] | [0-3] |
+| 2 | Feeling no interest in things | [text] | [0-3] |
+| 3 | Feeling hopeless about the future | [text] | [0-3] |
+| 4 | Feeling blue | [text] | [0-3] |
+| 5 | Worrying too much about things | [text] | [0-3] |
+| 6 | Trouble falling asleep or staying asleep | [text] | [0-3] |
+| 7 | Feeling everything is an effort | [text] | [0-3] |
+| 8 | Feeling tense or keyed up | [text] | [0-3] |
+| 9 | Having spells of terror or panic | [text] | [0-3] |
+| 10 | Feeling restless or can't sit still | [text] | [0-3] |
+| 11 | Feeling worthless | [text] | [0-3] |
+| 12 | I have good self-esteem | [text] | [0-3] |
+| 13 | I am able to cope with whatever comes my way | [text] | [0-3] |
+| 14 | I am able to accomplish the things I set out to do | [text] | [0-3] |
+| 15 | Friends/family I can count on | [text] | [0-3] |
+
+- **GD Score:** [sum]/45
+- **Severity:** [Low/Moderate/Severe/Very Severe]
+
+## Alcohol Use (Q16)
+- Drinks in past week: [number]
+
+## CAGE-AID Screen (Q22-24) — Initial Only
+
+| # | Question | Response |
+|---|----------|----------|
+| 22 | ... | Yes/No |
+| 23 | ... | Yes/No |
+| 24 | ... | Yes/No |
+
+- **CAGE-AID Score:** [0-3]
+- **Screen Result:** [Negative/Positive]
+
+## Health & Workplace Items (Q17-21) — Initial Only
+
+| # | Item | Response |
+|---|------|----------|
+| 17 | ... | ... |
+| 18 | ... | ... |
+| 19 | ... | ... |
+| 20 | ... | ... |
+| 21 | ... | ... |
+
+## Score Trend (re-administrations only)
+
+| Date | GD Score | Severity | Change |
+|------|----------|----------|--------|
+| [prior date] | [score] | [level] | -- |
+| {date} | [score] | [level] | [+/-N] |
+
+## Clinical Summary
+[1-2 sentences: for initial, baseline context and clinical significance; \
+for re-administrations, trend interpretation and treatment implications]
+
+## Progress Note Snippet
+[Ready-to-paste text for the Data section of the next progress note, e.g.: \
+"Wellness Assessment (G22E02) administered: Global Distress = 28/45 (Severe); \
+CAGE-AID = 0/3 (Negative)."]
+```
+
+For re-administrations, omit the CAGE-AID and Health & Workplace sections. \
+Include the Score Trend table with all prior scores plus the current one.
+
+For initial administrations, omit the Score Trend section.
+"""
 
 WA_MAP_PROMPT = (
     """\

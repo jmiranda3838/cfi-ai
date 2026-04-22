@@ -202,34 +202,6 @@ def test_stream_response_reraises_on_real_cache_expired_error():
         cache_mgr.invalidate.assert_called_once_with("normal")
 
 
-def test_plan_mode_uses_plan_cache_key():
-    """Plan mode should use 'plan' cache key."""
-    from unittest.mock import patch, MagicMock as MM
-    from cfi_ai.client import Client, CacheManager
-    from cfi_ai.config import Config
-
-    mock_config = MM(spec=Config)
-    mock_config.project = "test-project"
-    mock_config.location = "us-central1"
-    mock_config.model = "gemini-2.5-flash"
-    mock_config.max_tokens = 8192
-
-    with patch("cfi_ai.client.genai") as mock_genai:
-        client = Client(mock_config)
-        mock_stream = MM()
-        mock_genai.Client.return_value.models.generate_content_stream.return_value = mock_stream
-
-        cache_mgr = MM(spec=CacheManager)
-        cache_mgr.get_cache_name.return_value = "plan-cache-name"
-        client.set_cache_manager(cache_mgr)
-
-        client.stream_response(
-            messages=[], system="test-system", tools=[MM()], mode="plan"
-        )
-
-        cache_mgr.get_cache_name.assert_called_with("plan")
-
-
 def test_stream_result_captures_usage_metadata():
     """StreamResult should capture usage_metadata from streaming chunks."""
     from unittest.mock import MagicMock as MM
