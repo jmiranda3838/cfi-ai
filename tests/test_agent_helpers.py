@@ -2,7 +2,12 @@
 
 from google.genai import types
 
-from cfi_ai.agent import _build_result_slots, _should_retry_empty_turn, _split_tool_results
+from cfi_ai.agent import (
+    _assemble_tool_result_parts,
+    _build_result_slots,
+    _should_retry_empty_turn,
+    _split_tool_results,
+)
 
 
 def test_split_no_binary():
@@ -169,3 +174,49 @@ class TestBuildResultSlots:
         assert len(read_ops) == 0
         assert len(mutate_ops) == 2
         assert len(slots) == 2
+
+
+class TestAssembleToolResultParts:
+    """Tests for _assemble_tool_result_parts — the end_turn parity helper."""
+
+    def test_flattens_in_order_no_end_turn(self):
+        """Without end_turn_mixed, result parts match call count exactly."""
+        slots = [
+            [types.Part.from_function_response(name="write_file", response={"result": "wrote a"})],
+            [types.Part.from_function_response(name="write_file", response={"result": "wrote b"})],
+        ]
+        parts = _assemble_tool_result_parts(slots, end_turn_mixed=False)
+        assert len(parts) == 2
+        assert [p.function_response.name for p in parts] == ["write_file", "write_file"]
+
+    def test_appends_end_turn_response_when_mixed(self):
+        """5 writes + end_turn in model turn -> 6 responses in user turn."""
+        slots = [
+            [types.Part.from_function_response(name="write_file", response={"result": f"wrote {i}"})]
+            for i in range(5)
+        ]
+        parts = _assemble_tool_result_parts(slots, end_turn_mixed=True)
+        assert len(parts) == 6
+        assert parts[-1].function_response.name == "end_turn"
+        assert parts[-1].function_response.response == {"result": "Turn complete."}
+
+    def test_empty_slots_with_end_turn(self):
+        """Edge case: end_turn alone via the mixed path still produces 1 part."""
+        parts = _assemble_tool_result_parts([], end_turn_mixed=True)
+        assert len(parts) == 1
+        assert parts[0].function_response.name == "end_turn"
+
+    def test_preserves_multi_part_slots(self):
+        """Slots with multiple parts (e.g. fn_response + inline binary) flatten faithfully."""
+        binary = types.Part.from_bytes(data=b"pdf", mime_type="application/pdf")
+        slots = [
+            [
+                types.Part.from_function_response(name="attach_path", response={"result": "loaded"}),
+                binary,
+            ],
+            [types.Part.from_function_response(name="write_file", response={"result": "wrote"})],
+        ]
+        parts = _assemble_tool_result_parts(slots, end_turn_mixed=True)
+        # 2 parts from slot 0 + 1 from slot 1 + end_turn response
+        assert len(parts) == 4
+        assert parts[-1].function_response.name == "end_turn"

@@ -155,6 +155,28 @@ def _build_result_slots(
     return read_ops, mutate_ops, result_slots
 
 
+def _assemble_tool_result_parts(
+    result_slots: list[list[types.Part]],
+    end_turn_mixed: bool,
+) -> list[types.Part]:
+    """Flatten per-call result slots into one parts list, and append an
+    end_turn response when end_turn was emitted alongside the other calls.
+
+    Gemini rejects a turn whose function_response count doesn't match the
+    model turn's function_call count — this keeps the two in sync.
+    """
+    parts: list[types.Part] = []
+    for slot in result_slots:
+        parts.extend(slot)
+    if end_turn_mixed:
+        parts.append(
+            types.Part.from_function_response(
+                name=END_TURN_TOOL_NAME, response={"result": "Turn complete."}
+            )
+        )
+    return parts
+
+
 def _split_tool_results(parts: list[types.Part]) -> list[list[types.Part]]:
     """Split tool result parts so inline binary data gets its own Content message.
 
@@ -642,8 +664,13 @@ def _run_main_loop(
                 ]))
                 _log.debug("inner_loop end_turn_signal")
                 break
-            # If end_turn appeared with other calls, strip it and process real tools
+            # If end_turn appeared alongside other calls, run the real tools
+            # but remember the mix so we can respond to end_turn too — Gemini
+            # requires function_response count to match function_call count,
+            # otherwise the next API call 400s with INVALID_ARGUMENT.
+            end_turn_mixed = False
             if non_end and len(non_end) < len(function_calls):
+                end_turn_mixed = True
                 function_calls = non_end
 
             if not function_calls:
@@ -717,6 +744,13 @@ def _run_main_loop(
                             name=fc.name,
                             response={"error": "Discarded — activate_map must run alone."},
                         ))
+                # end_turn was stripped from function_calls above; respond to
+                # it too so the per-turn call/response counts stay in sync.
+                if end_turn_mixed:
+                    parts.append(types.Part.from_function_response(
+                        name=END_TURN_TOOL_NAME,
+                        response={"error": "Discarded — activate_map must run alone."},
+                    ))
                 messages.append(types.Content(role="user", parts=parts))
                 continue  # Restart inner loop — LLM sees map prompt next
 
@@ -809,20 +843,23 @@ def _run_main_loop(
                             )
                         )
 
-            # Flatten indexed slots back into original call order
-            tool_result_parts: list[types.Part] = []
-            for slot in result_slots:
-                tool_result_parts.extend(slot)
+            # Flatten indexed slots back into original call order, appending
+            # an end_turn response when end_turn was emitted with the others.
+            tool_result_parts = _assemble_tool_result_parts(result_slots, end_turn_mixed)
 
             # Gemini uses role="user" for function responses — the API only supports
             # "user" and "model" roles, and tool results are part of the user turn.
             for group in _split_tool_results(tool_result_parts):
                 messages.append(types.Content(role="user", parts=group))
             _log.debug(
-                "inner_loop tool_results_appended parts=%d functions=%s",
+                "inner_loop tool_results_appended parts=%d functions=%s end_turn_mixed=%s",
                 len(tool_result_parts),
                 [fc.name for fc in function_calls],
+                end_turn_mixed,
             )
+            if end_turn_mixed:
+                _log.debug("inner_loop end_turn_mixed break")
+                break
             continue  # Continue inner loop to let model process results
 
         else:

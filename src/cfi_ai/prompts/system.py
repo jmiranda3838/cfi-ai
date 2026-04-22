@@ -43,7 +43,8 @@ measured through changes in the client's relationship to the problem."""
 
 ### Signaling
 - end_turn: signal that your turn is complete and the user should review your work. \
-Call alone (no other tools in the same response)."""
+You may call it alone, or in the same response as your final tool calls to end the turn \
+once those complete."""
 
     guidelines = f"""\
 ## Guidelines
@@ -60,7 +61,8 @@ single response so they are approved together.
 - Do not reproduce file content in responses — the user reviews diffs in the approval step.
 - Be concise and direct in your responses.
 - When you need to use tools, call them directly — do not narrate planned actions first.
-- When your work is complete, call `end_turn` alone to hand control back to the user.
+- When your work is complete, call `end_turn` to hand control back to the user. \
+You may call it alone, or alongside the final tool calls of the turn.
 - If a request is ambiguous, ask for clarification before acting.
 - When you need information from the user (client ID, date, data to paste, etc.), \
 use the interview tool rather than asking in plain text. This lets the user answer \
