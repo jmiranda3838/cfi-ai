@@ -243,7 +243,7 @@ def test_reference_mode_forbids_writes():
 def test_cage_aid_in_unified_intake_prompt():
     """CAGE-AID risk note is present in the unified intake prompt."""
     from cfi_ai.prompts.intake import INTAKE_PROMPT
-    assert "CAGE screen" in INTAKE_PROMPT
+    assert "CAGE-AID" in INTAKE_PROMPT
 
 
 def test_maps_section_describes_missing_record_contract():

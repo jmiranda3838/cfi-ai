@@ -89,7 +89,7 @@ class TestPromptApproval:
         session.multiline = True
         session.prompt.return_value = "y"
 
-        assert ui.prompt_approval() is True
+        assert ui.prompt_approval() == (True, "")
 
         _, kwargs = session.prompt.call_args
         assert kwargs.get("multiline") is False
@@ -98,13 +98,15 @@ class TestPromptApproval:
         ui, session = _make_ui(tmp_path)
         for ans in ("", "y", "Y", "yes", "YES"):
             session.prompt.return_value = ans
-            assert ui.prompt_approval() is True
+            assert ui.prompt_approval() == (True, "")
 
     def test_no_inputs(self, tmp_path):
+        """Each rejection now also fires a second prompt for an optional
+        reason; an empty reason yields (False, "")."""
         ui, session = _make_ui(tmp_path)
         for ans in ("n", "no", "nope", "anything else"):
-            session.prompt.return_value = ans
-            assert ui.prompt_approval() is False
+            session.prompt.side_effect = [ans, ""]
+            assert ui.prompt_approval() == (False, "")
 
     def test_uses_approval_key_bindings_not_chat(self, tmp_path):
         """Regression: prompt_approval() must use _approval_key_bindings(),
@@ -125,10 +127,12 @@ class TestPromptApproval:
     def test_escape_does_not_approve(self, tmp_path):
         """Companion to the binding-wiring test: when the Escape handler
         raises EOFError (which is what _approval_key_bindings does), the
-        function returns False, NOT True via the ('', ...) check."""
+        function returns (False, ""), NOT (True, "") via the ('', ...) check.
+        Escape on the first prompt should not fire the reason prompt."""
         ui, session = _make_ui(tmp_path)
         session.prompt.side_effect = EOFError
-        assert ui.prompt_approval() is False
+        assert ui.prompt_approval() == (False, "")
+        assert session.prompt.call_count == 1
 
     def test_keyboard_interrupt_propagates(self, tmp_path):
         import pytest
@@ -136,6 +140,38 @@ class TestPromptApproval:
         session.prompt.side_effect = KeyboardInterrupt
         with pytest.raises(KeyboardInterrupt):
             ui.prompt_approval()
+
+    def test_rejection_with_reason(self, tmp_path):
+        ui, session = _make_ui(tmp_path)
+        session.prompt.side_effect = ["n", "PDF noise — GT/95 don't apply for in-person"]
+        assert ui.prompt_approval() == (
+            False, "PDF noise — GT/95 don't apply for in-person"
+        )
+        assert session.prompt.call_count == 2
+
+    def test_rejection_empty_reason(self, tmp_path):
+        ui, session = _make_ui(tmp_path)
+        session.prompt.side_effect = ["n", ""]
+        assert ui.prompt_approval() == (False, "")
+
+    def test_rejection_reason_stripped(self, tmp_path):
+        ui, session = _make_ui(tmp_path)
+        session.prompt.side_effect = ["n", "  hello  "]
+        assert ui.prompt_approval() == (False, "hello")
+
+    def test_rejection_eof_on_reason_prompt(self, tmp_path):
+        """Escape (EOFError) on the reason prompt still counts as a
+        rejection — must not silently re-approve."""
+        ui, session = _make_ui(tmp_path)
+        session.prompt.side_effect = ["n", EOFError()]
+        assert ui.prompt_approval() == (False, "")
+
+    def test_rejection_keyboard_interrupt_on_reason_prompt(self, tmp_path):
+        """Ctrl+C on the reason prompt is swallowed — the rejection decision
+        is already final, and propagating would risk losing the rejection."""
+        ui, session = _make_ui(tmp_path)
+        session.prompt.side_effect = ["n", KeyboardInterrupt()]
+        assert ui.prompt_approval() == (False, "")
 
 
 class TestGetInput:

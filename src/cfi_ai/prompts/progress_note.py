@@ -157,6 +157,10 @@ crowds."
 ### Risk Assessment
 
 #### 16. Risk Assessment
+This format applies to the progress note's Risk Assessment field only. The \
+Initial Assessment's Risk Assessment is a different TheraNest field — see the \
+Initial Assessment Guidance section for its two-part structure.
+
 Format as a checkbox grid:
 ```
 | Domain | Present | Notes |
@@ -455,6 +459,10 @@ cooking and grocery shopping due to fatigue from depression").
 ### Risk Assessment
 
 #### 16. Risk Assessment
+This format applies to the intake progress note's Risk Assessment field only. \
+The Initial Assessment's Risk Assessment is a different TheraNest field — see \
+the Initial Assessment Guidance section for its two-part structure.
+
 Format as a checkbox grid:
 ```
 | Domain | Present | Notes |

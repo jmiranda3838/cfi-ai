@@ -55,8 +55,9 @@ to call it."""
 - Before calling apply_patch on a file you have not read or written in this session, \
 first inspect it (attach_path or run_command cat) so your old_text matches the actual \
 content and you do not invent fields that don't exist in structured templates.
-- If the user rejects an apply_patch or write_file call, do not retry the same edit. \
-Re-read the file, or use interview to ask the user where the content should go.
+- If the user rejects an apply_patch or write_file call, do not retry the same edit \
+and do not claim the file was updated. Re-read the file, or use interview to ask \
+the user where the content should go.
 - run_command does not support pipes, redirection, or chaining — run separate commands.
 - rm can only delete individual files, not directories.
 - Batch related edits in a single apply_patch call.

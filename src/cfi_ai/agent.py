@@ -805,7 +805,7 @@ def _run_main_loop(
 
                 ui.show_plan(format_plan(plan))
                 approval_start = time.monotonic()
-                approved = ui.prompt_approval()
+                approved, rejection_reason = ui.prompt_approval()
                 approval_wait += time.monotonic() - approval_start
 
                 if approved:
@@ -839,16 +839,26 @@ def _run_main_loop(
                                 fc.name, len(result),
                             )
                 else:
+                    if rejection_reason:
+                        rejection_msg = (
+                            f"User rejected this edit. Reason: {rejection_reason}\n\n"
+                            "Use this reason to guide your next action. Do not retry "
+                            "the same change without addressing the user's reason. If "
+                            "the reason is unclear, use interview to ask a clarifying "
+                            "question."
+                        )
+                    else:
+                        rejection_msg = (
+                            "User rejected this edit (no reason given). Do not retry "
+                            "the same change — re-read the file to see its actual "
+                            "structure, or use interview to ask the user where this "
+                            "content should go."
+                        )
                     for i, fc in mutate_ops:
                         result_slots[i].append(
                             types.Part.from_function_response(
                                 name=fc.name,
-                                response={"error": (
-                                    "User rejected this edit. Do not retry the same "
-                                    "change — re-read the file to see its actual "
-                                    "structure, or use interview to ask the user "
-                                    "where this content should go."
-                                )},
+                                response={"error": rejection_msg},
                             )
                         )
 

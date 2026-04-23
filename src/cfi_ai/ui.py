@@ -481,7 +481,17 @@ class UI:
 
         return answers
 
-    def prompt_approval(self) -> bool:
+    def prompt_approval(self) -> tuple[bool, str]:
+        """Confirm a mutating tool call. Returns (approved, reason).
+
+        On approval, returns (True, ""). On rejection, prompts a second
+        single-line input for an optional reason and returns (False, reason).
+        The returned reason is always stripped, so whitespace-only input is
+        normalized to ""; callers (see agent.py's rejection branch) rely on a
+        plain truthiness check to distinguish "reason given" from "no reason
+        given." KeyboardInterrupt on the first prompt propagates; on the
+        second prompt it is swallowed because the rejection decision is
+        already final."""
         self.status.set_mode("awaiting_approval")
         try:
             response = self.session.prompt(
@@ -490,11 +500,24 @@ class UI:
                 multiline=False,
                 key_bindings=_approval_key_bindings(),
             )
-            return response.strip().lower() in ("", "y", "yes")
         except KeyboardInterrupt:
             raise
         except EOFError:
-            return False
+            return (False, "")
+
+        if response.strip().lower() in ("", "y", "yes"):
+            return (True, "")
+
+        try:
+            reason = self.session.prompt(
+                [("class:approval", "reason? (optional, Enter to skip) ")],
+                bottom_toolbar=HTML(f"cfi-ai | {self.status.display}"),
+                multiline=False,
+                key_bindings=_approval_key_bindings(),
+            )
+        except (EOFError, KeyboardInterrupt):
+            return (False, "")
+        return (False, reason.strip())
 
     def prompt_multiline(self, instruction: str) -> str | None:
         """Prompt for multi-line input. Returns text or None on cancel."""

@@ -33,13 +33,17 @@ hospitalizations, and significant life events.
 - **Family/Psychosocial Assessment** — The family or psychosocial assessment. \
 Cover family structure, key relationships, social supports, stressors, and \
 relevant developmental/cultural context.
-- **Risk Assessment** — Address all 8 risk domains (suicide, violence, physical \
-abuse, sexual abuse, psychotic break, running away, substance abuse, self-harm). \
-For each, indicate present/not present. If any are present, provide explanation \
-and note whether a safety plan was established. Format clearly so the clinician \
-can check the corresponding TheraNest checkboxes and paste the explanation. \
-**Important:** If the wellness assessment Q22-24 (CAGE screen) has any "Yes" \
-answers, flag substance abuse risk here and incorporate those findings.
+- **Risk Assessment** — TheraNest renders this as a checkbox grid plus a single \
+Explanation textarea, so produce a two-part block that maps 1:1 onto those \
+fields. First, `**Risk Domains Present**` — a plain bullet list of ONLY the \
+domains that are present, drawn from: suicide, violence, physical abuse, sexual \
+abuse, psychotic break, running away, substance abuse, self-harm. If none are \
+present, write `None`. Do not include "Not Present" entries — the clinician \
+only needs to see what to check. Second, `**Explanation**` — a prose paragraph \
+(no bullets, no bold) covering only the present domains: details of the risk, \
+and whether a safety plan was established. If the wellness assessment Q22-24 \
+(CAGE-AID) has any "Yes" answers, flag substance abuse as present and include \
+the CAGE-AID finding in the Explanation.
 - **Strengths** — Client/family strengths framed through preferred stories and \
 insider knowledges: skills of living the client already possesses, values that \
 sustain them, relationships that support their preferred identity, unique \
