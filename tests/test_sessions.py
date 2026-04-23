@@ -298,3 +298,12 @@ def test_adopt_handles_corrupt_file(sessions_dir, workspace):
     store.adopt("bad", bad_path)
     assert store.session_id == "bad"
     assert store._path == bad_path
+
+
+def test_session_store_path_property(sessions_dir, workspace):
+    """The public ``path`` property exposes the same Path as the private
+    ``_path`` backing attribute, and matches the session-id-based filename
+    under ``SESSIONS_DIR``."""
+    store = SessionStore(workspace)
+    assert store.path == store._path
+    assert store.path == sessions_dir / f"{store.session_id}.json"

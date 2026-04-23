@@ -97,6 +97,7 @@ def invocation_preface(map_name: str, args: str | None) -> str:
 
 
 # Import map modules to trigger registration
+from cfi_ai.maps import bugreport as _bugreport_map  # noqa: F401, E402
 from cfi_ai.maps import clear as _clear_map  # noqa: F401, E402
 from cfi_ai.maps import compliance as _compliance_map  # noqa: F401, E402
 from cfi_ai.maps import help as _help_map  # noqa: F401, E402

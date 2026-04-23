@@ -671,3 +671,104 @@ def test_from_env_no_warning_for_current_model(capsys):
     assert config.model == "gemini-3-flash-preview"
     err = capsys.readouterr().err
     assert "deprecated" not in err.lower()
+
+
+# ── bugreport ────────────────────────────────────────────────────────
+
+
+def test_load_bugreport_defaults(tmp_path):
+    """Config file with [project]+[model] but no [bugreport] section should give
+    enabled=True, repo="jmiranda3838/cfi-ai", dry_run=False."""
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        '[project]\nid = "p"\nlocation = "global"\n\n'
+        '[model]\nname = "gemini-3-flash-preview"\nmax_tokens = 8192\n'
+    )
+    with patch.dict(os.environ, {}, clear=True):
+        config = Config.load(config_path=cfg)
+    assert config.bugreport_enabled is True
+    assert config.bugreport_repo == "jmiranda3838/cfi-ai"
+    assert config.bugreport_dry_run is False
+
+
+def test_load_bugreport_from_file(tmp_path):
+    """[bugreport] repo and enabled in TOML should be picked up."""
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        '[project]\nid = "p"\nlocation = "global"\n\n'
+        '[model]\nname = "gemini-3-flash-preview"\nmax_tokens = 8192\n\n'
+        '[bugreport]\nrepo = "x/y"\nenabled = false\n'
+    )
+    with patch.dict(os.environ, {}, clear=True):
+        config = Config.load(config_path=cfg)
+    assert config.bugreport_enabled is False
+    assert config.bugreport_repo == "x/y"
+
+
+def test_load_bugreport_env_overrides_file(tmp_path):
+    """Env wins over file for both enabled and repo."""
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        '[project]\nid = "p"\nlocation = "global"\n\n'
+        '[model]\nname = "gemini-3-flash-preview"\nmax_tokens = 8192\n\n'
+        '[bugreport]\nrepo = "x/y"\nenabled = true\n'
+    )
+    env = {
+        "CFI_AI_BUGREPORT_ENABLED": "0",
+        "CFI_AI_BUGREPORT_REPO": "other/repo",
+    }
+    with patch.dict(os.environ, env, clear=True):
+        config = Config.load(config_path=cfg)
+    assert config.bugreport_enabled is False
+    assert config.bugreport_repo == "other/repo"
+
+
+@pytest.mark.parametrize(
+    "val,expected",
+    [
+        ("0", False),
+        ("false", False),
+        ("False", False),
+        ("FALSE", False),
+        ("no", False),
+        ("off", False),
+        ("", True),  # empty falls back to default (True)
+        ("   ", True),  # whitespace falls back to default (True)
+        ("1", True),
+        ("true", True),
+        ("True", True),
+        ("yes", True),
+    ],
+)
+def test_bugreport_enabled_env_parsing(val, expected):
+    """CFI_AI_BUGREPORT_ENABLED parses falsy strings to False, empty/whitespace
+    falls back to the default (True)."""
+    env = {"GOOGLE_CLOUD_PROJECT": "test", "CFI_AI_BUGREPORT_ENABLED": val}
+    with patch.dict(os.environ, env, clear=True):
+        config = Config.from_env()
+    assert config.bugreport_enabled is expected
+
+
+@pytest.mark.parametrize(
+    "val,expected",
+    [
+        ("0", False),
+        ("false", False),
+        ("False", False),
+        ("FALSE", False),
+        ("no", False),
+        ("off", False),
+        ("", False),  # empty falls back to default (False)
+        ("   ", False),
+        ("1", True),
+        ("true", True),
+        ("True", True),
+        ("yes", True),
+    ],
+)
+def test_bugreport_dry_run_env_parsing(val, expected):
+    """CFI_AI_BUGREPORT_DRY_RUN defaults to False; empty falls back to default."""
+    env = {"GOOGLE_CLOUD_PROJECT": "test", "CFI_AI_BUGREPORT_DRY_RUN": val}
+    with patch.dict(os.environ, env, clear=True):
+        config = Config.from_env()
+    assert config.bugreport_dry_run is expected

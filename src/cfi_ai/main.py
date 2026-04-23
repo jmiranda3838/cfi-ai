@@ -1,3 +1,4 @@
+import dataclasses
 import logging
 import os
 import sys
@@ -71,6 +72,11 @@ def _check_adc() -> None:
             sys.exit(1)
 
 
+def _apply_model_override(config: Config, model: str) -> Config:
+    """Return a new Config with ``model`` overridden; preserves all other fields."""
+    return dataclasses.replace(config, model=model)
+
+
 def main() -> None:
     level = os.environ.get("CFI_AI_LOG_LEVEL", "WARNING").upper()
     logging.basicConfig(
@@ -100,6 +106,9 @@ def main() -> None:
         print("  CFI_AI_CONTEXT_CACHE    Disable context caching (set to 0 or false)")
         print("  CFI_AI_GROUNDING_ENABLED       Disable Google Search grounding (set to 0 or false)")
         print("  CFI_AI_GROUNDING_OPEN_BROWSER  Auto-open Vertex search-suggestions HTML in browser")
+        print("  CFI_AI_BUGREPORT_ENABLED       Disable /bugreport map (set to 0 or false)")
+        print("  CFI_AI_BUGREPORT_REPO          Override the GitHub repo /bugreport posts to")
+        print("  CFI_AI_BUGREPORT_DRY_RUN       Save drafts locally instead of posting (set to 1)")
         return
     if "--update" in sys.argv:
         import shutil
@@ -145,16 +154,7 @@ def main() -> None:
         return
 
     if model_override:
-        config = Config(
-            project=config.project,
-            location=config.location,
-            model=model_override,
-            max_tokens=config.max_tokens,
-            max_context_tokens=config.max_context_tokens,
-            context_cache=config.context_cache,
-            grounding_open_browser=config.grounding_open_browser,
-            grounding_enabled=config.grounding_enabled,
-        )
+        config = _apply_model_override(config, model_override)
         config.validate()
 
     warnings.filterwarnings(

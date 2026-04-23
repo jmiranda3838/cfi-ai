@@ -81,6 +81,11 @@ class SessionStore:
         # sessions or sessions saved before this field existed.
         self.usage: dict | None = None
 
+    @property
+    def path(self) -> Path:
+        """The on-disk JSON path for the current session."""
+        return self._path
+
     def reset(self, workspace: Workspace) -> None:
         """Re-initialize this store as a brand-new session in ``workspace``.
 

@@ -115,6 +115,9 @@ class Config:
     context_cache: bool = True
     grounding_open_browser: bool = False
     grounding_enabled: bool = True
+    bugreport_enabled: bool = True
+    bugreport_repo: str = "jmiranda3838/cfi-ai"
+    bugreport_dry_run: bool = False
 
     def validate(self) -> None:
         """Fail fast on known invalid model/location combinations."""
@@ -155,6 +158,13 @@ class Config:
             ),
             grounding_enabled=_parse_bool_env(
                 os.environ.get("CFI_AI_GROUNDING_ENABLED"), True
+            ),
+            bugreport_enabled=_parse_bool_env(
+                os.environ.get("CFI_AI_BUGREPORT_ENABLED"), True
+            ),
+            bugreport_repo=os.environ.get("CFI_AI_BUGREPORT_REPO") or "jmiranda3838/cfi-ai",
+            bugreport_dry_run=_parse_bool_env(
+                os.environ.get("CFI_AI_BUGREPORT_DRY_RUN"), False
             ),
         )
         config.validate()
@@ -226,6 +236,21 @@ class Config:
         else:
             grounding_enabled = bool(grounding.get("enabled", True))
 
+        bugreport = file_data.get("bugreport", {})
+        env_bugreport_enabled = os.environ.get("CFI_AI_BUGREPORT_ENABLED")
+        if env_bugreport_enabled is not None:
+            bugreport_enabled = _parse_bool_env(env_bugreport_enabled, True)
+        else:
+            bugreport_enabled = bool(bugreport.get("enabled", True))
+        bugreport_repo = (
+            os.environ.get("CFI_AI_BUGREPORT_REPO")
+            or bugreport.get("repo")
+            or "jmiranda3838/cfi-ai"
+        )
+        bugreport_dry_run = _parse_bool_env(
+            os.environ.get("CFI_AI_BUGREPORT_DRY_RUN"), False
+        )
+
         config = cls(
             project=project,
             location=location,
@@ -235,6 +260,9 @@ class Config:
             context_cache=context_cache,
             grounding_open_browser=grounding_open_browser,
             grounding_enabled=grounding_enabled,
+            bugreport_enabled=bugreport_enabled,
+            bugreport_repo=bugreport_repo,
+            bugreport_dry_run=bugreport_dry_run,
         )
         config.validate()
         return config
