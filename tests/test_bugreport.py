@@ -23,8 +23,11 @@ from cfi_ai.maps.bugreport import (
     _build_issue_body,
     _call_summarizer,
     _confirm_post,
+    _detect_active_maps,
     _edit_in_editor,
+    _filter_labels,
     _normalize_finish_reason,
+    _parse_metadata_header,
     _resolve_editor_command,
     _serialize_content,
     handle_bugreport,
@@ -566,7 +569,10 @@ def test_handle_bugreport_token_passthrough_calls_discover_once(
     assert result.handled is True
     assert mock_discover.call_count == 1
     assert mock_create.call_args.kwargs["token"] == "tok"
-    assert mock_create.call_args.kwargs["labels"] == ["bug", "auto-reported"]
+    # With no metadata header in the summarizer output, labels default to
+    # just "auto-reported" — the old unconditional "bug" label is now
+    # category-driven and comes from Gemini's proposed labels.
+    assert mock_create.call_args.kwargs["labels"] == ["auto-reported"]
 
 
 def test_handle_bugreport_quit_returns_handled(populated_store, workspace):
@@ -642,3 +648,255 @@ def test_serialize_content_labels_code_execution_result():
     lines = _serialize_content(msg, idx=1)
     assert "code_execution_result" in lines[0]
     assert "<unrecognized part>" not in lines[0]
+
+
+# ── _parse_metadata_header ───────────────────────────────────────────
+
+
+def test_parse_metadata_header_valid():
+    summary = (
+        "```yaml\n"
+        "outcome: notable_issue\n"
+        'title: "[issue] intake reused today\'s date"\n'
+        "labels:\n"
+        "  - notable-issue\n"
+        "  - prompt-issue\n"
+        "  - intake\n"
+        "```\n"
+        "\n"
+        "## What the user was doing\n"
+        "Running /intake on a new client.\n"
+    )
+    metadata, body = _parse_metadata_header(summary)
+    assert metadata["outcome"] == "notable_issue"
+    assert metadata["title"] == "[issue] intake reused today's date"
+    assert metadata["labels"] == ["notable-issue", "prompt-issue", "intake"]
+    # Body has the header stripped but preserves the rest.
+    assert body.startswith("## What the user was doing")
+    assert "Running /intake on a new client." in body
+
+
+def test_parse_metadata_header_no_header_returns_original():
+    summary = "## What went wrong\nA thing broke.\n"
+    metadata, body = _parse_metadata_header(summary)
+    assert metadata == {}
+    assert body == summary
+
+
+def test_parse_metadata_header_unclosed_fence_returns_original():
+    """A fence opened but never closed is malformed — fall back gracefully."""
+    summary = "```yaml\noutcome: clean\n\n## Summary\nNo issues.\n"
+    metadata, body = _parse_metadata_header(summary)
+    assert metadata == {}
+    assert body == summary
+
+
+def test_parse_metadata_header_missing_fields_still_returns_what_it_found():
+    """Partial metadata (only outcome) is preserved; labels default empty."""
+    summary = "```yaml\noutcome: clean\n```\n\n## Summary\nNo issues.\n"
+    metadata, body = _parse_metadata_header(summary)
+    assert metadata.get("outcome") == "clean"
+    assert "labels" not in metadata
+    assert body.startswith("## Summary")
+
+
+def test_parse_metadata_header_strips_single_quotes():
+    summary = (
+        "```yaml\n"
+        "outcome: clean\n"
+        "title: '[clean] a simple title'\n"
+        "```\n"
+    )
+    metadata, _ = _parse_metadata_header(summary)
+    assert metadata["title"] == "[clean] a simple title"
+
+
+def test_parse_metadata_header_tolerates_leading_whitespace():
+    """Gemini occasionally emits a leading blank line — parser should cope."""
+    summary = (
+        "\n\n```yaml\n"
+        "outcome: clean\n"
+        "```\n"
+        "## Summary\nok.\n"
+    )
+    metadata, body = _parse_metadata_header(summary)
+    assert metadata["outcome"] == "clean"
+    assert "## Summary" in body
+
+
+# ── _filter_labels ───────────────────────────────────────────────────
+
+
+def test_filter_labels_keeps_only_allowlist():
+    proposed = ["clean", "positive-feedback", "not-a-real-label", "wellness-assessment"]
+    assert _filter_labels(proposed) == ["clean", "positive-feedback", "wellness-assessment"]
+
+
+def test_filter_labels_dedupes_and_preserves_order():
+    proposed = ["clean", "intake", "clean", "intake", "session"]
+    assert _filter_labels(proposed) == ["clean", "intake", "session"]
+
+
+def test_filter_labels_ignores_non_strings():
+    proposed = ["clean", 42, None, "session", {"bad": "dict"}]
+    assert _filter_labels(proposed) == ["clean", "session"]
+
+
+def test_filter_labels_strips_whitespace():
+    assert _filter_labels(["  clean  ", "  session"]) == ["clean", "session"]
+
+
+# ── single-source-of-truth parity ────────────────────────────────────
+
+
+def test_prompt_lists_every_allowed_label_except_handler_only():
+    """Every non-handler label in ALLOWED_LABELS must appear verbatim in the
+    prompt text, so Gemini is told about every label the filter accepts."""
+    from cfi_ai.prompts.bugreport import ALLOWED_LABELS, BUGREPORT_SUMMARY_PROMPT
+    for label in ALLOWED_LABELS - {"auto-reported"}:
+        assert f"`{label}`" in BUGREPORT_SUMMARY_PROMPT, (
+            f"label {label!r} is in ALLOWED_LABELS but missing from the "
+            f"prompt — Gemini will never propose it"
+        )
+
+
+def test_allowed_labels_matches_prompt_groups():
+    """ALLOWED_LABELS must be exactly the union of _LABEL_GROUPS plus the
+    handler-only label set. Guards against future drift if someone adds a
+    label to one and forgets the other."""
+    from cfi_ai.prompts.bugreport import ALLOWED_LABELS, _LABEL_GROUPS
+    from_groups = {label for _, labels in _LABEL_GROUPS for label in labels}
+    assert ALLOWED_LABELS == from_groups | {"auto-reported"}
+
+
+# ── _detect_active_maps ──────────────────────────────────────────────
+
+
+def test_detect_active_maps_finds_slash_invocations():
+    messages = [
+        types.Content(role="user", parts=[types.Part.from_text(text="/intake")]),
+        types.Content(role="model", parts=[types.Part.from_text(text="ok")]),
+        types.Content(
+            role="user", parts=[types.Part.from_text(text="/session draft note")]
+        ),
+    ]
+    assert _detect_active_maps(messages) == ["intake", "session"]
+
+
+def test_detect_active_maps_ignores_unknown_slashes():
+    """`/help` is a real map but not in VALID_MAPS (it's not a clinical map);
+    `/foo` is not a map at all. Both should be skipped."""
+    messages = [
+        types.Content(role="user", parts=[types.Part.from_text(text="/help")]),
+        types.Content(role="user", parts=[types.Part.from_text(text="/foo")]),
+    ]
+    assert _detect_active_maps(messages) == []
+
+
+def test_detect_active_maps_dedupes_preserving_first_seen_order():
+    messages = [
+        types.Content(role="user", parts=[types.Part.from_text(text="/session a")]),
+        types.Content(role="user", parts=[types.Part.from_text(text="/intake b")]),
+        types.Content(role="user", parts=[types.Part.from_text(text="/session c")]),
+    ]
+    assert _detect_active_maps(messages) == ["session", "intake"]
+
+
+def test_detect_active_maps_ignores_model_turns():
+    """A model message containing '/intake' in text is not a user invocation."""
+    messages = [
+        types.Content(
+            role="model",
+            parts=[types.Part.from_text(text="I could run /intake here.")],
+        ),
+    ]
+    assert _detect_active_maps(messages) == []
+
+
+# ── handler integration with metadata ────────────────────────────────
+
+
+def test_handle_bugreport_uses_gemini_proposed_title_and_labels(
+    populated_store, workspace
+):
+    """When the summarizer returns a metadata header, the handler uses its
+    proposed title (outcome-prefixed) and the filtered label set."""
+    ui = MagicMock()
+    summary_with_header = (
+        "```yaml\n"
+        "outcome: notable_issue\n"
+        'title: "[issue] apply_patch desync on progress note"\n'
+        "labels:\n"
+        "  - notable-issue\n"
+        "  - app-bug\n"
+        "  - apply-patch\n"
+        "```\n"
+        "\n"
+        "## What went wrong\n"
+        "apply_patch failed with old_text mismatch.\n"
+    )
+    with patch("cfi_ai.maps.bugreport.Config.load", return_value=_make_config()), patch(
+        "cfi_ai.maps.bugreport._call_summarizer", return_value=summary_with_header
+    ), patch(
+        "cfi_ai.maps.bugreport._prompt_action", return_value="p"
+    ), patch(
+        "cfi_ai.maps.bugreport._confirm_post", return_value=True
+    ), patch(
+        "cfi_ai.maps.bugreport.discover_token", return_value="tok"
+    ), patch(
+        "cfi_ai.maps.bugreport.create_issue",
+        return_value="https://github.com/o/r/issues/7",
+    ) as mock_create:
+        result = handle_bugreport(
+            args=None, ui=ui, workspace=workspace, session_store=populated_store
+        )
+    assert result.handled is True
+    kwargs = mock_create.call_args.kwargs
+    assert kwargs["title"] == "[issue] apply_patch desync on progress note"
+    # "auto-reported" is always first; Gemini's filtered labels follow.
+    assert kwargs["labels"] == [
+        "auto-reported", "notable-issue", "app-bug", "apply-patch"
+    ]
+    # The metadata header should be stripped from the body before posting.
+    assert "```yaml" not in kwargs["body"]
+    assert "## What went wrong" in kwargs["body"]
+
+
+def test_handle_bugreport_user_description_wins_over_gemini_title(
+    populated_store, workspace
+):
+    """Explicit /bugreport <description> overrides the Gemini-proposed title."""
+    ui = MagicMock()
+    summary_with_header = (
+        "```yaml\n"
+        "outcome: broken\n"
+        'title: "[broken] gemini title"\n'
+        "labels:\n"
+        "  - broken\n"
+        "  - llm-error\n"
+        "```\n"
+        "\n"
+        "body text.\n"
+    )
+    with patch("cfi_ai.maps.bugreport.Config.load", return_value=_make_config()), patch(
+        "cfi_ai.maps.bugreport._call_summarizer", return_value=summary_with_header
+    ), patch(
+        "cfi_ai.maps.bugreport._prompt_action", return_value="p"
+    ), patch(
+        "cfi_ai.maps.bugreport._confirm_post", return_value=True
+    ), patch(
+        "cfi_ai.maps.bugreport.discover_token", return_value="tok"
+    ), patch(
+        "cfi_ai.maps.bugreport.create_issue",
+        return_value="https://github.com/o/r/issues/8",
+    ) as mock_create:
+        handle_bugreport(
+            args="my custom bug title",
+            ui=ui,
+            workspace=workspace,
+            session_store=populated_store,
+        )
+    assert mock_create.call_args.kwargs["title"] == "my custom bug title"
+    # Labels still come from Gemini (user override only affects title).
+    assert "broken" in mock_create.call_args.kwargs["labels"]
+    assert "llm-error" in mock_create.call_args.kwargs["labels"]

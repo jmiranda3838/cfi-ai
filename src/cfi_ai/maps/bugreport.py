@@ -26,8 +26,10 @@ from google.genai import types
 
 from cfi_ai.config import Config
 from cfi_ai.github_issue import create_issue, discover_token
-from cfi_ai.maps import MapResult, register_map
-from cfi_ai.prompts.bugreport import BUGREPORT_SUMMARY_PROMPT
+from cfi_ai.maps import MapResult, parse_map_invocation, register_map
+from cfi_ai.prompts.bugreport import ALLOWED_LABELS, BUGREPORT_SUMMARY_PROMPT
+from cfi_ai.prompts.render import VALID_MAPS, render_map_prompt
+from cfi_ai.prompts.system import build_system_prompt
 from cfi_ai.sessions import SessionStore
 
 if TYPE_CHECKING:
@@ -36,7 +38,6 @@ if TYPE_CHECKING:
 
 
 _MAX_TITLE_LEN = 70
-_LABELS = ["bug", "auto-reported"]
 
 _SUMMARY_MAX_OUTPUT_TOKENS = 8192
 _SUMMARY_TIMEOUT_MS = 240_000
@@ -103,11 +104,79 @@ def _serialize_content(msg: types.Content, idx: int) -> list[str]:
     return lines
 
 
+def _detect_active_maps(messages: list[types.Content]) -> list[str]:
+    """Scan user messages for slash-map invocations, return unique map names
+    that appear in VALID_MAPS. Preserves first-seen order so the rendered
+    payload matches the chronological flow of the session."""
+    seen: list[str] = []
+    for msg in messages:
+        if msg.role != "user":
+            continue
+        for part in msg.parts or []:
+            text = getattr(part, "text", None)
+            if not text:
+                continue
+            parsed = parse_map_invocation(text)
+            if parsed is None:
+                continue
+            name = parsed[0]
+            if name in VALID_MAPS and name not in seen:
+                seen.append(name)
+    return seen
+
+
+def _build_prompts_section(
+    messages: list[types.Content],
+    config: Config,
+    workspace: Workspace,
+) -> str:
+    """Build the `## Prompts in effect` section injected at the top of the
+    transcript payload. Without this, Gemini can't fairly judge whether
+    friction was a PROMPT_ISSUE vs. an LLM_ERROR — it would be guessing at
+    what the model was told."""
+    try:
+        system_prompt = build_system_prompt(
+            workspace.summary(),
+            grounding_enabled=config.grounding_enabled,
+        )
+    except Exception as e:  # workspace.summary() can hit the filesystem
+        system_prompt = f"(could not render system prompt: {e})"
+
+    lines: list[str] = [
+        "## Prompts in effect",
+        "",
+        "### Base system prompt",
+        "",
+        "```",
+        system_prompt,
+        "```",
+        "",
+    ]
+
+    for map_name in _detect_active_maps(messages):
+        try:
+            rendered = render_map_prompt(map_name)
+        except ValueError:
+            continue
+        lines.extend([
+            f"### Active map prompt: /{map_name}",
+            "",
+            "```",
+            rendered,
+            "```",
+            "",
+        ])
+
+    return "\n".join(lines)
+
+
 def _build_transcript(
     messages: list[types.Content],
     session_id: str,
     first_user_message: str,
     usage: dict | None,
+    config: Config,
+    workspace: Workspace,
 ) -> str:
     header = [
         f"session_id: {session_id}",
@@ -123,10 +192,104 @@ def _build_transcript(
             f"total_output={usage.get('total_output', '?')} "
             f"total_cost_usd={usage.get('total_cost_usd', '?')}"
         )
-    body_lines: list[str] = ["## Session metadata", *header, "", "## Conversation"]
+    body_lines: list[str] = [
+        _build_prompts_section(messages, config, workspace),
+        "## Session metadata",
+        *header,
+        "",
+        "## Conversation",
+    ]
     for idx, msg in enumerate(messages, 1):
         body_lines.extend(_serialize_content(msg, idx))
     return "\n".join(body_lines)
+
+
+def _parse_metadata_header(summary: str) -> tuple[dict, str]:
+    """Extract a leading fenced YAML block from Gemini's summary output.
+
+    The prompt tells Gemini to emit a small, flat YAML block (outcome, title,
+    labels) as the first thing in the response. We don't take a pyyaml
+    dependency for this — the schema is tiny and line-based. On any parse
+    difficulty, return ({}, summary) so the handler falls back to the current
+    title/label logic and still posts.
+
+    Returns (metadata_dict, body_without_header).
+    """
+    stripped = summary.lstrip()
+    leading_whitespace = summary[: len(summary) - len(stripped)]
+    if not stripped.startswith("```yaml") and not stripped.startswith("```yml"):
+        return ({}, summary)
+
+    lines = stripped.splitlines()
+    # Drop the opening fence line.
+    body = lines[1:]
+    end_idx = None
+    for i, line in enumerate(body):
+        if line.strip() == "```":
+            end_idx = i
+            break
+    if end_idx is None:
+        return ({}, summary)
+
+    yaml_lines = body[:end_idx]
+    remainder_lines = body[end_idx + 1 :]
+    # Preserve a leading blank line between the block and the body for
+    # readable rendering once the header is stripped.
+    remainder = leading_whitespace + "\n".join(remainder_lines).lstrip("\n")
+
+    metadata: dict = {}
+    labels: list[str] = []
+    in_labels = False
+    for raw in yaml_lines:
+        if not raw.strip():
+            continue
+        # A list item under `labels:` is indented and starts with `- `.
+        if raw.lstrip().startswith("- ") and in_labels:
+            item = raw.lstrip()[2:].strip().strip('"').strip("'")
+            if item:
+                labels.append(item)
+            continue
+        # Top-level scalar key. Anything without a ':' before a value we
+        # recognize is not part of this flat schema — skip.
+        if ":" not in raw:
+            in_labels = False
+            continue
+        key, _, value = raw.partition(":")
+        key = key.strip()
+        value = value.strip()
+        if key == "labels":
+            in_labels = True
+            # An inline labels value would be non-empty here; our prompt emits
+            # the list form, so an inline value is unexpected but we handle it
+            # defensively by ignoring it.
+            continue
+        in_labels = False
+        # Strip matching surrounding quotes on scalar values.
+        if len(value) >= 2 and value[0] == value[-1] and value[0] in ('"', "'"):
+            value = value[1:-1]
+        if key in ("outcome", "title") and value:
+            metadata[key] = value
+
+    if labels:
+        metadata["labels"] = labels
+
+    if not metadata:
+        return ({}, summary)
+    return (metadata, remainder)
+
+
+def _filter_labels(proposed: list[str]) -> list[str]:
+    """Keep only labels in the closed vocabulary; dedupe; preserve order."""
+    seen: set[str] = set()
+    result: list[str] = []
+    for label in proposed:
+        if not isinstance(label, str):
+            continue
+        normalized = label.strip()
+        if normalized in ALLOWED_LABELS and normalized not in seen:
+            seen.add(normalized)
+            result.append(normalized)
+    return result
 
 
 def _normalize_finish_reason(fr) -> str:
@@ -357,7 +520,12 @@ def handle_bugreport(
 
     ui.print_info(f"Loading conversation ({len(messages)} turns)...")
     transcript = _build_transcript(
-        messages, session_store.session_id, first_user_message, usage
+        messages,
+        session_store.session_id,
+        first_user_message,
+        usage,
+        config,
+        workspace,
     )
 
     ui.print_info("Summarizing via Gemini (this may take a moment)...")
@@ -366,8 +534,27 @@ def handle_bugreport(
     except Exception as e:
         return MapResult(error=f"Summarizer call failed: {e}")
 
-    title = _build_title(args, first_user_message)
+    metadata, bug_summary = _parse_metadata_header(bug_summary)
+
+    # Title resolution: explicit /bugreport <description> wins (user override).
+    # Else the Gemini-proposed title. Else the legacy first-user-message title.
     user_description = args.strip() if args and args.strip() else ""
+    if user_description:
+        title = _build_title(args, first_user_message)
+    elif metadata.get("title"):
+        raw = metadata["title"].strip()
+        if len(raw) > _MAX_TITLE_LEN:
+            raw = raw[: _MAX_TITLE_LEN - 1].rstrip() + "…"
+        title = raw
+    else:
+        title = _build_title(None, first_user_message)
+
+    # Labels: always include "auto-reported"; merge Gemini's filtered proposals.
+    labels: list[str] = ["auto-reported"]
+    for label in _filter_labels(metadata.get("labels", [])):
+        if label not in labels:
+            labels.append(label)
+
     body = _build_issue_body(
         user_description=user_description,
         bug_summary=bug_summary,
@@ -409,7 +596,7 @@ def handle_bugreport(
                     repo=config.bugreport_repo,
                     title=title,
                     body=body,
-                    labels=_LABELS,
+                    labels=labels,
                     token=token,
                 )
             except RuntimeError as e:
