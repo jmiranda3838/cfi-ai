@@ -47,7 +47,7 @@ def _resolve_input_path(raw: str, workspace) -> tuple[Path | None, str | None]:
     # backslashes followed by alphanumerics — that would corrupt
     # Windows-style paths like 'C:\\Users\\name'.
     if "\\" in s:
-        unescaped = re.sub(r"\\([ \t'\"()\[\]&;|<>$#`!*?])", r"\1", s)
+        unescaped = re.sub(r"\\([ \t'\"()\[\],\-&;|<>$#`!*?])", r"\1", s)
         if unescaped != s:
             candidates.append(unescaped)
 
@@ -98,7 +98,12 @@ class AttachPathTool(BaseTool):
         )
 
     def execute(self, workspace, client=None, **kwargs) -> str | tuple[str, list[types.Part]]:
-        raw = kwargs["path"]
+        raw = kwargs.get("path")
+        if not raw:
+            return (
+                "Error: attach_path requires a 'path' argument (string). "
+                "Re-emit the call with the path you want to load."
+            )
         target, err = _resolve_input_path(raw, workspace)
         if target is None:
             if err is not None:

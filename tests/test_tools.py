@@ -31,6 +31,39 @@ def test_write_file_rejects_overwrite(tmp_path):
     assert (tmp_path / "exist.txt").read_text() == "original"
 
 
+def test_write_file_missing_path_returns_actionable_error(tmp_path):
+    """Regression for issue #77 Turn 18-19: a call missing 'path' used to
+    return the opaque string 'Error: path' via KeyError. It should now
+    name both required args so the model can self-correct."""
+    ws = Workspace(str(tmp_path))
+    result = WriteFileTool().execute(ws, content="hello")
+    assert result.startswith("Error:")
+    assert "path" in result and "content" in result
+    assert "Missing: path" in result
+
+
+def test_write_file_missing_content_returns_actionable_error(tmp_path):
+    ws = Workspace(str(tmp_path))
+    result = WriteFileTool().execute(ws, path="out.txt")
+    assert result.startswith("Error:")
+    assert "Missing: content" in result
+
+
+def test_write_file_allows_empty_content(tmp_path):
+    """An empty string is a valid file body and must be accepted."""
+    ws = Workspace(str(tmp_path))
+    result = WriteFileTool().execute(ws, path="empty.txt", content="")
+    assert "Wrote 0 characters" in result
+    assert (tmp_path / "empty.txt").read_text() == ""
+
+
+def test_attach_path_missing_path_returns_actionable_error(tmp_path):
+    ws = Workspace(str(tmp_path))
+    result = AttachPathTool().execute(ws)
+    assert result.startswith("Error:")
+    assert "path" in result
+
+
 def test_registry():
     api_tools = tools.get_api_tools()
     names = {fd.name for fd in api_tools[0].function_declarations}

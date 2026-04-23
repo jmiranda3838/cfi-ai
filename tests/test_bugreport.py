@@ -26,6 +26,7 @@ from cfi_ai.maps.bugreport import (
     _edit_in_editor,
     _normalize_finish_reason,
     _resolve_editor_command,
+    _serialize_content,
     handle_bugreport,
 )
 from cfi_ai.sessions import SessionStore
@@ -577,3 +578,67 @@ def test_handle_bugreport_quit_returns_handled(populated_store, workspace):
             args=None, ui=ui, workspace=workspace, session_store=populated_store
         )
     assert result.handled is True
+
+
+# ── _serialize_content: Gemini 3 part coverage ───────────────────────
+
+
+def test_serialize_content_labels_thought_parts_before_text():
+    """Regression for issue #77 Turn 11: a Gemini 3 thought part (thought=True,
+    with text) must be labeled as 'thought', not as ordinary model output."""
+    msg = types.Content(
+        role="model",
+        parts=[types.Part(text="internal reasoning", thought=True)],
+    )
+    lines = _serialize_content(msg, idx=1)
+    assert len(lines) == 1
+    assert "thought" in lines[0]
+    assert "internal reasoning" in lines[0]
+
+
+def test_serialize_content_labels_thought_signature():
+    """A standalone thought_signature part (Gemini 3 reasoning-continuity
+    token) should be labeled, not flagged as <unrecognized part>."""
+    msg = types.Content(
+        role="model",
+        parts=[types.Part(thought_signature=b"\x01\x02\x03\x04")],
+    )
+    lines = _serialize_content(msg, idx=1)
+    assert len(lines) == 1
+    assert "thought_signature" in lines[0]
+    assert "4 bytes" in lines[0]
+    assert "<unrecognized part>" not in lines[0]
+
+
+def test_serialize_content_labels_executable_code():
+    msg = types.Content(
+        role="model",
+        parts=[
+            types.Part(
+                executable_code=types.ExecutableCode(
+                    language="PYTHON", code="print(1)"
+                )
+            )
+        ],
+    )
+    lines = _serialize_content(msg, idx=1)
+    assert len(lines) == 1
+    assert "executable_code" in lines[0]
+    assert "print(1)" in lines[0]
+    assert "<unrecognized part>" not in lines[0]
+
+
+def test_serialize_content_labels_code_execution_result():
+    msg = types.Content(
+        role="model",
+        parts=[
+            types.Part(
+                code_execution_result=types.CodeExecutionResult(
+                    outcome="OUTCOME_OK", output="1"
+                )
+            )
+        ],
+    )
+    lines = _serialize_content(msg, idx=1)
+    assert "code_execution_result" in lines[0]
+    assert "<unrecognized part>" not in lines[0]

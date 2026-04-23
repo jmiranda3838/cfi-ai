@@ -125,6 +125,20 @@ session transcript should include speaker labels (e.g. "Therapist:", \
 "Client:") — capture dialogue faithfully including filler words, pauses noted \
 in brackets, and emotional tone observations in brackets where clinically relevant.
 
+**Re-running intake for an existing client.** If the client directory \
+already existed when you checked it in Phase 1 step 3, today's target paths \
+above may already be on disk from an earlier run. For each write:
+- To replace the file entirely (e.g. regenerating from a newer recording), \
+pass `overwrite=true` to `write_file`.
+- To amend specific sections without rewriting the whole file, use \
+`apply_patch` instead of `write_file`.
+- If you're not sure whether a target exists, a single \
+`run_command ls clients/<client-id>/sessions/` (or similar) resolves it \
+before you emit the writes.
+
+Don't let a collision error on one file abort the whole batch — plan the \
+whole sequence with the right flags up front.
+
 ## File Structure
 
 Save files under `clients/<client-id>/` using this layout:

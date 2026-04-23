@@ -233,3 +233,70 @@ def test_stream_result_captures_usage_metadata():
     text = "".join(sr.text_chunks())
     assert text == "hello world"
     assert sr.usage_metadata is usage
+
+
+def test_coalesced_parts_merges_adjacent_text_parts():
+    """Regression for issue #77 Turn 36: when Gemini streams a long answer
+    as many small text deltas, the stored representation should collapse
+    them into a single text part rather than preserving N fragments."""
+    from cfi_ai.client import StreamResult
+    from google.genai import types
+
+    sr = StreamResult(iter([]), request_id="test")
+    sr._parts = [
+        types.Part(text="Hel"),
+        types.Part(text="lo "),
+        types.Part(text="world"),
+    ]
+    merged = sr.coalesced_parts
+    assert len(merged) == 1
+    assert merged[0].text == "Hello world"
+
+
+def test_coalesced_parts_preserves_non_text_boundaries():
+    """Adjacent text parts merge, but function_call and other part types
+    must stay as separate parts and break the coalescing run."""
+    from cfi_ai.client import StreamResult
+    from google.genai import types
+
+    sr = StreamResult(iter([]), request_id="test")
+    sr._parts = [
+        types.Part(text="before "),
+        types.Part(text="call "),
+        types.Part(function_call=types.FunctionCall(name="write_file", args={})),
+        types.Part(text="after "),
+        types.Part(text="call"),
+    ]
+    merged = sr.coalesced_parts
+    assert len(merged) == 3
+    assert merged[0].text == "before call "
+    assert merged[1].function_call is not None
+    assert merged[1].function_call.name == "write_file"
+    assert merged[2].text == "after call"
+
+
+def test_coalesced_parts_does_not_merge_thought_into_text():
+    """A thought=True text part carries different semantics than ordinary
+    model output; merging the two would lose the reasoning distinction."""
+    from cfi_ai.client import StreamResult
+    from google.genai import types
+
+    sr = StreamResult(iter([]), request_id="test")
+    sr._parts = [
+        types.Part(text="reasoning bit", thought=True),
+        types.Part(text="normal "),
+        types.Part(text="answer"),
+    ]
+    merged = sr.coalesced_parts
+    assert len(merged) == 2
+    assert merged[0].thought is True
+    assert merged[0].text == "reasoning bit"
+    assert merged[1].text == "normal answer"
+    assert not getattr(merged[1], "thought", None)
+
+
+def test_coalesced_parts_empty_when_no_parts():
+    from cfi_ai.client import StreamResult
+
+    sr = StreamResult(iter([]), request_id="test")
+    assert sr.coalesced_parts == []

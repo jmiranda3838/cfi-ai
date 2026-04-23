@@ -646,8 +646,12 @@ def _run_main_loop(
 
             has_parts = bool(stream_result.parts)
             if has_parts:
-                messages.append(types.Content(role="model", parts=stream_result.parts))
-                _log.debug("inner_loop model_turn_appended parts=%d", len(stream_result.parts))
+                merged_parts = stream_result.coalesced_parts
+                messages.append(types.Content(role="model", parts=merged_parts))
+                _log.debug(
+                    "inner_loop model_turn_appended raw_parts=%d merged_parts=%d",
+                    len(stream_result.parts), len(merged_parts),
+                )
                 # Render grounding citations only for turns that actually produced
                 # something — skip on aborted/empty turns where the loop is about to bail.
                 _render_grounding_sources(ui, stream_result, open_browser=config.grounding_open_browser)

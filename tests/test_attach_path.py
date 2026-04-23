@@ -137,6 +137,21 @@ def test_relative_with_escaped_spaces(tmp_path):
     assert "hi" in result
 
 
+def test_absolute_with_escaped_commas_and_spaces(tmp_path):
+    """Regression for issue #77 Turn 7: a path like
+    '2900 Bristol St, Ste C-208 57.m4a' pasted with shell-escaped
+    spaces AND commas (\\, and \\ ) must resolve to the real file."""
+    name = "2900 Bristol St, Ste C-208 57.txt"
+    f = tmp_path / name
+    f.write_text("resolved")
+    ws = Workspace(str(tmp_path / "other"))
+    (tmp_path / "other").mkdir()
+    escaped = str(f).replace(" ", "\\ ").replace(",", "\\,")
+    result = AttachPathTool().execute(ws, path=escaped)
+    assert isinstance(result, str)
+    assert "resolved" in result
+
+
 def test_absolute_with_tilde_expansion(tmp_path, monkeypatch):
     """The resolver must honor ~ expansion so the model can pass paths
     like ~/Desktop/foo.png as advertised in the tool description."""

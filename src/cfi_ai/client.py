@@ -308,6 +308,57 @@ class StreamResult:
         """All accumulated parts. Available after text_chunks() is exhausted."""
         return self._parts
 
+    @staticmethod
+    def _is_pure_text(p: types.Part) -> bool:
+        """A part is eligible for coalescing only if its sole populated field
+        is ``text``. Thought parts, thought signatures, function calls,
+        inline data, etc. must stay as separate parts because they carry
+        semantics that would be lost if merged into a text blob."""
+        if not p.text:
+            return False
+        if getattr(p, "thought", None):
+            return False
+        if getattr(p, "thought_signature", None):
+            return False
+        if p.function_call is not None or p.function_response is not None:
+            return False
+        if p.inline_data is not None:
+            return False
+        if getattr(p, "executable_code", None) is not None:
+            return False
+        if getattr(p, "code_execution_result", None) is not None:
+            return False
+        if getattr(p, "file_data", None) is not None:
+            return False
+        return True
+
+    @property
+    def coalesced_parts(self) -> list[types.Part]:
+        """``parts`` with adjacent pure-text parts merged into single parts.
+
+        Gemini can stream a long answer as many small text deltas — preserving
+        them one-to-one bloats session JSON and makes downstream consumers
+        (bug reports, transcripts) treat a single response as fragmented
+        output. Coalescing fixes the representation without affecting the
+        live streaming experience, which still yields per-chunk.
+        """
+        merged: list[types.Part] = []
+        buf: list[str] = []
+
+        def _flush() -> None:
+            if buf:
+                merged.append(types.Part.from_text(text="".join(buf)))
+                buf.clear()
+
+        for p in self._parts:
+            if self._is_pure_text(p):
+                buf.append(p.text)
+            else:
+                _flush()
+                merged.append(p)
+        _flush()
+        return merged
+
     @property
     def function_calls(self) -> list[types.FunctionCall]:
         """Function call parts from the response."""

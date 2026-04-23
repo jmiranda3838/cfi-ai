@@ -50,8 +50,13 @@ def _serialize_content(msg: types.Content, idx: int) -> list[str]:
         lines.append(f"[turn {idx} - {role}]: (empty)")
         return lines
     for part in parts:
-        if part.text:
-            lines.append(f"[turn {idx} - {role}]: {part.text}")
+        # Check `thought` before `text`: Gemini 3 thought parts carry their
+        # reasoning in `part.text` with `part.thought=True`, and we want to
+        # label those distinctly so the summarizer doesn't mistake them for
+        # normal model output.
+        if getattr(part, "thought", None):
+            body = part.text or "(no text)"
+            lines.append(f"[turn {idx} - model thought]: {body}")
         elif part.function_call is not None:
             name = part.function_call.name or "?"
             args = dict(part.function_call.args or {})
@@ -68,10 +73,31 @@ def _serialize_content(msg: types.Content, idx: int) -> list[str]:
             except (TypeError, ValueError):
                 resp_str = str(resp)
             lines.append(f"[turn {idx} - tool_result {name}]: {resp_str}")
+        elif part.text:
+            lines.append(f"[turn {idx} - {role}]: {part.text}")
         elif part.inline_data is not None:
             mime = part.inline_data.mime_type or "?"
             size = len(part.inline_data.data) if part.inline_data.data else 0
             lines.append(f"[turn {idx} - {role} inline_data]: {mime}, {size} bytes")
+        elif getattr(part, "executable_code", None) is not None:
+            lang = getattr(part.executable_code, "language", None) or "?"
+            code = getattr(part.executable_code, "code", None) or ""
+            lines.append(f"[turn {idx} - {role} executable_code {lang}]: {code}")
+        elif getattr(part, "code_execution_result", None) is not None:
+            outcome = getattr(part.code_execution_result, "outcome", None) or "?"
+            output = getattr(part.code_execution_result, "output", None) or ""
+            lines.append(f"[turn {idx} - {role} code_execution_result {outcome}]: {output}")
+        elif getattr(part, "file_data", None) is not None:
+            uri = getattr(part.file_data, "file_uri", None) or "?"
+            mime = getattr(part.file_data, "mime_type", None) or "?"
+            lines.append(f"[turn {idx} - {role} file_data]: {mime} @ {uri}")
+        elif getattr(part, "thought_signature", None):
+            size = len(part.thought_signature)
+            lines.append(f"[turn {idx} - model thought_signature]: {size} bytes")
+        elif getattr(part, "video_metadata", None) is not None:
+            lines.append(f"[turn {idx} - {role} video_metadata]: present")
+        elif getattr(part, "media_resolution", None) is not None:
+            lines.append(f"[turn {idx} - {role} media_resolution]: {part.media_resolution}")
         else:
             lines.append(f"[turn {idx} - {role} other]: <unrecognized part>")
     return lines

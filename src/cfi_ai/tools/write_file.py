@@ -35,7 +35,17 @@ class WriteFileTool(BaseTool):
         )
 
     def execute(self, workspace, client=None, **kwargs) -> str:
-        rel = kwargs["path"]
+        rel = kwargs.get("path")
+        if "content" not in kwargs:
+            return (
+                "Error: write_file requires both 'path' and 'content' arguments. "
+                "Missing: content. Re-emit the call with both arguments."
+            )
+        if not rel:
+            return (
+                "Error: write_file requires both 'path' and 'content' arguments. "
+                "Missing: path. Re-emit the call with both arguments."
+            )
         content = kwargs["content"]
         overwrite = kwargs.get("overwrite", False)
         target = workspace.validate_path(rel)
