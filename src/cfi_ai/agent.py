@@ -843,7 +843,12 @@ def _run_main_loop(
                         result_slots[i].append(
                             types.Part.from_function_response(
                                 name=fc.name,
-                                response={"error": "User rejected this operation."},
+                                response={"error": (
+                                    "User rejected this edit. Do not retry the same "
+                                    "change — re-read the file to see its actual "
+                                    "structure, or use interview to ask the user "
+                                    "where this content should go."
+                                )},
                             )
                         )
 

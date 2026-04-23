@@ -12,7 +12,9 @@ class ApplyPatchTool(BaseTool):
                 "Apply one or more search-and-replace edits to an existing file. "
                 "Each edit's old_text must appear exactly once unless replace_all is set. "
                 "Edits are applied sequentially — later edits see the result of earlier ones. "
-                "The operation is transactional: if any edit fails, no changes are written."
+                "The operation is transactional: if any edit fails, no changes are written. "
+                "Before patching a file you have not already read or written in this session, "
+                "read its current contents so old_text matches reality."
             ),
             input_schema={
                 "type": "object",

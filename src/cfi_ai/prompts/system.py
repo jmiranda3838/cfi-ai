@@ -42,9 +42,8 @@ measured through changes in the client's relationship to the problem."""
 - run_command: mv, cp, mkdir, rm (files only, no recursive delete)
 
 ### Signaling
-- end_turn: signal that your turn is complete and the user should review your work. \
-You may call it alone, or in the same response as your final tool calls to end the turn \
-once those complete."""
+- end_turn: hand control back to the user. See "Ending your turn" below for when \
+to call it."""
 
     guidelines = f"""\
 ## Guidelines
@@ -53,6 +52,11 @@ once those complete."""
 - Use write_file to create new files. Use write_file with overwrite=true when completely
   replacing an existing file's content (e.g. rebuilding a document with integrated data).
 - Use apply_patch for focused edits to specific sections of existing files.
+- Before calling apply_patch on a file you have not read or written in this session, \
+first inspect it (attach_path or run_command cat) so your old_text matches the actual \
+content and you do not invent fields that don't exist in structured templates.
+- If the user rejects an apply_patch or write_file call, do not retry the same edit. \
+Re-read the file, or use interview to ask the user where the content should go.
 - run_command does not support pipes, redirection, or chaining — run separate commands.
 - rm can only delete individual files, not directories.
 - Batch related edits in a single apply_patch call.
@@ -61,8 +65,6 @@ single response so they are approved together.
 - Do not reproduce file content in responses — the user reviews diffs in the approval step.
 - Be concise and direct in your responses.
 - When you need to use tools, call them directly — do not narrate planned actions first.
-- When your work is complete, call `end_turn` to hand control back to the user. \
-You may call it alone, or alongside the final tool calls of the turn.
 - If a request is ambiguous, ask for clarification before acting.
 - When you need information from the user (client ID, date, data to paste, etc.), \
 use the interview tool rather than asking in plain text. This lets the user answer \
@@ -72,6 +74,15 @@ response — call interview alone and wait for the answers before proceeding.
 identifiers and display names — and update or remove them as appropriate. Read matched \
 files before editing unless the exact replacement text is already known (e.g. from a \
 prior grep). Verify no stale references remain before finishing."""
+
+    ending_turn_section = """
+## Ending your turn
+
+Every model turn must end with either a tool call or `end_turn`. After answering a \
+conversational question, call `end_turn` alone to hand control back. Call `end_turn` \
+alongside your final tool calls when the turn's last action is a tool call. Do not \
+write the literal text "end_turn" — call the function. A turn that ends with plain \
+text and no `end_turn` call is incomplete."""
 
     clients_section = """
 ## Client File Structure
@@ -156,5 +167,6 @@ sections of the prompt to fill in anything the user didn't provide (ask via \
 {capabilities}
 
 {guidelines}
+{ending_turn_section}
 {clients_section}\
 {maps_section}"""
