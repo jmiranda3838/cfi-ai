@@ -130,7 +130,9 @@ from the new TheraNest Dynamic Form layout.
 
 - #1 Participant(s) in Session — present with roles
 - #2 Type Of Note — should be "Intake"
-- #3 CPT Code Billed — must be 90791 for intake
+- #3 CPT Code Billed — must be `90791` for non-EAP intakes; must be `90834` \
+for Optum EWS/EAP intakes (90791 is NOT covered under EAP — see EWS-Specific \
+Checks)
 - #4 CPT Code Modifiers — see EWS-Specific Checks below
 - #5 Modality — In-Person / Video / Phone
 - #6 Authorization Number — see EWS-Specific Checks
@@ -234,6 +236,8 @@ is missing the Billing & Provider Information section entirely, flag as \
 Phone. `[FAIL]` if absent.
 - **CPT 90837 + Optum EWS = HARD BLOCK** — 90837 is NOT allowed under Optum \
 EWS. `[FAIL]` and recommend 90834.
+- **CPT 90791 + Optum EWS/EAP intake = HARD BLOCK** — 90791 is NOT covered \
+under Optum EWS/EAP. `[FAIL]` and recommend 90834 for the intake.
 - **Authorization Number (#6)** — must be populated for EWS clients. `[FAIL]` \
 if blank.
 - **Session # of Authorized Total (#7)** — must be populated for EWS clients. \

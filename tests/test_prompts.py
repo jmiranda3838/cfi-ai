@@ -370,6 +370,15 @@ def test_intake_progress_note_guidance_has_compliance_validation_block():
     assert "Optum EWS" in INTAKE_PROGRESS_NOTE_GUIDANCE
 
 
+def test_intake_progress_note_guidance_has_eap_cpt_rule():
+    """Intake generator must produce 90834 for EAP payers (see issue #83)."""
+    from cfi_ai.prompts.progress_note import INTAKE_PROGRESS_NOTE_GUIDANCE
+    assert "Optum EWS/EAP payers" in INTAKE_PROGRESS_NOTE_GUIDANCE
+    assert "90791 is NOT covered under Optum EWS/EAP" in INTAKE_PROGRESS_NOTE_GUIDANCE
+    assert "AND CPT = 90791" in INTAKE_PROGRESS_NOTE_GUIDANCE
+    assert "hardcoded to 90791" not in INTAKE_PROGRESS_NOTE_GUIDANCE
+
+
 def test_client_profile_guidance_has_billing_section():
     """Client profile guidance must include the Billing & Provider section."""
     from cfi_ai.prompts.client_profile import CLIENT_PROFILE_GUIDANCE
@@ -395,6 +404,13 @@ def test_compliance_prompt_checks_new_fields():
     assert "U5" in COMPLIANCE_PROMPT
     assert "90837" in COMPLIANCE_PROMPT
     assert "Billing & Provider" in COMPLIANCE_PROMPT
+
+
+def test_compliance_prompt_has_eap_intake_cpt_rule():
+    """Compliance auditor must handle EAP intake CPT exception (see issue #83)."""
+    from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
+    assert "90834` for Optum EWS/EAP intakes" in COMPLIANCE_PROMPT
+    assert "CPT 90791 + Optum EWS/EAP intake = HARD BLOCK" in COMPLIANCE_PROMPT
 
 
 def test_tp_review_references_new_field_names():

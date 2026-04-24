@@ -334,8 +334,9 @@ section into the corresponding TheraNest Dynamic Form field. Today's date is \
 {date}.
 
 This is an intake session — treatment plan goals are being **established**, \
-not tracked. CPT code is hardcoded to 90791. The Wellness Assessment is \
-ALWAYS administered at intake (Optum EWS requirement at session 1).
+not tracked. CPT code is `90791` for non-EAP intakes and `90834` for Optum \
+EWS/EAP intakes (90791 is NOT covered under EAP). The Wellness Assessment \
+is ALWAYS administered at intake (Optum EWS requirement at session 1).
 
 Read the client profile's **Billing & Provider Information** section before \
 generating the note. If that section is missing, the session map will have \
@@ -357,8 +358,11 @@ List everyone present with roles (e.g., "Client only", "Client and partner", \
 ### Billing & Authorization
 
 #### 3. CPT Code Billed [REQUIRED]
-`90791` (Psychiatric Diagnostic Evaluation) — hardcoded for intake sessions \
-regardless of duration.
+Choose based on the client profile's Payer field:
+- **Non-EAP payers:** `90791` (Psychiatric Diagnostic Evaluation) — regardless \
+of duration.
+- **Optum EWS/EAP payers:** `90834` (Individual Psychotherapy, 38-52 min) — \
+90791 is NOT covered under Optum EWS/EAP.
 
 #### 4. CPT Code Modifiers
 Apply this conditional logic based on the client profile's Billing & Provider \
@@ -599,8 +603,9 @@ Assessment line with submission status.
 - **Profile says Supervised = Yes** → field #4 MUST contain `U5`.
 - **Field #5 = Video or Phone** → field #4 MUST contain `GT` or `95`.
 - **Payer is Optum EWS AND CPT = 90837** → BLOCK: 90837 is not allowed under \
-Optum EWS. (Intake is always 90791, so this should never trigger for intake \
-notes — but flag it loudly if it somehow does.)
+Optum EWS. Switch to 90834.
+- **Payer is Optum EWS/EAP AND CPT = 90791** → BLOCK: 90791 is NOT covered \
+under Optum EWS/EAP. Use 90834 for EAP intakes.
 - **Field #17 (Risk Level) > None** → field #19 MUST be populated with a \
 real safety plan.
 - **Field #20 = Yes** → field #21 MUST be populated.
