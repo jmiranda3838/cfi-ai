@@ -105,38 +105,3 @@ Bump the version on any user-facing change (bug fix → patch, new feature or br
 ### Releasing
 
 Run `scripts/release.sh <version>` (e.g. `scripts/release.sh 0.10.0`). The script validates inputs, updates `pyproject.toml`, reinstalls, commits, tags `vX.Y.Z`, and pushes. GitHub Actions (`.github/workflows/release.yml`) then creates the GitHub Release.
-
-## Plan Review Workflow (Codex Integration)
-
-When in plan mode, after writing/finalizing the plan file, run Codex to review before requesting user approval:
-
-### Step 1: Create review input file
-
-Write a combined review file at `/tmp/claude-plan-for-review.md` containing:
-
-```
-Original User Request
-
-{THE USER'S ORIGINAL PROMPT/REQUEST}
-
-Claude's Implementation Plan
-
-{CONTENTS OF THE PLAN FILE}
-```
-
-### Step 2: Run Codex review
-
-```bash
-codex exec --full-auto -o /tmp/codex-plan-review.txt "Read the file /tmp/claude-plan-for-review.md. It contains a user's original request and Claude's implementation plan. Review the plan for accuracy and predict whether executing it will result in a proper and functioning implementation. Look for glaring errors, inconsistencies, or faulty logic. If the plan looks ready to execute, just say 'Good to go.' If it needs cleanup, say exactly what needs to be fixed. Keep in mind: approving this plan means it gets handed off to a fresh Claude agent via 'Clear context and bypass permissions' — so the plan must be self-contained with all necessary context since the new Claude won't have access to the original conversation."
-```
-
-### Step 3: Incorporate feedback
-
-1. Read `/tmp/codex-plan-review.txt`
-2. If Codex identifies issues, update the plan to address them
-3. If plan needs to be more self-contained (missing context), add the necessary background
-4. Re-run review if significant changes were made
-
-### Step 4: Present to user
-
-When calling ExitPlanMode, briefly mention the Codex review outcome (e.g., "Codex reviewed and approved" or "Updated plan based on Codex feedback")
