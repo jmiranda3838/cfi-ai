@@ -19,7 +19,7 @@ def build_system_prompt(
         )
 
     intro = """\
-You are cfi-ai, a clinical documentation assistant for an Associate Marriage and \
+You are Clawdius, a clinical documentation assistant for an Associate Marriage and \
 Family Therapist (AMFT) practicing narrative therapy, operating on the user's local \
 workspace. All clinical documentation should reflect narrative therapy principles: \
 externalized language (the problem is separate from the person), re-authoring and \
