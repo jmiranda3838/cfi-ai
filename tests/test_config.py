@@ -22,7 +22,7 @@ def test_from_env_defaults():
         config = Config.from_env()
     assert config.project == "my-project"
     assert config.location == "global"
-    assert config.model == "gemini-3-flash-preview"
+    assert config.model == "gemini-3.1-pro-preview-customtools"
     assert config.max_tokens == 8192
     assert config.context_cache is True
 
@@ -252,7 +252,7 @@ def test_first_run_setup_defaults(tmp_path):
         data = _run_first_time_setup(path=cfg)
     assert data["project"]["id"] == "my-proj"
     assert data["project"]["location"] == "global"
-    assert data["model"]["name"] == "gemini-3-flash-preview"
+    assert data["model"]["name"] == "gemini-3.1-pro-preview-customtools"
     assert data["model"]["max_tokens"] == 8192
     assert data["model"]["max_context_tokens"] == 128_000
 
@@ -552,11 +552,11 @@ def test_load_migrates_deprecated_model_and_location(tmp_path, capsys):
     )
     with patch.dict(os.environ, {}, clear=True):
         config = Config.load(config_path=cfg)
-    assert config.model == "gemini-3-flash-preview"
+    assert config.model == "gemini-3.1-pro-preview-customtools"
     assert config.location == "global"
     # File was rewritten
     reloaded = _load_config_file(cfg)
-    assert reloaded["model"]["name"] == "gemini-3-flash-preview"
+    assert reloaded["model"]["name"] == "gemini-3.1-pro-preview-customtools"
     assert reloaded["project"]["location"] == "global"
     # Notice was printed
     err = capsys.readouterr().err
@@ -575,7 +575,7 @@ def test_load_migrates_deprecated_model_already_global(tmp_path, capsys):
     )
     with patch.dict(os.environ, {}, clear=True):
         config = Config.load(config_path=cfg)
-    assert config.model == "gemini-3-flash-preview"
+    assert config.model == "gemini-3.1-pro-preview-customtools"
     assert config.location == "global"
     err = capsys.readouterr().err
     assert "gemini-2.5-pro" in err
@@ -608,7 +608,7 @@ def test_load_migration_preserves_other_sections(tmp_path):
     )
     with patch.dict(os.environ, {}, clear=True):
         config = Config.load(config_path=cfg)
-    assert config.model == "gemini-3-flash-preview"
+    assert config.model == "gemini-3.1-pro-preview-customtools"
     reloaded = _load_config_file(cfg)
     assert reloaded["grounding"]["open_browser"] is True
     assert reloaded["grounding"]["enabled"] is False
@@ -626,7 +626,7 @@ def test_load_migrates_all_deprecated_models(tmp_path, old_model):
     )
     with patch.dict(os.environ, {}, clear=True):
         config = Config.load(config_path=cfg)
-    assert config.model == "gemini-3-flash-preview"
+    assert config.model == "gemini-3.1-pro-preview-customtools"
     assert config.location == "global"
 
 
@@ -645,7 +645,7 @@ def test_load_migration_idempotent_on_second_run(tmp_path, capsys):
 
     with patch.dict(os.environ, {}, clear=True):
         config = Config.load(config_path=cfg)
-    assert config.model == "gemini-3-flash-preview"
+    assert config.model == "gemini-3.1-pro-preview-customtools"
     err = capsys.readouterr().err
     assert "deprecated" not in err
 
@@ -668,7 +668,7 @@ def test_from_env_no_warning_for_current_model(capsys):
     env = {"GOOGLE_CLOUD_PROJECT": "my-project"}
     with patch.dict(os.environ, env, clear=True):
         config = Config.from_env()
-    assert config.model == "gemini-3-flash-preview"
+    assert config.model == "gemini-3.1-pro-preview-customtools"
     err = capsys.readouterr().err
     assert "deprecated" not in err.lower()
 

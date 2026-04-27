@@ -15,7 +15,7 @@ from __future__ import annotations
 from dataclasses import asdict, dataclass
 from typing import Any
 
-from cfi_ai.pricing import lookup_context_window, lookup_pricing
+from cfi_ai.pricing import lookup_active_rates, lookup_context_window, lookup_pricing
 
 
 @dataclass
@@ -63,7 +63,7 @@ class CostTracker:
         self.total_cached += cached
         self.total_output += output
 
-        rates = lookup_pricing(self.model)
+        rates = lookup_active_rates(self.model, prompt)
         if rates:
             self.total_cost_usd += (
                 billed_input * rates["input"]

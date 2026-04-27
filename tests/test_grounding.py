@@ -5,8 +5,6 @@ from unittest.mock import MagicMock as MM, patch
 from cfi_ai.agent import (
     _render_grounding_sources,
     _write_search_suggestions,
-    _is_grounding_invalid_argument,
-    _report_api_error,
 )
 
 
@@ -189,55 +187,3 @@ def test_write_search_suggestions_swallows_write_errors(monkeypatch):
     # Should not raise
     result = _write_search_suggestions(gm, open_browser=True)
     assert result is None
-
-
-# ── INVALID_ARGUMENT detection / error reporting ────────────────────────
-
-
-def test_is_grounding_invalid_argument_matches_google_search_400():
-    e = Exception("400 INVALID_ARGUMENT: tool google_search not supported with function calling")
-    assert _is_grounding_invalid_argument(e) is True
-
-
-def test_is_grounding_invalid_argument_matches_grounding_keyword():
-    e = Exception("INVALID_ARGUMENT: grounding configuration rejected")
-    assert _is_grounding_invalid_argument(e) is True
-
-
-def test_is_grounding_invalid_argument_ignores_unrelated_errors():
-    e = Exception("INVALID_ARGUMENT: malformed function declaration")
-    assert _is_grounding_invalid_argument(e) is False
-
-
-def test_is_grounding_invalid_argument_ignores_non_400():
-    e = Exception("Connection refused")
-    assert _is_grounding_invalid_argument(e) is False
-
-
-def test_report_api_error_uses_targeted_message_for_grounding():
-    ui = MM()
-    config = MM()
-    config.model = "gemini-2.5-flash"
-    e = Exception("400 INVALID_ARGUMENT: google_search tool not supported")
-
-    _report_api_error(ui, e, config)
-
-    ui.print_error.assert_called_once()
-    msg = ui.print_error.call_args.args[0]
-    assert "gemini-2.5-flash" in msg
-    assert "Google Search grounding" in msg
-    assert "global endpoint" in msg
-    assert "cfi-ai --setup" in msg
-
-
-def test_report_api_error_falls_through_for_unrelated_errors():
-    ui = MM()
-    config = MM()
-    config.model = "gemini-3-flash-preview"
-    e = Exception("503 Service Unavailable")
-
-    _report_api_error(ui, e, config)
-
-    ui.print_error.assert_called_once()
-    msg = ui.print_error.call_args.args[0]
-    assert "API error: 503 Service Unavailable" in msg

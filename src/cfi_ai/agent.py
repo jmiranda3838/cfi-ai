@@ -254,40 +254,6 @@ def _is_auth_error(exc: Exception) -> bool:
     return False
 
 
-def _is_grounding_invalid_argument(exc: Exception) -> bool:
-    """Detect Vertex INVALID_ARGUMENT failures caused by combining function calling
-    with Google Search grounding on a model that doesn't support both at once.
-
-    Older Gemini models reject the request with INVALID_ARGUMENT and a message that
-    references google_search / GoogleSearch / grounding. We match on both signals so
-    unrelated INVALID_ARGUMENT failures (e.g. malformed function declarations) don't
-    get this misleading explanation.
-    """
-    msg = str(exc)
-    if "INVALID_ARGUMENT" not in msg and "400" not in msg:
-        return False
-    return any(
-        token in msg
-        for token in ("google_search", "GoogleSearch", "google search", "grounding")
-    )
-
-
-def _report_api_error(ui: UI, exc: Exception, config: Config) -> None:
-    """Print a Rich error for an API failure. Substitutes a targeted message when
-    the failure looks like a known grounding+function-calling incompatibility."""
-    if _is_grounding_invalid_argument(exc):
-        ui.print_error(
-            f"Model '{config.model}' rejected the request because it does not "
-            "support combining function calling with Google Search grounding. "
-            "Switch to gemini-3-flash-preview on the global endpoint (or another "
-            "grounding-capable model/location pairing) via 'cfi-ai --setup' or by editing "
-            "~/.config/cfi-ai/config.toml."
-        )
-        _log.debug("grounding_invalid_argument model=%s detail=%s", config.model, exc)
-        return
-    ui.print_error(f"API error: {exc}")
-
-
 def _run_reauth(ui: UI) -> bool:
     """Launch interactive gcloud reauth flow. Returns True on success."""
     ui.print_info(
@@ -602,7 +568,7 @@ def _run_main_loop(
                 ):
                     cache_retry_attempted = True
                     continue
-                _report_api_error(ui, e, config)
+                ui.print_error(f"API error: {e}")
                 # Remove the last user message so they can retry
                 messages.pop()
                 break
@@ -629,7 +595,7 @@ def _run_main_loop(
                 ):
                     cache_retry_attempted = True
                     continue
-                _report_api_error(ui, e, config)
+                ui.print_error(f"API error: {e}")
                 break
             finally:
                 stream_result.log_completion()

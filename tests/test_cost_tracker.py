@@ -5,7 +5,7 @@ from __future__ import annotations
 from types import SimpleNamespace
 
 from cfi_ai.cost_tracker import CostTracker
-from cfi_ai.pricing import MODEL_PRICING
+from cfi_ai.pricing import MODEL_CONTEXT_WINDOW, MODEL_PRICING, lookup_active_rates
 from cfi_ai.ui import _format_cost_segment, _format_tokens
 
 
@@ -307,3 +307,87 @@ def test_format_cost_segment_with_cap_shows_capped_window():
     seg = _format_cost_segment(t)
     assert "ctx 64k/128k" in seg
     assert "(50%)" in seg
+
+
+# --- tiered pricing (Gemini 3 Pro family: 200k input threshold) ---
+
+
+def test_default_model_registered_in_pricing_and_context_tables():
+    """Guardrail: the current default model must always have pricing + context
+    info registered, or the toolbar silently drops cost/percentage."""
+    assert "gemini-3.1-pro-preview-customtools" in MODEL_PRICING
+    assert "gemini-3.1-pro-preview-customtools" in MODEL_CONTEXT_WINDOW
+
+
+def test_lookup_active_rates_below_threshold_returns_standard_rates():
+    rates = lookup_active_rates("gemini-3.1-pro-preview-customtools", 100_000)
+    assert rates == {"input": 2.00, "cached": 0.20, "output": 12.00}
+
+
+def test_lookup_active_rates_above_threshold_returns_long_context_rates():
+    rates = lookup_active_rates("gemini-3.1-pro-preview-customtools", 500_000)
+    assert rates == {"input": 4.00, "cached": 0.40, "output": 18.00}
+
+
+def test_lookup_active_rates_at_exact_threshold_stays_standard():
+    """Per Vertex docs: 'longer than 200K' — exactly 200,000 stays in the standard tier."""
+    rates = lookup_active_rates("gemini-3.1-pro-preview-customtools", 200_000)
+    assert rates == {"input": 2.00, "cached": 0.20, "output": 12.00}
+
+
+def test_lookup_active_rates_flat_model_ignores_prompt_size():
+    """Flat-rate models return the same rates regardless of prompt size."""
+    rates = lookup_active_rates("gemini-2.5-flash", 5_000_000)
+    assert rates == {"input": 0.30, "cached": 0.075, "output": 2.50}
+
+
+def test_lookup_active_rates_unknown_model_returns_none():
+    assert lookup_active_rates("not-a-real-model", 1_000) is None
+
+
+def test_record_tiered_below_threshold_uses_standard_rates():
+    t = CostTracker(model="gemini-3.1-pro-preview-customtools")
+    t.record(_usage(prompt=100_000, cached=0, output=1_000))
+    expected = (100_000 * 2.00 + 1_000 * 12.00) / 1_000_000
+    assert t.total_cost_usd == expected
+
+
+def test_record_tiered_above_threshold_flips_input_cached_and_output():
+    """The whole call is billed at long-context rates when prompt > 200k —
+    not just the input portion. Verifies all three rates flip together."""
+    t = CostTracker(model="gemini-3.1-pro-preview-customtools")
+    t.record(_usage(prompt=300_000, cached=50_000, output=2_000))
+    # billed_input = 250_000, cached = 50_000, output = 2_000
+    expected = (
+        250_000 * 4.00      # long-context input rate
+        + 50_000 * 0.40     # long-context cached rate
+        + 2_000 * 18.00     # long-context output rate
+    ) / 1_000_000
+    assert t.total_cost_usd == expected
+
+
+def test_record_tiered_at_exact_threshold_uses_standard_rates():
+    """Boundary check: prompt of exactly 200_000 stays at the standard tier."""
+    t = CostTracker(model="gemini-3.1-pro-preview-customtools")
+    t.record(_usage(prompt=200_000, cached=0, output=100))
+    expected = (200_000 * 2.00 + 100 * 12.00) / 1_000_000
+    assert t.total_cost_usd == expected
+
+
+def test_record_tiered_just_above_threshold_flips():
+    """Boundary check: prompt of 200_001 flips to long-context rates."""
+    t = CostTracker(model="gemini-3.1-pro-preview-customtools")
+    t.record(_usage(prompt=200_001, cached=0, output=100))
+    expected = (200_001 * 4.00 + 100 * 18.00) / 1_000_000
+    assert t.total_cost_usd == expected
+
+
+def test_record_tiered_two_turns_apply_per_turn_tier():
+    """Each turn picks its tier based on its own prompt size — totals don't
+    promote earlier turns to long-context just because a later turn was big."""
+    t = CostTracker(model="gemini-3.1-pro-preview-customtools")
+    t.record(_usage(prompt=50_000, cached=0, output=500))   # standard
+    t.record(_usage(prompt=400_000, cached=0, output=1_000))  # long-context
+    turn1 = (50_000 * 2.00 + 500 * 12.00) / 1_000_000
+    turn2 = (400_000 * 4.00 + 1_000 * 18.00) / 1_000_000
+    assert t.total_cost_usd == turn1 + turn2
