@@ -1,7 +1,11 @@
 """Compliance check prompt template for the /compliance command."""
 
 from cfi_ai.prompts.narrative_therapy import NARRATIVE_THERAPY_ORIENTATION
-from cfi_ai.prompts.shared import CRITICAL_INSTRUCTIONS, indent_block
+from cfi_ai.prompts.shared import (
+    CRITICAL_INSTRUCTIONS,
+    DOCUMENTATION_PRINCIPLES,
+    indent_block,
+)
 from cfi_ai.prompts.treatment_plan import THERANEST_INTERVENTIONS
 
 _RAW_COMPLIANCE_PROMPT = (
@@ -21,10 +25,22 @@ interventions. Today's date is {date}.
 
 """
     + CRITICAL_INSTRUCTIONS
+    + "\n"
+    + DOCUMENTATION_PRINCIPLES
     + """
 ## Audit-Specific Rules
 - Be specific about what's missing — quote the requirement and what's absent.
-- For vague progress language, quote the problematic text and suggest a measurable alternative.
+- **Scope of "vague" findings.** Per the Documentation Principles above, \
+flag vagueness ONLY when it obscures a medically-necessary element: \
+diagnosis, risk findings, measurable progress indicators, interventions \
+actually used, or the medical-necessity rationale. Vagueness about \
+third-party identity, family/relational narrative, trauma or substance-use \
+backstory, and other non-load-bearing client content is the *correct* \
+minimum-necessary posture and MUST NOT be flagged. "Client discussed \
+conflict with a family member" is acceptable; "Client reports continued \
+symptom reduction" without a measurable indicator is a finding.
+- For vague progress language in the necessity-defending fields above, \
+quote the problematic text and suggest a measurable alternative.
 - Missing documentation is a valid audit finding, not a reason to stop the review.
 - Load whatever records exist. If a record needed for a check is missing, report that as \
 `[FAIL]` or `[WARN]` and explain exactly what could not be verified.

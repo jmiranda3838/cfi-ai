@@ -197,6 +197,31 @@ def test_critical_instructions_in_all_map_prompts():
         assert marker in prompt
 
 
+def test_documentation_principles_in_all_map_prompts():
+    """DOCUMENTATION_PRINCIPLES text appears in all clinical map prompts."""
+    from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
+    from cfi_ai.prompts.intake import INTAKE_PROMPT
+    from cfi_ai.prompts.session import SESSION_MAP_PROMPT
+    from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
+    for name, prompt in [
+        ("INTAKE_PROMPT", INTAKE_PROMPT),
+        ("SESSION_MAP_PROMPT", SESSION_MAP_PROMPT),
+        ("COMPLIANCE_PROMPT", COMPLIANCE_PROMPT),
+        ("TP_REVIEW_PROMPT", TP_REVIEW_PROMPT),
+    ]:
+        assert "Documentation Principles" in prompt, f"{name} missing principles header"
+        assert "minimum-necessary" in prompt.lower() or "minimum necessary" in prompt.lower(), (
+            f"{name} missing minimum-necessary phrasing"
+        )
+
+
+def test_compliance_narrows_vague_findings_to_necessity_fields():
+    """Compliance auditor must scope 'vague' findings to medically-necessary elements."""
+    from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
+    assert "Scope of \"vague\" findings" in COMPLIANCE_PROMPT
+    assert "MUST NOT be flagged" in COMPLIANCE_PROMPT
+
+
 def test_reference_mode_forbids_writes():
     """All clinical map prompts must explicitly forbid write_file/apply_patch in reference mode."""
     from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT

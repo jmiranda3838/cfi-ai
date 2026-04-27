@@ -1,7 +1,7 @@
 """Clinical prompt templates for the /session map (ongoing progress notes)."""
 
 from cfi_ai.prompts.narrative_therapy import NARRATIVE_THERAPY_ORIENTATION
-from cfi_ai.prompts.shared import CRITICAL_INSTRUCTIONS
+from cfi_ai.prompts.shared import CRITICAL_INSTRUCTIONS, DOCUMENTATION_PRINCIPLES
 
 SESSION_MAP_PROMPT = (
     """\
@@ -9,6 +9,8 @@ You are generating a progress note for an ongoing therapy session. Today's date 
 
 """
     + CRITICAL_INSTRUCTIONS
+    + "\n"
+    + DOCUMENTATION_PRINCIPLES
     + """
 ## Resolving Client Context
 
