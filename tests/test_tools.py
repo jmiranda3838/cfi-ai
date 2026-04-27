@@ -67,7 +67,7 @@ def test_attach_path_missing_path_returns_actionable_error(tmp_path):
 def test_registry():
     api_tools = tools.get_api_tools()
     names = {fd.name for fd in api_tools[0].function_declarations}
-    assert names == {"activate_map", "apply_patch", "attach_path", "end_turn", "extract_document", "interview", "run_command", "write_file"}
+    assert names == {"activate_map", "apply_patch", "attach_path", "end_turn", "extract_document", "interview", "load_payer_rules", "run_command", "write_file"}
 
 
 def test_get_api_tools_includes_google_search():

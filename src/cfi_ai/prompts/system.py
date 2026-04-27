@@ -102,7 +102,7 @@ clients/<client-id>/
   treatment-plan/<YYYY-MM-DD>-treatment-plan.md  (TheraNest Treatment Plan fields)
   sessions/<YYYY-MM-DD>-progress-note.md      (TheraNest 30-field progress note)
   sessions/<YYYY-MM-DD>-intake-transcript.md
-  wellness-assessments/<YYYY-MM-DD>-wellness-assessment.md  (G22E02 structured scores)
+  wellness-assessments/<YYYY-MM-DD>-wellness-assessment.md  (payer-specific assessment instrument scores, when applicable)
 ```
 
 - Newly generated files use `YYYY-MM-DD` date prefixes. When multiple dated files exist \
@@ -139,13 +139,12 @@ wellness assessments). Triggers for execution: "new client," "intake," "first se
 "initial assessment," or providing intake materials without specifying a map.
 - **session**: Progress note for an ongoing session. Triggers for execution: "session \
 note," "progress note," session audio/transcript for a known client.
-- **compliance**: Optum audit compliance check; missing records may be surfaced as \
-findings. Triggers for execution: "compliance check," "audit," "check records."
+- **compliance**: Payer audit compliance check against the active payer's rules; \
+missing or out-of-scope records may be surfaced as findings. Triggers for execution: \
+"compliance check," "audit," "check records."
 - **tp-review**: Review and update treatment plan; requires an existing treatment plan \
 and progress notes to generate updates. Triggers for execution: "treatment plan review," \
 "update treatment plan," "TP review."
-- **wellness-assessment**: Score a G22E02 Wellness Assessment. Triggers for execution: \
-"wellness assessment," "G22E02," "GD score," or providing a WA form/scan.
 
 Call `activate_map` alone with only the `map` name — do not combine it with other tool \
 calls in the same response. The loaded map prompt tells you how to resolve the client \

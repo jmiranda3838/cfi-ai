@@ -105,4 +105,3 @@ from cfi_ai.maps import intake as _intake_map  # noqa: F401, E402
 from cfi_ai.maps import resume as _resume_map  # noqa: F401, E402
 from cfi_ai.maps import session as _session_map  # noqa: F401, E402
 from cfi_ai.maps import tp_review as _tp_review_map  # noqa: F401, E402
-from cfi_ai.maps import wellness_assessment as _wa_map  # noqa: F401, E402

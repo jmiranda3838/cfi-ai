@@ -38,10 +38,7 @@ class ActivateMapTool(BaseTool):
                     "map": {
                         "type": "string",
                         "enum": list(VALID_MAPS),
-                        "description": (
-                            "The map to activate: intake, session, compliance, "
-                            "tp-review, or wellness-assessment."
-                        ),
+                        "description": f"The map to activate: {', '.join(VALID_MAPS)}.",
                     },
                 },
                 "required": ["map"],

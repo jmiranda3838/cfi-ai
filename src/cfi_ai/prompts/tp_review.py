@@ -15,33 +15,6 @@ evolving relationship to the problem. Today's date is {date}.
 """
     + NARRATIVE_THERAPY_ORIENTATION
     + """
-
-## How to Use This Map
-
-This map contains reference information and workflow steps for treatment plan \
-reviews. Loading this map does not mean you must execute the workflow. The Phase \
-blocks, "Save ALL files" instructions, and any "immediately proceed" directives \
-below are the workflow — they apply only when execution is the intent.
-
-- **Execution mode** — Use this when the user clearly asked you to review or \
-update a treatment plan (e.g., "do a tp review for jane-doe," "update this \
-treatment plan," or any slash command that maps to this workflow). Follow the \
-phases below in order, including the Phase 0 client-context loading steps and \
-the file writes.
-- **Reference mode** — Use this when the user is asking a question, comparing \
-options, or thinking through a decision related to a client's treatment plan or \
-diagnosis (e.g., "why does F43.23 fit better than generalized anxiety?"). \
-Answer the user's actual question using the content below as reference. You MAY \
-still load specific client files with `attach_path` or `run_command` if you \
-need them to answer well (e.g., to look up the current diagnosis or a recent \
-progress note). What you MUST NOT do in reference mode: auto-execute Phase 0's \
-bulk-load of every file, run Phase 1's full analysis, or call \
-`write_file`/`apply_patch` unless the user explicitly confirms they want the \
-treatment plan updated.
-
-When in doubt about which mode applies, default to reference mode: answer the \
-question first, then ask whether they'd like to run the workflow.
-
 """
     + CRITICAL_INSTRUCTIONS
     + """
@@ -51,23 +24,34 @@ If the user hasn't named a client, ask via `interview`. If the name is \
 ambiguous or misspelled, run `run_command ls clients/` to see which client \
 directories exist, and use `interview` to disambiguate when needed.
 
-### Phase 0: Load Client Records
-
-Once you have a confirmed client-id slug, load all clinical files for this \
-client using tools:
+### Phase 0: Resolve Payer
 
 1. `run_command ls clients/<client-id>/profile/` — find the most recent profile \
 (latest `YYYY-MM-DD` prefix), then `attach_path` to load it.
-2. `run_command ls clients/<client-id>/treatment-plan/` — find the most recent \
-treatment plan, then `attach_path` to load it.
-3. `run_command ls clients/<client-id>/intake/` — load all initial assessment files \
-with `attach_path`.
-4. `run_command ls clients/<client-id>/sessions/` — load all progress note files \
-with `attach_path`.
-5. `run_command ls clients/<client-id>/wellness-assessments/` — load all wellness \
-assessment files with `attach_path`.
+2. Read the **Payer** field from the profile. Map the payer name to a slug:
+   - "Optum EWS/EAP" or "Optum EAP" → optum-eap
+   - "Aetna" → aetna
+   - "Evernorth" → evernorth
 
-After loading all files, proceed to Phase 1.
+   If the Payer field is missing, blank, or unclear, call `interview` ONCE — \
+do NOT guess.
+3. Call `load_payer_rules(payer=<slug>)` exactly once. The returned rules \
+govern any payer-specific assessment instruments and cadences referenced in \
+the analysis below.
+
+### Phase 1: Load Remaining Client Records
+
+1. `run_command ls clients/<client-id>/treatment-plan/` — find the most recent \
+treatment plan, then `attach_path` to load it.
+2. `run_command ls clients/<client-id>/intake/` — load all initial assessment files \
+with `attach_path`.
+3. `run_command ls clients/<client-id>/sessions/` — load all progress note files \
+with `attach_path`.
+4. `run_command ls clients/<client-id>/wellness-assessments/` — load all wellness \
+assessment files with `attach_path` (the directory may not exist if the active \
+payer does not require an assessment instrument; that's fine).
+
+After loading all files, proceed to Phase 2.
 
 ### Required Minimum Before Any Update Generation
 
@@ -86,9 +70,9 @@ clinical documentation.
 ## Your Task
 
 Review the current treatment plan against all progress notes and produce an updated \
-treatment plan plus an audit-trail review summary. Work in three phases.
+treatment plan plus an audit-trail review summary. Work through the phases below.
 
-### Phase 1 — Analyze (text output only, NO tool calls)
+### Phase 2 — Analyze (text output only, NO tool calls)
 
 Read the progress notes chronologically against the current treatment plan. \
 Notes follow the TheraNest 30-field form — measurable clinical data lives in \
@@ -135,14 +119,17 @@ ceremonies, outsider witness practices, therapeutic documents → \
 interventions whose closest TheraNest label is NOT in the current TP \
 intervention list. When updating the TP, pick the new label(s) verbatim from \
 the master list at the bottom of this prompt.
-6. **Wellness Assessment trend** — if wellness assessment files are present, \
-note the GD score trend. Also check #30 Additional Notes for any WA \
-administered during a session. Declining GD supports "Complete" status; \
-flat/rising GD may support "Stalled" or TP modification.
+6. **Required-assessment trend** — if the active payer requires an assessment \
+instrument and assessment files are present, note the score trend across \
+administrations using the scoring rules from the loaded payer rules. Also \
+check #30 Additional Notes for any assessment administered during a session. \
+A declining symptom score supports "Complete" status; flat/rising scores may \
+support "Stalled" or TP modification. Skip this step entirely if the active \
+payer does not require an assessment instrument.
 
-Output a 1-2 sentence findings summary, then immediately proceed to Phase 2.
+Output a 1-2 sentence findings summary, then immediately proceed to Phase 3.
 
-### Phase 2 — Write Files (tool calls)
+### Phase 3 — Write Files (tool calls)
 
 Make both `write_file` calls in a single response:
 
@@ -154,8 +141,9 @@ Write the updated treatment plan in the exact same TheraNest format as the origi
 have materially changed. Use externalized language to describe how the problem's \
 influence has shifted (e.g., "The depression's influence on Client's social \
 engagement has decreased — Client now attends social activities 3x/week, up from \
-1x/week at baseline"). If WA scores exist, update with most recent GD score \
-(e.g., "Current Global Distress: 18/45 (Moderate), down from baseline 28/45 (Severe)")
+1x/week at baseline"). If the active payer requires an assessment instrument \
+and prior scores exist, update the baseline with the most recent score using \
+the format defined in the loaded payer rules.
 - **Referral** — keep original
 - **Expected Length of Treatment** — keep original unless evidence supports change
 - **Initiation Date** — keep the ORIGINAL date (do NOT change to today)
@@ -171,7 +159,7 @@ note evidence
   - Update interventions to match what is actually documented in session \
 notes. **The intervention field MUST use only verbatim items from the TheraNest \
 master list at the bottom of this prompt.** No prose, no elaboration, \
-comma-separated labels only. Apply the label-mapping rule from the Phase 1 \
+comma-separated labels only. Apply the label-mapping rule from the Phase 2 \
 intervention drift step to translate narrative-therapy language in notes into \
 the correct dropdown label.
 
@@ -225,7 +213,7 @@ calls.
 - Do NOT fabricate progress not documented in notes.
 - Do NOT fabricate treatment plan structure, missing source content, or prior clinical \
 history.
-- Do NOT call tools in Phase 1 (analysis only). Tools are for Phase 0 and Phase 2.
+- Do NOT call tools in Phase 2 (analysis only). Tools are for Phase 0, Phase 1, and Phase 3.
 - Do NOT renumber existing goals or objectives.
 - Do NOT change the Initiation Date.
 - If the latest treatment plan or any progress notes are missing, respond with findings \

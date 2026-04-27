@@ -14,14 +14,12 @@ from cfi_ai.prompts.intake import INTAKE_PROMPT
 from cfi_ai.prompts.progress_note import PROGRESS_NOTE_GUIDANCE
 from cfi_ai.prompts.session import SESSION_MAP_PROMPT
 from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
-from cfi_ai.prompts.wellness_assessment import WA_MAP_PROMPT
 
 VALID_MAPS: tuple[str, ...] = (
     "intake",
     "session",
     "compliance",
     "tp-review",
-    "wellness-assessment",
 )
 
 
@@ -39,6 +37,4 @@ def render_map_prompt(map_name: str, *, date: str | None = None) -> str:
         return COMPLIANCE_PROMPT.format(date=today)
     if map_name == "tp-review":
         return TP_REVIEW_PROMPT.format(date=today)
-    if map_name == "wellness-assessment":
-        return WA_MAP_PROMPT.format(date=today)
     raise ValueError(f"Unhandled map: {map_name}")

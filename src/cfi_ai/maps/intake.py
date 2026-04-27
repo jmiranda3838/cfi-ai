@@ -22,9 +22,6 @@ def handle_intake(
     session_store: "SessionStore",
 ) -> MapResult:
     today = datetime.date.today().isoformat()
-    if args and args.strip():
-        ui.print_info(f"Processing intake materials: {args.strip()} ({today}).")
-    else:
-        ui.print_info(f"Starting intake ({today}).")
+    ui.print_info("/intake activated.")
     message = invocation_preface("intake", args) + render_map_prompt("intake", date=today)
     return MapResult(message=message, map_mode=True)

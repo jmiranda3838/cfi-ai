@@ -1,71 +1,124 @@
-"""Initial Assessment guidance (TheraNest Part 6) — single source of truth."""
+"""Authoritative TheraNest form spec for "Initial Assessment & Diagnostic Codes" — source of truth. Clinical and narrative-therapy writing guidance lives in separate modules."""
 
-INITIAL_ASSESSMENT_GUIDANCE = """\
-## Initial Assessment Guidance (TheraNest Part 6)
+INITIAL_ASSESSMENT_TEMPLATE = """\
+## TheraNest Form: Initial Assessment & Diagnostic Codes
 
-Write the initial assessment structured to match TheraNest's "Initial Assessment & \
-Diagnostic Codes" tab. The clinician should be able to copy-paste each section \
-directly into the corresponding TheraNest field. Clearly note when information is \
-absent or was not assessed.
+Fields on the TheraNest "Initial Assessment & Diagnostic Codes" tab, in the \
+order they appear. Each section below maps 1:1 onto a TheraNest field. This \
+document describes only what TheraNest expects — not how to write it.
 
-- **Diagnostic Impressions** — ICD-10 codes with descriptions (e.g., \
-`F32.1 — Major depressive disorder, single episode, moderate`). List primary \
-diagnosis first, then any secondary diagnoses.
-- **Presenting Problem** — Describe the problem(s) using externalized language: \
-name the problem as separate from the client (e.g., "the depression," "the \
-conflict") and describe its effects on the client's life, relationships, and \
-sense of self. Include duration and precipitating factors. Note any dominant \
-narratives the client holds about themselves or the problem (e.g., "I've always \
-been broken"). Identify the client's preferred direction — what they want their \
-life to look like when the problem has less influence. Write as a narrative \
-paragraph suitable for TheraNest's Presenting Problem text area. If Wellness \
-Assessment data is available, reference the GD severity level.
-- **Observations** — Therapist's observations of client's presentation and \
-family interactions. Include affect, appearance, engagement, and relational \
-dynamics observed in session. Note the client's relationship to the problem \
-as observed (e.g., how the problem's influence showed up in session, moments \
-where the client resisted or stood apart from the problem). Document any \
-unique outcomes observed — times the client spoke or acted from a position \
-of agency rather than from the problem-saturated story.
-- **Pertinent History** — Any prior therapy (including family, social, \
-psychological, and medical history). Summarize relevant treatment history, \
-hospitalizations, and significant life events.
-- **Family/Psychosocial Assessment** — The family or psychosocial assessment. \
-Cover family structure, key relationships, social supports, stressors, and \
-relevant developmental/cultural context.
-- **Risk Assessment** — TheraNest renders this as a checkbox grid plus a single \
-Explanation textarea, so produce a two-part block that maps 1:1 onto those \
-fields. First, `**Risk Domains Present**` — a plain bullet list of ONLY the \
-domains that are present, drawn from: suicide, violence, physical abuse, sexual \
-abuse, psychotic break, running away, substance abuse, self-harm. If none are \
-present, write `None`. Do not include "Not Present" entries — the clinician \
-only needs to see what to check. Second, `**Explanation**` — a prose paragraph \
-(no bullets, no bold) covering only the present domains: details of the risk, \
-and whether a safety plan was established. If the wellness assessment Q22-24 \
-(CAGE-AID) has any "Yes" answers, flag substance abuse as present and include \
-the CAGE-AID finding in the Explanation.
-- **Strengths** — Client/family strengths framed through preferred stories and \
-insider knowledges: skills of living the client already possesses, values that \
-sustain them, relationships that support their preferred identity, unique \
-outcomes or exceptions to the problem story, and acts of resistance against \
-the problem's influence. Include support systems, protective factors, and \
+Global conventions:
+- Write all textareas as prose.
+- No textarea should be left blank. When a domain does not apply, was not \
+assessed, or the client denies it, state so explicitly (e.g., "Client denies \
+any history of..." or "Not assessed in this session.").
+
+- **Diagnostic Impressions** — one subsection per diagnosis. Each subsection \
+has three fields:
+    - **Diagnostic Code** — dropdown. Produce in the format \
+`<numeric code> (<ICD-10 code>) <Description>`.
+    - **Diagnostic Classification** — dropdown: Primary, Secondary, Tertiary, \
+or Quaternary. Each value may be used at most once; any fifth-or-later \
+diagnosis is listed without a classification.
+    - **Diagnosis Code Description** — textarea. Optional additional \
+clarification about the diagnosis; appears on printed initial/behavioral \
+assessments and progress notes. Write a brief clarification if one is \
+useful, otherwise state "None."
+- **Presenting Problem** — textarea. Per TheraNest: "client's initial \
+explanation of the problem(s), duration and precipitant cause." Cover the \
+problem(s) as the client describes them (use the client's own words where \
+useful), how long they have been occurring, what precipitated or triggered \
+them, and their current impact on the client's functioning.
+- **Pertinent History** — textarea. Per TheraNest: "any prior therapy \
+(including family, social, psychological, and medical)." Cover prior mental \
+health treatment (providers, modalities, approximate dates, outcomes), \
+inpatient hospitalizations, current and past psychiatric medications, family \
+history of mental illness or substance use, substance use history, relevant \
+medical conditions, and significant life events (trauma, losses, major \
+transitions).
+- **Observations** — textarea. Per TheraNest: "therapist's observations of \
+client's presentation and family interactions." Covers mental status exam \
+(MSE) domains observed directly in session: appearance and grooming, \
+behavior and motor activity, attitude, speech (rate/volume/articulation), \
+mood, affect (range, congruence), thought process and content, orientation, \
+attention, insight, and judgment. For family, couples, or collateral \
+sessions, also document relational dynamics (e.g., turn-taking, alignments, \
+conflict patterns, who speaks for whom). Restrict to what was observed in \
+the room — not historical information.
+- **Family/Psychosocial Assessment** — textarea. Per TheraNest: "the family \
+or psychosocial assessment." Cover family structure (household composition, \
+marital status, children), family of origin (parents, siblings, \
+relationships with them), key current relationships, living situation and \
+housing stability, education and employment, financial stressors, relevant \
+cultural and religious background, developmental history relevant to the \
+presenting problem, and legal history if applicable. Scoped to the client's \
+current psychosocial snapshot — prior treatment and hospitalizations belong \
+in Pertinent History; supports and cultural/spiritual resources belong in \
+Strengths; treatment-relevant cultural factors belong in Cultural Variables.
+- **Risk** — Per TheraNest: "evidence of potential or actual risk(s); \
+select and explain." Two-part field:
+    - Checkboxes for each of the following domains; check only those that \
+are present: suicide, violence, physical abuse, sexual abuse, psychotic \
+break, running away, substance abuse, self-harm.
+    - **Explanation** — textarea. Cover each checked domain with: nature \
+and severity of the risk (ideation vs. plan vs. intent vs. means, frequency \
+and recency); historical context (prior attempts, hospitalizations); and \
+risk-specific protective factors. Organize by domain when multiple are \
+checked. If no domains are checked, document that the client denied each \
+risk area and add any other relevant context. Safety planning belongs in \
+the Contract/Safety Plan field below, not here.
+- **Contract/Safety Plan** — Per TheraNest: "if yes, which risk areas; if \
+no, explain." Two-part field:
+    - **Client Made Contract/Safety Plan To Cover Risk(s)?** — dropdown: \
+None, Yes, or No. (None = not applicable / no risks present; Yes = a plan \
+was made; No = no plan was made despite risks being present.)
+    - **Explanation** — textarea. If Yes, list which risk areas the plan \
+covers and the key elements of the plan (e.g., warning signs, internal \
+coping strategies, social supports, professional/crisis contacts, means \
+restriction). If No, explain why (e.g., client declined, risk too acute for \
+outpatient safety planning, referred to higher level of care). If None, \
+state that no risks were identified requiring safety planning.
+- **Strengths** — textarea. Per TheraNest: "client/family strengths \
+(including support system(s))." Cover four areas: (1) personal strengths, \
+coping skills, and prior successful coping strategies; (2) family, \
+relational, social, and community supports; (3) cultural, spiritual, and \
+religious resources; (4) motivation for treatment and general protective \
+factors.
+- **Tentative Goals and Plans** — textarea. No TheraNest description. \
+Outline initial treatment goals (typically 2–4), the approaches or \
+modalities to be used, anticipated session frequency, and any referrals or \
+adjunct services. "Tentative" distinguishes this from the formal Treatment \
+Plan — keep it high-level and brief; detailed goals and interventions \
+belong in the separate Treatment Plan form.
+- **Involvement** — textarea. Per TheraNest: "who will be involved in \
+treatment?" Name each participant and their role (e.g., individual client, \
+partner, family members, parent/caregiver) and any collateral contacts \
+being coordinated with (other providers, case managers, physicians, school \
+personnel). Note the session format this implies (individual, couples, \
+family, collateral).
+- **Treatment Length** — text. Expected duration of treatment (e.g., \
+"6 months," "12 sessions").
+- **Is Client Appropriate for Agency Services?** — Two-part field:
+    - Dropdown: Yes or No.
+    - **Explanation** — textarea. If Yes, briefly state why the client is \
+appropriate for the agency's services. If No, explain and include referral \
 resources.
-- **Tentative Goals and Plans** — Initial goals framed as narrative therapy \
-directions: developing preferred stories, increasing the client's influence \
-over the problem, re-authoring identity conclusions, thickening alternative \
-narratives, and connecting with values and commitments. State goals in terms \
-of the client's relationship to the problem and their preferred direction \
-(e.g., "Reduce the influence of anxiety on client's daily functioning and \
-develop a preferred story of courage and capability").
-- **Involvement** — Who will be involved in treatment (e.g., individual client, \
-family members, collateral contacts).
-- **Treatment Length** — Expected duration of treatment (e.g., "6 months," \
-"12 sessions").
-- **Is Client Appropriate for Agency Services?** — Yes or No with explanation. \
-Include referral resources if No.
-- **Cultural Variables?** — Yes or No. If Yes, describe cultural factors relevant \
-to treatment.
-- **Special Needs of Client** — Yes or No. If Yes, describe (e.g., interpreter, \
-religious consultant, accessibility needs).
-- **Educational or Vocational Problems or Needs** — Yes or No. If Yes, describe.
+- **Special Needs of Client** — Per TheraNest: "Eg Need For Interpreter, \
+Interpreter For The Deaf, Religious Consultant, Etc. If yes, what?" \
+Two-part field:
+    - Dropdown: None, Yes, or No.
+    - **Explanation** — textarea. If Yes, describe the specific need(s) \
+(e.g., interpreter, ASL interpreter, religious or cultural consultant, \
+accessibility accommodations). If None or No, state that no special needs \
+were identified.
+- **Cultural Variables?** — Two-part field:
+    - Dropdown: None, Yes, or No.
+    - **Explanation** — textarea. If Yes, describe cultural factors \
+relevant to treatment. If None or No, state that no treatment-relevant \
+cultural factors were identified.
+- **Educational or Vocational Problems or Needs** — Two-part field:
+    - Dropdown: None, Yes, or No.
+    - **Explanation** — textarea. If Yes, describe the educational or \
+vocational problem(s) or need(s). If None or No, state that no educational \
+or vocational problems or needs were identified.
 """

@@ -119,7 +119,7 @@ def test_session_dispatch_loads_prompt(tmp_path):
     assert result.map_mode is True
     assert "User invoked /session" in result.message
     # The prompt content itself should be loaded (not an intent shim)
-    assert "Progress Note Guidance" in result.message
+    assert "TheraNest Form: Progress Note" in result.message
     assert "Resolving Client Context" in result.message
 
 
@@ -160,17 +160,6 @@ def test_tp_review_dispatch_loads_prompt(tmp_path):
     assert "Treatment Plan Review Summary" in result.message
 
 
-def test_wa_dispatch_loads_prompt(tmp_path):
-    ui = MagicMock()
-    ws = Workspace(str(tmp_path))
-    result = dispatch_map("wellness-assessment", "carol wa-scan.pdf", ui, ws, MagicMock())
-    assert result.error is None
-    assert result.map_mode is True
-    assert "User invoked /wellness-assessment" in result.message
-    assert "carol wa-scan.pdf" in result.message
-    assert "GD Score" in result.message or "GD score" in result.message
-
-
 def test_intake_dispatch_loads_prompt(tmp_path):
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
@@ -188,7 +177,28 @@ def test_clinical_maps_do_not_preload_clients(tmp_path):
     (tmp_path / "clients" / "bob").mkdir(parents=True)
     ui = MagicMock()
     ws = Workspace(str(tmp_path))
-    for name in ("session", "compliance", "tp-review", "wellness-assessment", "intake"):
+    for name in ("session", "compliance", "tp-review", "intake"):
         result = dispatch_map(name, None, ui, ws, MagicMock())
         assert "Available clients:" not in result.message, f"{name} leaked client list"
         assert "[MAP:" not in result.message, f"{name} still emits [MAP:] marker"
+
+
+def test_tp_review_description_includes_cadence():
+    """The /tp-review map description shown in /help and the system prompt must
+    name the 90-day review checkpoint so clinicians know when to invoke it."""
+    from cfi_ai.maps import get_map_descriptions
+
+    description = get_map_descriptions()["tp-review"]
+    assert "90-day review checkpoint" in description
+
+
+def test_help_lists_all_clinical_maps():
+    """The /help output must enumerate the four clinical maps (post-WA-removal)."""
+    ui = MagicMock()
+    ws = Workspace("/tmp")
+    dispatch_map("help", None, ui, ws, MagicMock())
+    rendered = ui.render_markdown.call_args[0][0]
+    for name in ("/intake", "/session", "/compliance", "/tp-review"):
+        assert name in rendered, f"/help missing {name}"
+    # The retired wellness-assessment map must not surface to clinicians anymore.
+    assert "/wellness-assessment" not in rendered

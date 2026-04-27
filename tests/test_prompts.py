@@ -92,7 +92,6 @@ def test_intake_prompt_formats():
     _assert_no_unreplaced_placeholders(result)
     assert "Risk Assessment" in result
     assert "Diagnostic Impressions" in result
-    assert "GD Score" in result
     assert "current.md" not in result
 
 
@@ -105,7 +104,7 @@ def test_session_map_prompt_formats():
         progress_note_guidance=note_guidance,
     )
     _assert_no_unreplaced_placeholders(result)
-    assert "TheraNest 30-Field Form" in result
+    assert "TheraNest Form: Progress Note" in result
     assert "run_command ls" in result
     # Single consolidated prompt handles both file and non-file inputs
     assert "attach_path" in result
@@ -146,43 +145,24 @@ def test_tp_review_prompt_stops_writes_when_prereqs_missing():
     assert "Do NOT fabricate treatment plan structure, missing source content, or prior clinical" in TP_REVIEW_PROMPT
 
 
-def test_wa_map_prompt_formats():
-    from cfi_ai.prompts.wellness_assessment import WA_MAP_PROMPT
-    result = WA_MAP_PROMPT.format(date="2026-03-18")
-    _assert_no_unreplaced_placeholders(result)
-    assert "0-45" in result
-    assert "run_command ls" in result
-    # Consolidated prompt handles both file and pasted inputs
-    assert "extract_document" in result
-    assert "attach_path" in result
-
-
 def test_per_document_constants_importable():
     """Each per-document module exposes its constants as non-empty strings."""
     from cfi_ai.prompts.shared import CRITICAL_INSTRUCTIONS
-    from cfi_ai.prompts.narrative_therapy import (
-        NARRATIVE_THERAPY_PRINCIPLES,
-        NARRATIVE_THERAPY_PROGRESS,
-        NARRATIVE_THERAPY_ORIENTATION,
-    )
-    from cfi_ai.prompts.initial_assessment import INITIAL_ASSESSMENT_GUIDANCE
+    from cfi_ai.prompts.narrative_therapy import NARRATIVE_THERAPY_ORIENTATION
+    from cfi_ai.prompts.initial_assessment import INITIAL_ASSESSMENT_TEMPLATE
     from cfi_ai.prompts.treatment_plan import (
         THERANEST_INTERVENTIONS,
         TREATMENT_PLAN_GUIDANCE,
     )
-    from cfi_ai.prompts.progress_note import (
-        PROGRESS_NOTE_GUIDANCE,
-        INTAKE_PROGRESS_NOTE_GUIDANCE,
-    )
+    from cfi_ai.prompts.progress_note import PROGRESS_NOTE_GUIDANCE
     from cfi_ai.prompts.client_profile import CLIENT_PROFILE_GUIDANCE
-    from cfi_ai.prompts.wellness_assessment import WA_SCORING_RULES, WA_OUTPUT_FORMAT
+    from cfi_ai.prompts.payers.optum_eap import WA_SCORING_RULES, WA_OUTPUT_FORMAT
     for const in (
         CRITICAL_INSTRUCTIONS,
-        NARRATIVE_THERAPY_PRINCIPLES, NARRATIVE_THERAPY_PROGRESS,
         NARRATIVE_THERAPY_ORIENTATION,
-        INITIAL_ASSESSMENT_GUIDANCE,
+        INITIAL_ASSESSMENT_TEMPLATE,
         THERANEST_INTERVENTIONS, TREATMENT_PLAN_GUIDANCE,
-        PROGRESS_NOTE_GUIDANCE, INTAKE_PROGRESS_NOTE_GUIDANCE,
+        PROGRESS_NOTE_GUIDANCE,
         CLIENT_PROFILE_GUIDANCE, WA_SCORING_RULES, WA_OUTPUT_FORMAT,
     ):
         assert isinstance(const, str) and len(const) > 50
@@ -194,15 +174,13 @@ def test_map_prompts_have_reference_loading_wrapper():
     from cfi_ai.prompts.session import SESSION_MAP_PROMPT
     from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
     from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
-    from cfi_ai.prompts.wellness_assessment import WA_MAP_PROMPT
 
-    marker = "Loading this map does not mean you must execute the workflow"
+    marker = "Loading the map does not mean you must execute the workflow"
     for name, prompt in [
         ("INTAKE_PROMPT", INTAKE_PROMPT),
         ("SESSION_MAP_PROMPT", SESSION_MAP_PROMPT),
         ("COMPLIANCE_PROMPT", COMPLIANCE_PROMPT),
         ("TP_REVIEW_PROMPT", TP_REVIEW_PROMPT),
-        ("WA_MAP_PROMPT", WA_MAP_PROMPT),
     ]:
         assert marker in prompt, f"{name} missing reference-loading wrapper"
 
@@ -213,10 +191,9 @@ def test_critical_instructions_in_all_map_prompts():
     from cfi_ai.prompts.intake import INTAKE_PROMPT
     from cfi_ai.prompts.session import SESSION_MAP_PROMPT
     from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
-    from cfi_ai.prompts.wellness_assessment import WA_MAP_PROMPT
     marker = "Do NOT narrate the map"
     for prompt in (INTAKE_PROMPT, SESSION_MAP_PROMPT,
-                   COMPLIANCE_PROMPT, TP_REVIEW_PROMPT, WA_MAP_PROMPT):
+                   COMPLIANCE_PROMPT, TP_REVIEW_PROMPT):
         assert marker in prompt
 
 
@@ -226,29 +203,21 @@ def test_reference_mode_forbids_writes():
     from cfi_ai.prompts.intake import INTAKE_PROMPT
     from cfi_ai.prompts.session import SESSION_MAP_PROMPT
     from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
-    from cfi_ai.prompts.wellness_assessment import WA_MAP_PROMPT
 
     for name, prompt in [
         ("INTAKE_PROMPT", INTAKE_PROMPT),
         ("SESSION_MAP_PROMPT", SESSION_MAP_PROMPT),
         ("COMPLIANCE_PROMPT", COMPLIANCE_PROMPT),
         ("TP_REVIEW_PROMPT", TP_REVIEW_PROMPT),
-        ("WA_MAP_PROMPT", WA_MAP_PROMPT),
     ]:
         assert "MUST NOT" in prompt, f"{name} missing reference-mode prohibition"
         assert "write_file" in prompt, f"{name} missing write_file prohibition"
         assert "apply_patch" in prompt, f"{name} missing apply_patch prohibition"
 
 
-def test_cage_aid_in_unified_intake_prompt():
-    """CAGE-AID risk note is present in the unified intake prompt."""
-    from cfi_ai.prompts.intake import INTAKE_PROMPT
-    assert "CAGE-AID" in INTAKE_PROMPT
-
-
 def test_maps_section_describes_missing_record_contract():
     prompt = build_system_prompt("summary")
-    assert "missing records may be surfaced as findings" in prompt
+    assert "missing or out-of-scope records may be surfaced as findings" in prompt
     assert "requires an existing treatment plan and progress notes to generate updates" in prompt
 
 
@@ -258,43 +227,11 @@ def test_interview_in_system_prompts():
     assert "interview" in normal
 
 
-def test_interview_in_wellness_assessment_prompt():
-    """Wellness assessment prompt references interview tool for ambiguous items."""
-    from cfi_ai.prompts.wellness_assessment import WA_MAP_PROMPT
-    assert "interview" in WA_MAP_PROMPT
-
-
 def test_maps_section_references_slash_invocation_format():
     """System prompt tells the LLM how to recognize slash invocations."""
     prompt = build_system_prompt("summary")
     assert "activate_map" in prompt
     assert "User invoked /" in prompt
-
-
-def test_measuring_progress_only_in_evaluation_prompts():
-    """Part B (Measuring Progress) appears in compliance/tp-review but not session/intake."""
-    from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
-    from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
-    from cfi_ai.prompts.progress_note import PROGRESS_NOTE_GUIDANCE
-    from cfi_ai.prompts.intake import INTAKE_PROMPT
-
-    marker = "Measuring Progress in Narrative Therapy"
-    # Evaluation prompts keep the rubric
-    assert marker in COMPLIANCE_PROMPT
-    assert marker in TP_REVIEW_PROMPT
-    # Generation prompts use only core principles
-    assert marker not in PROGRESS_NOTE_GUIDANCE
-    assert marker not in INTAKE_PROMPT
-
-
-def test_orientation_alias_equals_split():
-    """Backwards-compat alias equals the two split constants combined."""
-    from cfi_ai.prompts.narrative_therapy import (
-        NARRATIVE_THERAPY_ORIENTATION,
-        NARRATIVE_THERAPY_PRINCIPLES,
-        NARRATIVE_THERAPY_PROGRESS,
-    )
-    assert NARRATIVE_THERAPY_ORIENTATION == NARRATIVE_THERAPY_PRINCIPLES + NARRATIVE_THERAPY_PROGRESS
 
 
 # -- TheraNest 30-field progress note form --
@@ -310,8 +247,7 @@ THERANEST_FIELD_MARKERS = [
     "Payer",
     "Diagnostic Impressions",
     "Diagnosis Addressed This Session",
-    "Treatment Goal History",
-    "Current Treatment Goals",
+    "Treatment Goals",
     "Goals/Objectives Addressed This Session",
     "Mental Status",
     "Functional Impairment",
@@ -341,42 +277,15 @@ def test_progress_note_guidance_covers_all_30_fields():
         )
 
 
-def test_intake_progress_note_guidance_covers_all_30_fields():
-    """Intake-session progress note guidance must cover every TheraNest field."""
-    from cfi_ai.prompts.progress_note import INTAKE_PROGRESS_NOTE_GUIDANCE
-    for marker in THERANEST_FIELD_MARKERS:
-        assert marker in INTAKE_PROGRESS_NOTE_GUIDANCE, (
-            f"INTAKE_PROGRESS_NOTE_GUIDANCE missing field marker: {marker!r}"
-        )
-
-
-def test_progress_note_guidance_has_compliance_validation_block():
-    """Ongoing-session prompt must include the COMPLIANCE WARNING validation rules."""
-    from cfi_ai.prompts.progress_note import PROGRESS_NOTE_GUIDANCE
-    assert "COMPLIANCE WARNING" in PROGRESS_NOTE_GUIDANCE
-    assert "HJ" in PROGRESS_NOTE_GUIDANCE
-    assert "U5" in PROGRESS_NOTE_GUIDANCE
-    assert "GT" in PROGRESS_NOTE_GUIDANCE
-    assert "90837" in PROGRESS_NOTE_GUIDANCE
-    assert "Optum EWS" in PROGRESS_NOTE_GUIDANCE
-
-
-def test_intake_progress_note_guidance_has_compliance_validation_block():
-    """Intake prompt must also include COMPLIANCE WARNING validation rules."""
-    from cfi_ai.prompts.progress_note import INTAKE_PROGRESS_NOTE_GUIDANCE
-    assert "COMPLIANCE WARNING" in INTAKE_PROGRESS_NOTE_GUIDANCE
-    assert "HJ" in INTAKE_PROGRESS_NOTE_GUIDANCE
-    assert "U5" in INTAKE_PROGRESS_NOTE_GUIDANCE
-    assert "Optum EWS" in INTAKE_PROGRESS_NOTE_GUIDANCE
-
-
-def test_intake_progress_note_guidance_has_eap_cpt_rule():
-    """Intake generator must produce 90834 for EAP payers (see issue #83)."""
-    from cfi_ai.prompts.progress_note import INTAKE_PROGRESS_NOTE_GUIDANCE
-    assert "Optum EWS/EAP payers" in INTAKE_PROGRESS_NOTE_GUIDANCE
-    assert "90791 is NOT covered under Optum EWS/EAP" in INTAKE_PROGRESS_NOTE_GUIDANCE
-    assert "AND CPT = 90791" in INTAKE_PROGRESS_NOTE_GUIDANCE
-    assert "hardcoded to 90791" not in INTAKE_PROGRESS_NOTE_GUIDANCE
+def test_optum_eap_rules_carry_modifier_and_cpt_validation():
+    """Optum EWS/EAP modifier and CPT-code constraints live in the payer-rules module."""
+    from cfi_ai.prompts.payers.optum_eap import OPTUM_EAP_RULES
+    assert "HJ" in OPTUM_EAP_RULES
+    assert "U5" in OPTUM_EAP_RULES
+    assert "GT" in OPTUM_EAP_RULES
+    assert "90834" in OPTUM_EAP_RULES
+    assert "90791" in OPTUM_EAP_RULES
+    assert "Optum EWS" in OPTUM_EAP_RULES
 
 
 def test_client_profile_guidance_has_billing_section():
@@ -393,24 +302,21 @@ def test_client_profile_guidance_has_billing_section():
 
 
 def test_compliance_prompt_checks_new_fields():
-    """Compliance audit must reference the new TheraNest field names + EWS rules."""
+    """Compliance audit prompt is payer-agnostic but covers the generic TheraNest fields."""
     from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
     assert "Functional Impairment" in COMPLIANCE_PROMPT
     assert "Client's Response to Intervention" in COMPLIANCE_PROMPT
     assert "Therapeutic Intervention" in COMPLIANCE_PROMPT
     assert "Authorization Number" in COMPLIANCE_PROMPT
-    assert "EWS-Specific Checks" in COMPLIANCE_PROMPT
-    assert "HJ" in COMPLIANCE_PROMPT
-    assert "U5" in COMPLIANCE_PROMPT
-    assert "90837" in COMPLIANCE_PROMPT
     assert "Billing & Provider" in COMPLIANCE_PROMPT
 
 
-def test_compliance_prompt_has_eap_intake_cpt_rule():
-    """Compliance auditor must handle EAP intake CPT exception (see issue #83)."""
-    from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
-    assert "90834` for Optum EWS/EAP intakes" in COMPLIANCE_PROMPT
-    assert "CPT 90791 + Optum EWS/EAP intake = HARD BLOCK" in COMPLIANCE_PROMPT
+def test_optum_eap_rules_have_intake_cpt_exception():
+    """Optum EWS/EAP forbids 90791 at intake; the rule lives in the payer-rules module."""
+    from cfi_ai.prompts.payers.optum_eap import OPTUM_EAP_RULES
+    assert "90834" in OPTUM_EAP_RULES
+    assert "Do NOT use `90791`" in OPTUM_EAP_RULES
+    assert "Optum EAP intakes" in OPTUM_EAP_RULES
 
 
 def test_tp_review_references_new_field_names():
@@ -428,3 +334,79 @@ def test_session_map_phase1_backfills_billing_section():
     assert "Billing & Provider Information" in SESSION_MAP_PROMPT
     assert "interview" in SESSION_MAP_PROMPT
     assert "overwrite=true" in SESSION_MAP_PROMPT
+
+
+# --- Multi-payer Phase 0 wiring across all four clinical maps ---
+
+
+def _render_clinical_map_prompts(date: str = "2026-04-27") -> dict[str, str]:
+    """Render every clinical map prompt with all required placeholders filled."""
+    from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
+    from cfi_ai.prompts.intake import INTAKE_PROMPT
+    from cfi_ai.prompts.progress_note import PROGRESS_NOTE_GUIDANCE
+    from cfi_ai.prompts.session import SESSION_MAP_PROMPT
+    from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
+
+    note_guidance = PROGRESS_NOTE_GUIDANCE.format(date=date)
+    return {
+        "intake": INTAKE_PROMPT.format(date=date),
+        "session": SESSION_MAP_PROMPT.format(
+            date=date, progress_note_guidance=note_guidance
+        ),
+        "compliance": COMPLIANCE_PROMPT.format(date=date),
+        "tp-review": TP_REVIEW_PROMPT.format(date=date),
+    }
+
+
+def test_clinical_maps_have_payer_resolution_step():
+    """Every clinical map prompt must drive payer resolution + load_payer_rules."""
+    for map_name, prompt in _render_clinical_map_prompts().items():
+        assert "Resolve Payer" in prompt, f"{map_name} missing 'Resolve Payer' step"
+        assert "load_payer_rules" in prompt, f"{map_name} missing load_payer_rules call"
+
+
+def test_clinical_maps_have_slug_mapping_table():
+    """Every clinical map prompt must spell out the Payer-field-to-slug mapping."""
+    for map_name, prompt in _render_clinical_map_prompts().items():
+        for slug in ("optum-eap", "aetna", "evernorth"):
+            assert slug in prompt, f"{map_name} missing slug {slug!r} in payer-mapping table"
+        assert "Optum EWS/EAP" in prompt, f"{map_name} missing Optum payer-name example"
+
+
+def test_payer_resolution_precedes_record_loading_in_phased_maps():
+    """In compliance + tp-review, payer resolution is Phase 0 (runs before record loading)."""
+    for map_name in ("compliance", "tp-review"):
+        prompt = _render_clinical_map_prompts()[map_name]
+        # Phase 0 should come before any later phase
+        phase_0_idx = prompt.find("Phase 0")
+        phase_1_idx = prompt.find("Phase 1")
+        assert phase_0_idx != -1, f"{map_name} missing 'Phase 0' label"
+        assert phase_1_idx != -1, f"{map_name} missing 'Phase 1' label"
+        assert phase_0_idx < phase_1_idx, f"{map_name} Phase 0 must precede Phase 1"
+
+
+def test_assessment_instrument_logic_gated_on_payer():
+    """Generic prompts must gate assessment-instrument work on the active payer's rules.
+
+    This is the de-Optum-ization invariant: the literal strings 'G22E02',
+    'Global Distress', and 'CAGE-AID' should NOT appear in the generic
+    prompts (intake, session, compliance, tp-review) — they live in
+    `prompts/payers/optum_eap.py` only.
+    """
+    for map_name, prompt in _render_clinical_map_prompts().items():
+        for forbidden in ("G22E02", "Global Distress", "CAGE-AID"):
+            assert forbidden not in prompt, (
+                f"{map_name} contains {forbidden!r} — should be payer-conditional, "
+                f"not baked into the generic prompt"
+            )
+
+
+def test_intake_compliance_tp_review_use_assessment_gate_phrasing():
+    """Maps that touch assessment instruments must use 'active payer' gate phrasing."""
+    rendered = _render_clinical_map_prompts()
+    for map_name in ("intake", "compliance", "tp-review"):
+        prompt = rendered[map_name]
+        assert "active payer" in prompt, (
+            f"{map_name} should gate assessment-instrument logic on the active payer "
+            f"(missing 'active payer' phrasing)"
+        )

@@ -60,7 +60,7 @@ def test_session_prompt(tmp_path):
     assert not result.startswith("Error:")
     today = datetime.date.today().isoformat()
     assert today in result
-    assert "Progress Note Guidance" in result
+    assert "TheraNest Form: Progress Note" in result
     assert "run_command ls clients/" in result
 
 
@@ -82,18 +82,10 @@ def test_tp_review_prompt(tmp_path):
     assert "You must have the latest treatment plan." in result
 
 
-def test_wa_prompt(tmp_path):
-    ws = _make_workspace(tmp_path)
-    result = _execute_map(ws, map="wellness-assessment")
-    assert not result.startswith("Error:")
-    assert "run_command ls clients/" in result
-    assert "initial" in result.lower()
-
-
 def test_no_current_md_in_prompts(tmp_path):
     """No prompt output should contain current.md references."""
     ws = _make_workspace(tmp_path)
-    for map_name in ("intake", "session", "compliance", "tp-review", "wellness-assessment"):
+    for map_name in ("intake", "session", "compliance", "tp-review"):
         result = _execute_map(ws, map=map_name)
         assert "current.md" not in result, f"{map_name} prompt contains current.md"
 

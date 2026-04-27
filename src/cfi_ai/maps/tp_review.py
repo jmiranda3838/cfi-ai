@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 @register_map(
     "tp-review",
-    description="Review and update a client's treatment plan based on progress notes; requires an existing treatment plan and progress notes to generate updates",
+    description="Review and update a client's treatment plan based on progress notes (run at the 90-day review checkpoint or when clinical change warrants); requires an existing treatment plan and progress notes to generate updates",
 )
 def handle_tp_review(
     args: str | None,

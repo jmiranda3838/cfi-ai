@@ -16,7 +16,7 @@ if TYPE_CHECKING:
 
 @register_map(
     "compliance",
-    description="Run Optum compliance check on a client's records; missing records may be surfaced as findings",
+    description="Run a payer compliance check on a client's records; missing records may be surfaced as findings",
 )
 def handle_compliance(
     args: str | None,
@@ -25,6 +25,6 @@ def handle_compliance(
     session_store: "SessionStore",
 ) -> MapResult:
     today = datetime.date.today().isoformat()
-    ui.print_info(f"Running Optum compliance check ({today}).")
+    ui.print_info(f"Running compliance check ({today}).")
     message = invocation_preface("compliance", args) + render_map_prompt("compliance", date=today)
     return MapResult(message=message, map_mode=True)

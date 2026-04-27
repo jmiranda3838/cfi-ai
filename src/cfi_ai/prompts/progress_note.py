@@ -1,11 +1,267 @@
-"""Progress note guidance — single source of truth for both ongoing and intake variants."""
+"""Authoritative TheraNest form spec for the "Progress Note" — source of truth for both ongoing and intake variants. Clinical, narrative-therapy, and payer-compliance guidance lives in separate modules."""
 
-from cfi_ai.prompts.narrative_therapy import NARRATIVE_THERAPY_PRINCIPLES
+# Each Mental Status domain in TheraNest is its own multi-select sub-field
+# with a fixed vocabulary. Master lists are the single source of truth so all
+# downstream prompts (compliance, tp-review, etc.) agree on allowed values.
+THERANEST_APPEARANCE_OPTIONS = """\
+clean
+dirty
+appropriate to age
+meticulous
+odor
+older than age
+unbathed
+unkempt
+unremarkable
+well-groomed
+younger than age
+WNL\
+"""
 
-PROGRESS_NOTE_GUIDANCE = (
-    NARRATIVE_THERAPY_PRINCIPLES
-    + """\
-## Progress Note Guidance (TheraNest 30-Field Form)
+THERANEST_ORIENTATION_OPTIONS = """\
+x4: time, place, person, situation
+x1: time only
+x1: place only
+x1: person only
+x1: situation only
+x2: time + place (not person, situation)
+x2: time + person (not place, situation)
+x2: time + situation (not place, person)
+x2: place + person (not time, situation)
+x2: place + situation (not time, person)
+x2: person + situation (not time, place)
+x3: time + place + person (not situation)
+x3: time + person + situation (not place)
+x3: place + person + situation (not time)
+WNL\
+"""
+
+THERANEST_BEHAVIOR_OPTIONS = """\
+agitated
+alert
+awkward
+belligerent
+clumsy
+compulsive
+cooperative
+delirious
+distracted
+echopraxia
+fatigued
+grimacing
+guarded
+hostile
+hyperactive
+hypoactive
+impulsive
+manipulative
+mannerisms
+playful
+pleasant
+provocative
+relaxed
+ritualistic
+seductive
+sleepy
+stiff
+stuporous
+suspicious
+tics
+tremulous
+uncooperative
+withdrawn
+WNL\
+"""
+
+THERANEST_SPEECH_OPTIONS = """\
+expansive
+hesitant
+inaudible
+incoherent
+loud
+monotonous
+mute
+pressured
+rapid
+repetitive
+slow
+slurred
+soft
+stuttering
+verbose
+whispering
+WNL\
+"""
+
+THERANEST_AFFECT_OPTIONS = """\
+appropriate to situation
+blunted
+constricted
+expansive
+flat
+inappropriate to situation
+labile
+lively
+stable
+WNL\
+"""
+
+THERANEST_MOOD_OPTIONS = """\
+angry
+anxious: mild
+anxious: moderate
+anxious: severe
+anxious: panic
+aggressive
+apathetic
+apprehensive
+belligerent
+combative
+depressed
+dysphoric
+elevated
+euphoric
+fearful
+hopeless
+hostile
+hurt
+irritable
+miserable
+optimistic
+perplexed
+pessimistic
+regretful
+sad
+seductive
+shame
+WNL
+hopeful\
+"""
+
+THERANEST_THOUGHT_PROCESS_OPTIONS = """\
+blocked
+circumstantial
+coherent
+disorganized
+echolalia
+flight of ideas
+fragmented
+goal directed
+incoherent
+irrational
+loosely associated
+mutism
+neologistic
+obsessive
+organized
+perseverative
+preoccupied
+recent memory impairment
+remote memory impairment
+rigid
+tangential
+word salad
+WNL\
+"""
+
+THERANEST_THOUGHT_CONTENT_OPTIONS = """\
+concrete thinking
+delusions: bizarre
+delusions: erotomanic
+delusions: grandiose
+delusions: guilt, sin
+delusions: influence (active)
+delusions: influence (passive)
+delusions: mind-reading
+delusions: mood-congruent
+delusions: mood-incongruent
+delusions: nihilistic
+delusions: persecutory
+delusions: religious
+delusions: somatic
+delusions: thought insertion
+delusions: thought withdrawal
+delusions: other
+homicidal ideation
+ideas of reference
+obsessions
+overvalued ideas
+paranoid ideation
+phobias
+poverty of thought
+suicidal ideation
+WNL\
+"""
+
+THERANEST_PERCEPTION_OPTIONS = """\
+depersonalization
+derealization
+hallucinations: auditory
+hallucinations: gustatory
+hallucinations: kinesthetic
+hallucinations: olfactory
+hallucinations: tactile
+hallucinations: visual
+WNL\
+"""
+
+THERANEST_JUDGMENT_OPTIONS = """\
+appropriate
+impaired
+inappropriate
+intact
+unrealistic
+WNL\
+"""
+
+THERANEST_INSIGHT_OPTIONS = """\
+emotional
+full
+impaired
+intellectual
+intellectual and emotional
+limited
+none
+partial
+WNL\
+"""
+
+THERANEST_APPETITE_OPTIONS = """\
+binging
+binging and purging
+decreased
+erratic
+increased
+purging
+restricting
+WNL\
+"""
+
+THERANEST_SLEEP_OPTIONS = """\
+early insomnia
+excessive
+impaired
+middle insomnia
+terminal insomnia
+WNL\
+"""
+
+# Shared vocabulary for the Risk Assessment section's Suicidality and
+# Homicidality sub-fields (both are multi-select with the same options).
+THERANEST_RISK_PRESENTATION_OPTIONS = """\
+Not Present
+Ideation
+Plan
+Intent
+Attempt\
+"""
+
+_RAW_PROGRESS_NOTE_GUIDANCE = """\
+## TheraNest Form: Progress Note
+
+Fields on the TheraNest Progress Note form, in the order they appear. Each \
+section below maps 1:1 onto a TheraNest field. This document describes only \
+what TheraNest expects — not how to write it.
 
 Write the progress note as a markdown document with one section per TheraNest \
 field, in the EXACT field order below. The clinician will paste each section \
@@ -17,604 +273,364 @@ profile's **Billing & Provider Information** section before generating the \
 note; the session map will have already used `interview` to populate it if it \
 was missing.
 
-Apply narrative-therapy framing throughout: externalized language, unique \
-outcomes, preferred story development. Clinical narrative-therapy progress \
-metrics (externalizing ratings, unique outcomes, preferred story thickening) \
-live in fields #25, #26, and #27 below.
+This form spec is payer-agnostic. CPT-code allowlists, required modifiers, \
+authorization handling, and any payer-specific assessment instruments come \
+from the payer rules loaded via `load_payer_rules` at the start of the \
+workflow. Fill billing fields per the active payer's rules — do not infer \
+payer-specific behavior from this spec.
 
 ---
 
 ### Header / Administrative
 
-#### 1. Participant(s) in Session
-List everyone present with roles (e.g., "Client only", "Client and partner", \
-"Client and mother"). For minors, include parent/guardian role.
+#### Client Details
+Auto-populated by TheraNest from the client record. No content needs to be \
+produced for this field.
 
-#### 2. Type Of Note
-One of: `Individual` / `Family` / `Couples` / `Group` / `Termination`. \
-(Use `Intake` only for the first session — for ongoing sessions choose based \
-on participants.)
+#### Client ID Number
+Auto-generated by TheraNest. No content needs to be produced for this field.
+
+#### Service Start/End Date
+Two date fields: Service Start Date and Service End Date. For a single-session \
+service these are both today ({date}).
+
+#### Session Start/End Time
+Two time fields marking the exact start and end time of the session.
+
+#### Duration (minutes)
+Auto-calculated by TheraNest from the Session Start/End Time. No content needs \
+to be produced for this field.
+
+#### Appointment
+Dropdown. Select the TheraNest appointment record this progress note \
+documents. Entries appear in the format: \
+`<start time> - <end time>. <CPT code>: <duration> - <CPT description>, \
+<Type>, <Payer>, <Supervisee/Provider> (<supervisor details>)`. Example: \
+`07:00 AM - 08:00 AM. 90834: 41 - 38-52 mins, Individual, <Payer>, \
+Supervisee (<supervisor name, license>, <rendering provider, license>)`. \
+Produce your best guess based on the session details — the clinician will \
+correct the selection in TheraNest.
+
+#### Place Of Service
+CMS Place of Service code in the format `<Label> (<code>)`. For in-person \
+sessions use `Office (11)`. Select the code matching the session modality.
+
+#### Provider(s)
+Auto-populated by TheraNest with the associate therapist and supervisor. No \
+content needs to be produced for this field.
+
+#### Participant(s) in Session
+Textarea. List everyone present in the session with their role (e.g., \
+"Client only", "Client and partner", "Client and mother"). For minors, \
+include the parent/guardian role.
+
+#### Type Of Note
+Dropdown. One of: `Individual` / `Group` / `Family` / `Collateral`. Select \
+based on the participants in the session.
 
 ---
 
 ### Billing & Authorization
 
-#### 3. CPT Code Billed [REQUIRED]
-Choose the appropriate code based on session duration, participants, and \
-payer rules:
+#### CPT Code Billed [REQUIRED]
+Dropdown. Choose the appropriate code for session duration and participants:
 - `90832` — Individual psychotherapy, 16-37 minutes
-- `90834` — Individual psychotherapy, 38-52 minutes (most common)
-- `90837` — Individual psychotherapy, 53+ minutes (NOT allowed under Optum EWS)
+- `90834` — Individual psychotherapy, 38-52 minutes
+- `90837` — Individual psychotherapy, 53+ minutes
 - `90846` — Family therapy without patient present, 50 min
 - `90847` — Family/couples therapy with patient present, 50 min
 - `90791` — Reserved for intake; do not use for ongoing sessions
 
-#### 4. CPT Code Modifiers
-Apply this conditional logic based on the client profile's Billing & Provider \
-section:
-- **HJ** — REQUIRED for all Optum EWS/EAP claims. Add when Payer contains \
-"Optum EWS" or "EAP".
-- **U5** — REQUIRED when Supervised = Yes in the profile. Signals that the \
-service was rendered by a supervisee under licensed supervision.
-- **GT** or **95** — REQUIRED when Modality = Video or Phone (telehealth).
-- For self-pay, in-person, fully licensed clinicians: leave blank.
+#### CPT Code Modifiers
+Checkboxes for `HJ`, `U5`, `GT`, and `95`. Each modifier represents:
+- **HJ** — EAP (Employee Assistance Program) service indicator
+- **U5** — service rendered by a supervisee under licensed supervision
+- **GT** — synchronous telemedicine via interactive audio/video
+- **95** — synchronous real-time telehealth over HIPAA-compliant audio/video
 
-Format as comma-separated list: `HJ, U5` or `HJ, U5, 95` etc.
+#### Modality [REQUIRED]
+Dropdown. One of: `In-Person` / `Video` / `Phone`. Pull from the profile's \
+Default Modality, or infer from the source material if it differs (e.g., \
+session audio with in-person ambient sound vs. Zoom recording).
 
-#### 5. Modality [REQUIRED]
-`In-Person` / `Video` / `Phone`. Pull from the profile's Default Modality, or \
-infer from the source material if it differs (e.g., session audio with \
-in-person ambient sound vs. Zoom recording).
+#### Authorization Number
+Textarea. The payer-issued authorization number for this course of \
+treatment. Populate from the client profile's Authorization Number if one \
+is on file; otherwise leave blank.
 
-#### 6. Authorization Number
-Pull from the profile's Authorization Number field. Required for EAP/EWS; \
-leave blank for self-pay/non-authorized payers.
+#### Session # of Authorized Total
+The session's position within the authorized course of treatment. Compute \
+as `[count of existing progress notes for this client + 1] of [Total \
+Authorized Sessions from the profile]`. Example: `3 of 5`. Use \
+`run_command ls clients/<id>/sessions/` to count existing notes if needed.
 
-#### 7. Session # of Authorized Total
-Compute as `[count of existing progress notes for this client + 1] of \
-[Total Authorized Sessions from profile]`. Example: `3 of 5`. Critical for \
-EAP utilization tracking. Use `run_command ls clients/<id>/sessions/` if \
-needed to count existing notes.
-
-#### 8. Payer [REQUIRED]
+#### Payer [REQUIRED]
 Pull verbatim from the profile's Payer field (e.g., "Optum EWS/EAP", \
-"Anthem PPO", "Self-pay").
+"Aetna", "Evernorth", "Self-pay").
 
 ---
 
 ### Diagnosis
 
-#### 9. Diagnostic Impressions
-Pull the full ICD-10/DSM-5 diagnosis list from the most recent treatment plan \
-or initial assessment. List primary diagnosis first, then secondary. Format: \
-`F43.23 — Adjustment disorder with mixed anxiety and depressed mood`.
+#### Diagnostic Impressions
+Auto-populated by TheraNest from the Initial Assessment & Diagnostic Codes. \
+No content needs to be produced for this field.
 
-#### 10. Diagnosis Addressed This Session [REQUIRED]
-State which dx from #9 was the focus today. For most sessions this is the \
-primary diagnosis, but if a session addressed a secondary dx (e.g., \
-substance use during a primary depression treatment), name that one.
+#### Diagnosis Addressed This Session [REQUIRED]
+Textarea. State which dx from Diagnostic Impressions was the focus today. For \
+most sessions this is the primary diagnosis, but if a session addressed a \
+secondary dx (e.g., substance use during a primary depression treatment), \
+name that one.
 
 ---
 
 ### Treatment Plan Linkage
 
-#### 11. Treatment Goal History
-Brief history of how the goals have evolved across the treatment course: \
-which goals have been completed/closed, which have been added, which have been \
-modified. If this is an early session and history is sparse, write \
-`No prior goal modifications — [N] sessions into current treatment plan.`
+#### Treatment Goals
+Auto-populated by TheraNest from the full goals and objectives in the \
+Treatment Plan. No content needs to be produced for this field.
 
-#### 12. Current Treatment Goals
-Pull the current numbered goals and objectives from the most recent treatment \
-plan, verbatim. Format as a numbered list (Goal 1, Goal 2 — with Objective \
-1a, 1b under each).
-
-#### 13. Goals/Objectives Addressed This Session [REQUIRED]
-**Auditors look for explicit linkage here.** State which specific goal(s) and \
-objective(s) from #12 were worked on today, by number, and HOW each was \
-addressed. Example: "Goal 1, Objective 1a: Used externalizing conversation \
-to map the depression's current influence on Client's morning routine. Goal \
-2, Objective 2b: Identified two new unique outcomes from the past week."
+#### Goals/Objectives Addressed This Session [REQUIRED]
+Textarea. State which specific goal(s) and objective(s) from Treatment \
+Goals were worked on today, by number, and HOW each was addressed in \
+session.
 
 ---
 
 ### Mental Status Exam
 
-#### 14. Mental Status
-Map narrative MSE observations from this session to each sub-category. Output \
-as a markdown table with checkbox notation the clinician can paste:
+#### Mental Status
+Multi-field section. Each domain below is its own TheraNest sub-field — a \
+multi-select list where the clinician picks one or more items from a fixed \
+vocabulary. Use values from the provided lists verbatim; do not substitute, \
+paraphrase, or invent new values. If a domain is within normal limits, select \
+`WNL`.
 
-```
-| Domain | Observation |
-|---|---|
-| Appearance | [neat / disheveled / appropriate / etc.] |
-| Orientation | [oriented x3 / etc.] |
-| Behavior | [cooperative / restless / guarded / etc.] |
-| Speech | [normal rate/tone / pressured / slowed / etc.] |
-| Affect | [congruent / restricted / flat / labile / etc.] |
-| Mood | [euthymic / depressed / anxious / etc.] |
-| Thought Process | [linear / tangential / circumstantial / etc.] |
-| Thought Content | [no SI/HI / preoccupied with X / etc.] |
-| Perception | [no AH/VH / etc.] |
-| Judgment | [intact / fair / impaired] |
-| Insight | [good / fair / limited] |
-| Appetite | [normal / decreased / increased] |
-| Sleep | [normal / insomnia / hypersomnia] |
-```
+##### Appearance
+Multi-select list. Allowed values:
 
-#### 15. Functional Impairment [REQUIRED]
-**This field is critical for medical necessity — do NOT skip or boilerplate.**
-Document a **present-tense snapshot** of concrete impairment by domain: \
+__APPEARANCE_LIST__
+
+##### Orientation
+Multi-select list. Allowed values:
+
+__ORIENTATION_LIST__
+
+##### Behavior
+Multi-select list. Allowed values:
+
+__BEHAVIOR_LIST__
+
+##### Speech
+Multi-select list. Allowed values:
+
+__SPEECH_LIST__
+
+##### Affect
+Multi-select list. Allowed values:
+
+__AFFECT_LIST__
+
+##### Mood
+Multi-select list. Allowed values:
+
+__MOOD_LIST__
+
+##### Thought Process
+Multi-select list. Allowed values:
+
+__THOUGHT_PROCESS_LIST__
+
+##### Thought Content
+Multi-select list. Allowed values:
+
+__THOUGHT_CONTENT_LIST__
+
+##### Perception
+Multi-select list. Allowed values:
+
+__PERCEPTION_LIST__
+
+##### Judgment
+Multi-select list. Allowed values:
+
+__JUDGMENT_LIST__
+
+##### Insight
+Multi-select list. Allowed values:
+
+__INSIGHT_LIST__
+
+##### Appetite
+Multi-select list. Allowed values:
+
+__APPETITE_LIST__
+
+##### Sleep
+Multi-select list. Allowed values:
+
+__SLEEP_LIST__
+
+#### Functional Impairment [REQUIRED]
+Textarea. A present-tense snapshot of concrete impairment by domain: \
 work/school, relationships, self-care, ADLs (activities of daily living). \
 Describe current functioning only — do NOT include trajectory language \
-(improved/worsened/stable) here; trajectory belongs in #27 Client Progress. \
-Example: "Client reports missing 1 day of work this week; attended one social \
-outing with a friend; currently avoids grocery shopping due to anxiety in \
-crowds."
+(improved/worsened/stable) here; trajectory belongs in Client Progress. \
+Example: "Client reports missing 1 day of work this week; attended one \
+social outing with a friend; currently avoids grocery shopping due to \
+anxiety in crowds."
 
 ---
 
 ### Risk Assessment
 
-#### 16. Risk Assessment
-This format applies to the progress note's Risk Assessment field only. The \
-Initial Assessment's Risk Assessment is a different TheraNest field — see the \
-Initial Assessment Guidance section for its two-part structure.
+#### Suicidality [REQUIRED]
+Multi-select list. Allowed values:
 
-Format as a checkbox grid:
-```
-| Domain | Present | Notes |
-|---|---|---|
-| Suicidality | [Yes/No] | [details if Yes; "Client denies SI" if No] |
-| Homicidality | [Yes/No] | [details if Yes; "Client denies HI" if No] |
-| Risk Assessment Notes | | [self-harm history, prior attempts, ideation patterns, intervention used in session] |
-```
+__RISK_PRESENTATION_LIST__
 
-#### 17. Risk Level [REQUIRED]
-`None` / `Low` / `Moderate` / `High` / `Imminent`. Choose based on the risk \
-assessment in #16.
+Select `Not Present` if the client denies SI. Otherwise select all that apply \
+(e.g., `Ideation` alone for passive thoughts without plan or intent).
 
-#### 18. Protective Factors [REQUIRED]
-Required even when Risk Level = None. List concrete protective factors: \
-support system (specify who), reasons for living, future-oriented goals, \
-treatment engagement, coping skills already in use, religious/spiritual \
-resources, access to means restriction, etc.
+#### Homicidality [REQUIRED]
+Multi-select list. Allowed values:
 
-#### 19. Safety Plan (if clinically indicated)
-Populate ONLY if Risk Level > None. Use the Stanley-Brown Safety Plan format \
-(warning signs → internal coping → social distractions → people for help → \
-professionals/agencies → means restriction). For Risk Level = None, write \
-`Not clinically indicated at this time.`
+__RISK_PRESENTATION_LIST__
 
-#### 20. Tarasoff / Mandated Reporting Triggered? [REQUIRED]
-`Yes` / `No`. Triggered by: credible threat of harm to identifiable victim, \
-suspected child/elder/dependent adult abuse, or court-ordered disclosure.
+Select `Not Present` if the client denies HI. Otherwise select all that apply.
 
-#### 21. If "Yes" was selected above, please explain
-Populate ONLY if #20 = Yes. Document who was contacted (CPS/APS/police/victim), \
-when, what was reported, and supervisor consultation. Otherwise leave blank.
+#### Explanation
+Textarea. Populate with details for any non-`Not Present` selection above: \
+self-harm history, prior attempts, ideation patterns, identified target(s) \
+for HI, and intervention used in session. If both Suicidality and \
+Homicidality are `Not Present`, write `Client denies SI and HI.`
+
+#### Risk Level [REQUIRED]
+Dropdown. One of: `None` / `Low` / `Moderate` / `High` / `Imminent`. Choose \
+based on the Suicidality, Homicidality, and Explanation fields above.
+
+#### Protective Factors [REQUIRED]
+Textarea. Required even when Risk Level = None. List concrete protective \
+factors: support system (specify who), reasons for living, future-oriented \
+goals, treatment engagement, coping skills already in use, \
+religious/spiritual resources, access to means restriction, etc.
+
+#### Safety Plan (if clinically indicated)
+Textarea. Populate ONLY if Risk Level > None. Use the Stanley-Brown Safety \
+Plan format (warning signs → internal coping → social distractions → people \
+for help → professionals/agencies → means restriction). For Risk Level = \
+None, write `Not clinically indicated at this time.`
+
+#### Tarasoff / Mandated Reporting Triggered? [REQUIRED]
+Dropdown. One of: `Yes` / `No`. Triggered by: credible threat of harm to \
+identifiable victim, suspected child/elder/dependent adult abuse, or \
+court-ordered disclosure.
+
+#### If "Yes" was selected above, please explain
+Textarea. Populate ONLY if Tarasoff/Mandated Reporting Triggered? = Yes. \
+Document who was contacted (CPS/APS/police/victim), when, what was reported, \
+and supervisor consultation. Otherwise leave blank.
 
 ---
 
 ### Session Content
 
-#### 22. Subjective
-Client narrative and self-reported symptoms. What the client reported about \
-how the past week went, current state, what's changed, what's emerged. \
-Include direct quotes where clinically relevant. Use externalized language \
-where the client used it.
+#### Subjective
+Textarea. The client's self-report for this session: what the client \
+reported about the past week, current state, what has changed, what has \
+emerged. Include direct quotes where clinically relevant and use the \
+client's own language for symptoms, situations, and self-description.
 
-#### 23. Session Focus
-Primary topics, themes, and presenting issues addressed in this session. \
-Brief — 1-3 sentences.
+#### Session Focus
+Textarea. Primary topics, themes, and presenting issues addressed in this \
+session. Brief — 1-3 sentences.
 
-#### 24. Planned Intervention
-Narrative therapy interventions planned for upcoming sessions: externalizing \
-conversations, re-authoring conversations, scaffolding questions, \
-deconstructive listening/questioning, remembering practices, definitional \
-ceremonies, therapeutic documents (letters, certificates). Frame in terms of \
-what will move the client toward their preferred direction.
+#### Planned Intervention
+Textarea. **Past tense — what the clinician had planned for this session \
+BEFORE it occurred**, not interventions to be used in future sessions. \
+Document the pre-session plan: which interventions the clinician intended \
+to use today, tied to the treatment-plan goal(s) and objective(s) they \
+were selected to serve, and the clinical rationale for that plan. This \
+field is distinct from Therapeutic Intervention below, which documents \
+what was actually used in the session.
 
-#### 25. Therapeutic Intervention
-Specific clinical techniques used in THIS session, mapped to the goal/objective \
-they served. Examples:
-- "Externalizing conversation [Goal 1, Obj 1a] — mapped the depression's \
-influence on morning routine and decision-making"
-- "Re-authoring conversation [Goal 2, Obj 2a] — thickened the client's \
-preferred story of themselves as a 'capable parent'"
-- "Scaffolding questions [Goal 1, Obj 1b] — connected last week's unique \
-outcome to the client's values around connection"
+#### Therapeutic Intervention
+Textarea. The clinical technique(s) the clinician ACTUALLY USED in this \
+session, past tense, each tied to the treatment-plan goal(s) and \
+objective(s) it served. For each technique, briefly describe what was \
+done. This field documents execution — contrast with Planned Intervention \
+(the pre-session plan) and Client's Response to Intervention (how the \
+client received what was done).
 
-**This field is what the technique WAS.** See #26 and #27 for response and \
-trajectory.
+#### Client's Response to Intervention [REQUIRED]
+Textarea. The client's observable, in-session response to the \
+intervention(s) documented in Therapeutic Intervention: engagement level, \
+receptivity, insight or skill demonstrated, resistance, and any notable \
+moments. Focus on what was observed during this session. Cumulative \
+progress across sessions belongs in Client Progress.
 
-#### 26. Client's Response to Intervention [REQUIRED]
-**Distinct from #25 and #27 — this is whether the technique worked TODAY.**
-Document the client's observable response in this session: engagement, \
-willingness to externalize, narrative receptivity, insight demonstrated, \
-skill demonstration, resistance or breakthrough moments. Example: "Client \
-engaged readily with externalizing language for the first time, naming the \
-depression as 'the heaviness' and describing two moments this week when \
-they 'pushed back against the heaviness.'"
+#### Client Progress [REQUIRED]
+Two checkboxes: `Progress` and `No Progress`. Check exactly one, reflecting \
+the client's cumulative trajectory toward treatment-plan goals overall — \
+NOT just this session.
 
-#### 27. Client Progress
-Cumulative trajectory toward treatment goals overall — NOT just this session. \
-Document narrative-therapy measurable progress:
-- **Externalizing ratings** — e.g., "Client rates the anxiety's influence at \
-5/10, down from 8/10 at intake (Goal 1)"
-- **Unique outcomes frequency** — e.g., "Client identified 3 unique outcomes \
-this week, up from 0-1 in early sessions"
-- **Preferred story development** — e.g., "Preferred story of being a \
-'reliable friend' is now richly described and connected to two recent \
-behavioral instances"
-- **Functional trajectory** — domain-by-domain change over time, drawn from \
-#15 snapshots across sessions. State direction (improved/stable/worsened) per \
-domain. Example: "Work attendance improved from missing 3 days/week at intake \
-to 1 day/week currently; social engagement improved — attending weekly outing \
-vs. complete isolation at baseline; grocery shopping avoidance remains stable \
-since last session."
+#### Additional Details
+Textarea. Supporting detail for the Client Progress selection above. \
+Document concrete indicators of change (or lack of change) over time \
+across the active treatment-plan goals and objectives: symptom ratings, \
+behavioral frequencies, functional-domain change drawn from Functional \
+Impairment snapshots across sessions, and any other measurable targets \
+named in the treatment plan. Where possible, state direction (improved / \
+stable / worsened) per goal or domain.
 
 ---
 
 ### Synthesis
 
-#### 28. Medical Necessity Statement [REQUIRED]
-**This is Optum's #1 audit focus. Do NOT skip or boilerplate.** Explicitly tie \
-today's session to: (a) the active diagnosis from #10, (b) current symptoms / \
-functional impairment from #15, (c) treatment plan goals from #13, and (d) \
-why continued psychotherapy is clinically indicated. Reference specific \
-clinical findings from THIS session — never use a template phrase. If a \
-recent Wellness Assessment has GD ≥ 12, reference it as objective evidence.
+#### Medical Necessity Statement [REQUIRED]
+Textarea. Explicit clinical rationale for why continued psychotherapy is \
+indicated, tying together: (a) the active diagnosis from Diagnosis \
+Addressed This Session, (b) current symptoms and functional impairment \
+from Functional Impairment, (c) treatment-plan goals from \
+Goals/Objectives Addressed This Session, and (d) the clinical necessity \
+of ongoing treatment. Reference specific findings from THIS session \
+rather than template language.
 
-#### 29. Plan
-Free-text plan that folds in the following compliance items (none of these \
-have dedicated form fields):
-- **Homework / between-session tasks** assigned (e.g., noticing assignments, \
-reflective writing, externalizing journal, behavioral experiments)
-- **Referrals made** (e.g., psychiatric eval, group therapy, medical workup) \
-or `No referrals at this time`
+#### Plan
+Textarea. The clinical plan from today's session. Cover the items below — \
+none of these have dedicated TheraNest fields:
+- **Homework / between-session tasks** assigned (e.g., noticing \
+assignments, reflective writing, journaling prompts, behavioral \
+experiments)
+- **Referrals made** (e.g., psychiatric eval, group therapy, medical \
+workup) or `No referrals at this time`
 - **Next appointment**: date/time and focus areas for the next session
-- **Coordination of care**: Communication with PCP, psychiatrist, school, \
-family, other providers — OR explicitly note `Client declined ROI for \
-coordination of care at this time` or `No coordination of care needed today`
+- **Coordination of care**: communication with PCP, psychiatrist, school, \
+family, or other providers — OR explicitly note `Client declined ROI for \
+coordination of care at this time` or `No coordination of care needed \
+today`
 
-#### 30. Additional Notes
-Free-text field that folds in the following compliance items.
+#### Additional Notes
+Textarea. Any clinical information relevant to the session that does not \
+fit the structured fields above (e.g., supervisor consultation notes, \
+technical issues during telehealth, collateral contacts made).
 
-**Wellness Assessment tracking** — REQUIRED for Optum EWS clients (mandatory \
-at session 1, again between sessions 3-5, and per Optum re-administration \
-schedule). Format:
-```
-Wellness Assessment: Administered today: [Y/N] | Tool: [Optum WA-Adult / Optum WA-Youth / PHQ-9 / GAD-7 / Other] | Score: GD=[X]/45 [Severity] | Submitted to Optum: [Y/N] on [YYYY-MM-DD]
-```
-If the member refused: `Member refused WA — demographics submitted with MRef \
-bubble marked.` For non-Optum clients, only include the WA line if a screening \
-tool was actually administered.
-
-Any other clinical info that doesn't fit the structured fields above goes here \
-(e.g., supervisor consultation notes, technical issues during telehealth, \
-collateral contacts made, etc.).
-
----
-
-### Compliance Validation (run AFTER drafting all 30 fields)
-
-After populating every field, evaluate the following rules. If ANY rule fails, \
-prepend a `> [COMPLIANCE WARNING]` blockquote at the very TOP of the note \
-(above field #1) listing each violation and what the clinician must fix in \
-TheraNest before submission. Do NOT silently fix or omit fields.
-
-- **Payer is Optum EWS/EAP** → field #4 MUST contain `HJ`; field #6 MUST be \
-populated; field #7 MUST be populated; field #30 MUST contain a Wellness \
-Assessment line with submission status.
-- **Profile says Supervised = Yes** → field #4 MUST contain `U5`.
-- **Field #5 = Video or Phone** → field #4 MUST contain `GT` or `95`.
-- **Payer is Optum EWS AND CPT = 90837** → BLOCK: 90837 is NOT allowed under \
-Optum EWS. Recommend the clinician switch to 90834 (38-52 min).
-- **Field #17 (Risk Level) > None** → field #19 MUST be populated with a real \
-safety plan, not "Not clinically indicated".
-- **Field #20 = Yes** → field #21 MUST be populated.
-
-Example warning block:
-```
-> [COMPLIANCE WARNING]
-> - Payer is Optum EWS/EAP but the HJ modifier is missing from field #4.
-> - CPT 90837 is not allowed under Optum EWS — switch to 90834 (38-52 min).
-> Fix in TheraNest before submitting this claim.
-```
 """
+
+PROGRESS_NOTE_GUIDANCE = (
+    _RAW_PROGRESS_NOTE_GUIDANCE
+    .replace("__APPEARANCE_LIST__", THERANEST_APPEARANCE_OPTIONS)
+    .replace("__ORIENTATION_LIST__", THERANEST_ORIENTATION_OPTIONS)
+    .replace("__BEHAVIOR_LIST__", THERANEST_BEHAVIOR_OPTIONS)
+    .replace("__SPEECH_LIST__", THERANEST_SPEECH_OPTIONS)
+    .replace("__AFFECT_LIST__", THERANEST_AFFECT_OPTIONS)
+    .replace("__MOOD_LIST__", THERANEST_MOOD_OPTIONS)
+    .replace("__THOUGHT_PROCESS_LIST__", THERANEST_THOUGHT_PROCESS_OPTIONS)
+    .replace("__THOUGHT_CONTENT_LIST__", THERANEST_THOUGHT_CONTENT_OPTIONS)
+    .replace("__PERCEPTION_LIST__", THERANEST_PERCEPTION_OPTIONS)
+    .replace("__JUDGMENT_LIST__", THERANEST_JUDGMENT_OPTIONS)
+    .replace("__INSIGHT_LIST__", THERANEST_INSIGHT_OPTIONS)
+    .replace("__APPETITE_LIST__", THERANEST_APPETITE_OPTIONS)
+    .replace("__SLEEP_LIST__", THERANEST_SLEEP_OPTIONS)
+    .replace("__RISK_PRESENTATION_LIST__", THERANEST_RISK_PRESENTATION_OPTIONS)
 )
-
-INTAKE_PROGRESS_NOTE_GUIDANCE = """\
-## Progress Note Guidance (TheraNest 30-Field Form — Intake Session)
-
-Write the intake progress note as a markdown document with one section per \
-TheraNest field, in the EXACT field order below. The clinician will paste each \
-section into the corresponding TheraNest Dynamic Form field. Today's date is \
-{date}.
-
-This is an intake session — treatment plan goals are being **established**, \
-not tracked. CPT code is `90791` for non-EAP intakes and `90834` for Optum \
-EWS/EAP intakes (90791 is NOT covered under EAP). The Wellness Assessment \
-is ALWAYS administered at intake (Optum EWS requirement at session 1).
-
-Read the client profile's **Billing & Provider Information** section before \
-generating the note. If that section is missing, the session map will have \
-already used `interview` to populate it before reaching this step.
-
----
-
-### Header / Administrative
-
-#### 1. Participant(s) in Session
-List everyone present with roles (e.g., "Client only", "Client and partner", \
-"Client and therapist"). For minors, include parent/guardian role.
-
-#### 2. Type Of Note
-`Intake`
-
----
-
-### Billing & Authorization
-
-#### 3. CPT Code Billed [REQUIRED]
-Choose based on the client profile's Payer field:
-- **Non-EAP payers:** `90791` (Psychiatric Diagnostic Evaluation) — regardless \
-of duration.
-- **Optum EWS/EAP payers:** `90834` (Individual Psychotherapy, 38-52 min) — \
-90791 is NOT covered under Optum EWS/EAP.
-
-#### 4. CPT Code Modifiers
-Apply this conditional logic based on the client profile's Billing & Provider \
-section:
-- **HJ** — REQUIRED for all Optum EWS/EAP claims. Add when Payer contains \
-"Optum EWS" or "EAP".
-- **U5** — REQUIRED when Supervised = Yes in the profile. Signals that the \
-service was rendered by a supervisee under licensed supervision.
-- **GT** or **95** — REQUIRED when Modality = Video or Phone (telehealth).
-- For self-pay, in-person, fully licensed clinicians: leave blank.
-
-Format as comma-separated list: `HJ, U5` or `HJ, U5, 95` etc.
-
-#### 5. Modality [REQUIRED]
-`In-Person` / `Video` / `Phone`. Pull from the profile's Default Modality, or \
-infer from the source material if it differs (e.g., session audio with \
-in-person ambient sound vs. Zoom recording).
-
-#### 6. Authorization Number
-Pull from the profile's Authorization Number field. Required for EAP/EWS; \
-leave blank for self-pay/non-authorized payers.
-
-#### 7. Session # of Authorized Total
-Compute as `[count of existing progress notes for this client] + 1` of \
-[Total Authorized Sessions from profile]. For intake, this is typically \
-"1 of 5" or "1 of 10". Critical for EAP utilization tracking.
-
-#### 8. Payer [REQUIRED]
-Pull verbatim from the profile's Payer field (e.g., "Optum EWS/EAP", \
-"Anthem PPO", "Self-pay").
-
----
-
-### Diagnosis
-
-#### 9. Diagnostic Impressions
-Pull the full ICD-10/DSM-5 diagnosis list from this intake session's Initial \
-Assessment document. List primary diagnosis first, then secondary diagnoses. \
-Format: `F43.23 — Adjustment disorder with mixed anxiety and depressed mood`.
-
-#### 10. Diagnosis Addressed This Session [REQUIRED]
-For an intake, the primary diagnosis established in field #9. State which dx \
-was the focus of the assessment (typically the primary).
-
----
-
-### Treatment Plan Linkage
-
-#### 11. Treatment Goal History
-`N/A — initial intake; no prior treatment goals on record.`
-
-#### 12. Current Treatment Goals
-`Established this session — see treatment plan document for full numbered \
-goals and objectives.`
-
-#### 13. Goals/Objectives Addressed This Session [REQUIRED]
-`Baseline assessment — treatment plan goals established this session.` Then \
-list the goals and objectives created during intake by number for future \
-session linkage (e.g., "Goal 1: Reduce the influence of the anxiety on daily \
-functioning. Objective 1a: Externalize the anxiety and map its effects.").
-
----
-
-### Mental Status Exam
-
-#### 14. Mental Status
-Map narrative MSE observations from the session to each sub-category. Output \
-as a markdown table with checkbox notation the clinician can paste:
-
-```
-| Domain | Observation |
-|---|---|
-| Appearance | [neat / disheveled / appropriate / etc.] |
-| Orientation | [oriented x3 / etc.] |
-| Behavior | [cooperative / restless / guarded / etc.] |
-| Speech | [normal rate/tone / pressured / slowed / etc.] |
-| Affect | [congruent / restricted / flat / labile / etc.] |
-| Mood | [euthymic / depressed / anxious / etc.] |
-| Thought Process | [linear / tangential / circumstantial / etc.] |
-| Thought Content | [no SI/HI / preoccupied with X / etc.] |
-| Perception | [no AH/VH / etc.] |
-| Judgment | [intact / fair / impaired] |
-| Insight | [good / fair / limited] |
-| Appetite | [normal / decreased / increased] |
-| Sleep | [normal / insomnia / hypersomnia] |
-```
-
-#### 15. Functional Impairment [REQUIRED]
-**This field is critical for medical necessity — do NOT skip or boilerplate.**
-For intake, document baseline impairment across domains: work/school, \
-relationships, self-care, ADLs (activities of daily living). Be specific and \
-concrete (e.g., "Client reports missing 3 days of work in past 2 weeks due to \
-anxiety; has stopped attending weekly social gatherings; reports difficulty \
-cooking and grocery shopping due to fatigue from depression").
-
----
-
-### Risk Assessment
-
-#### 16. Risk Assessment
-This format applies to the intake progress note's Risk Assessment field only. \
-The Initial Assessment's Risk Assessment is a different TheraNest field — see \
-the Initial Assessment Guidance section for its two-part structure.
-
-Format as a checkbox grid:
-```
-| Domain | Present | Notes |
-|---|---|---|
-| Suicidality | [Yes/No] | [details if Yes; "Client denies SI" if No] |
-| Homicidality | [Yes/No] | [details if Yes; "Client denies HI" if No] |
-| Risk Assessment Notes | | [self-harm history, prior attempts, ideation patterns, intervention used in session] |
-```
-For intake, also include the CAGE-AID screen result if administered: \
-`CAGE-AID: [Negative / Positive (N/3)]` — this satisfies the substance use \
-risk domain.
-
-#### 17. Risk Level [REQUIRED]
-`None` / `Low` / `Moderate` / `High` / `Imminent`. Choose based on the risk \
-assessment in #16. For most stable intake clients without active SI/HI, this \
-will be `None` or `Low`.
-
-#### 18. Protective Factors [REQUIRED]
-Required even when Risk Level = None. List concrete protective factors: \
-support system (specify who), reasons for living, future-oriented goals, \
-treatment engagement, coping skills already in use, religious/spiritual \
-resources, access to means restriction, etc.
-
-#### 19. Safety Plan (if clinically indicated)
-Populate ONLY if Risk Level > None. Use the Stanley-Brown Safety Plan format \
-(warning signs → internal coping → social distractions → people for help → \
-professionals/agencies → means restriction). For Risk Level = None, write \
-`Not clinically indicated at this time.`
-
-#### 20. Tarasoff / Mandated Reporting Triggered? [REQUIRED]
-`Yes` / `No`. Triggered by: credible threat of harm to identifiable victim, \
-suspected child/elder/dependent adult abuse, or court-ordered disclosure. \
-For most intake sessions this is `No`.
-
-#### 21. If "Yes" was selected above, please explain
-Populate ONLY if #20 = Yes. Document who was contacted (CPS/APS/police/victim), \
-when, what was reported, and supervisor consultation. Otherwise leave blank.
-
----
-
-### Session Content
-
-#### 22. Subjective
-Client narrative and self-report. What the client reported about their \
-presenting issues, history of the problem, prior treatment, current symptoms, \
-and what brought them in now. Include direct quotes where clinically relevant. \
-Use externalized language where the client used it (e.g., "Client describes \
-the depression as 'something that pulls me under'").
-
-#### 23. Session Focus
-Primary topics, themes, and presenting issues addressed in the intake. For \
-intake this is typically: history-taking, presenting problem exploration, \
-externalizing introduction, risk screening, baseline functioning assessment, \
-preferred direction.
-
-#### 24. Planned Intervention
-Narrative therapy interventions planned for upcoming sessions: externalizing \
-conversations, re-authoring conversations, scaffolding questions, \
-deconstructive listening/questioning, remembering practices, definitional \
-ceremonies, therapeutic documents (letters, certificates). Frame in terms of \
-the client's preferred direction.
-
-#### 25. Therapeutic Intervention
-Specific clinical techniques used in THIS intake session. For intake, this \
-typically includes: diagnostic interview, biopsychosocial assessment, \
-narrative therapy stance-taking, externalizing introduction, Wellness \
-Assessment administration, risk assessment, treatment planning collaboration. \
-Be specific.
-
-#### 26. Client's Response to Intervention [REQUIRED]
-**Distinct from #27 — this is whether the intake interventions worked TODAY.**
-Document the client's observable response to the intake process: engagement \
-level, willingness to externalize the problem, narrative receptivity, comfort \
-with the structure, insight demonstrated, areas of resistance or difficulty.
-
-#### 27. Client Progress
-For intake: `Baseline established this session.` Briefly note the starting \
-point (e.g., "Baseline GD = 28/45 Severe; baseline externalizing rating: \
-client rates the depression's influence at 9/10").
-
----
-
-### Synthesis
-
-#### 28. Medical Necessity Statement [REQUIRED]
-**This is Optum's #1 audit focus. Do NOT skip or boilerplate.** Explicitly tie \
-today's intake to: (a) the active diagnosis from #10, (b) current symptoms / \
-functional impairment from #15, (c) treatment plan goals being established in \
-#13, and (d) why ongoing psychotherapy is clinically indicated. Reference \
-specific clinical findings from this session — never use a template phrase. \
-For intake, baseline GD score ≥ 12 supports medical necessity as objective \
-evidence of clinically significant distress.
-
-#### 29. Plan
-Free-text plan that folds in the following compliance items (none of these \
-have dedicated form fields):
-- **Homework / between-session tasks** assigned (e.g., noticing assignments, \
-reflective writing about preferred outcomes, externalizing journal)
-- **Referrals made** (e.g., psychiatric eval, group therapy, medical workup) \
-or `No referrals at this time`
-- **Next appointment**: date/time and focus areas for the next session
-- **Coordination of care**: Communication with PCP, psychiatrist, school, \
-family, prior providers — OR explicitly note `Client declined ROI for \
-coordination of care at this time` or `No coordination of care needed today`
-
-#### 30. Additional Notes
-Free-text field that folds in the following compliance items.
-
-**Wellness Assessment tracking** — REQUIRED for Optum EWS clients (and \
-ALWAYS at intake, since the initial WA is mandatory at session 1). Format:
-```
-Wellness Assessment: Administered today: Y | Tool: Optum WA-Adult (G22E02) | Score: GD=[X]/45 [Severity]; CAGE-AID=[N]/3 [Negative/Positive] | Submitted to Optum: [Y/N] on [YYYY-MM-DD]
-```
-If the member refused: `Member refused WA — demographics submitted with MRef \
-bubble marked.` For non-Optum clients, only include the WA line if a screening \
-tool was actually administered.
-
-Any other clinical info that doesn't fit the structured fields above goes here \
-(e.g., notable observations about narrative receptivity, supervisor \
-consultation notes, technical issues during telehealth, etc.).
-
----
-
-### Compliance Validation (run AFTER drafting all 30 fields)
-
-After populating every field, evaluate the following rules. If ANY rule fails, \
-prepend a `> [COMPLIANCE WARNING]` blockquote at the very TOP of the note \
-(above field #1) listing each violation and what the clinician must fix in \
-TheraNest before submission. Do NOT silently fix or omit fields.
-
-- **Payer is Optum EWS/EAP** → field #4 MUST contain `HJ`; field #6 MUST be \
-populated; field #7 MUST be populated; field #30 MUST contain a Wellness \
-Assessment line with submission status.
-- **Profile says Supervised = Yes** → field #4 MUST contain `U5`.
-- **Field #5 = Video or Phone** → field #4 MUST contain `GT` or `95`.
-- **Payer is Optum EWS AND CPT = 90837** → BLOCK: 90837 is not allowed under \
-Optum EWS. Switch to 90834.
-- **Payer is Optum EWS/EAP AND CPT = 90791** → BLOCK: 90791 is NOT covered \
-under Optum EWS/EAP. Use 90834 for EAP intakes.
-- **Field #17 (Risk Level) > None** → field #19 MUST be populated with a \
-real safety plan.
-- **Field #20 = Yes** → field #21 MUST be populated.
-
-Example warning block:
-```
-> [COMPLIANCE WARNING]
-> - Payer is Optum EWS/EAP but the HJ modifier is missing from field #4.
-> - Authorization Number (#6) is blank — Optum EWS requires this populated.
-> Fix in TheraNest before submitting this claim.
-```
-"""

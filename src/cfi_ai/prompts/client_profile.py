@@ -1,49 +1,41 @@
-"""Client Profile guidance (internal reference, drives progress-note compliance)."""
+"""Schema for the per-client profile document — the canonical location for client-level facts cfi-ai needs across sessions. Clinical guidance and payer-compliance rules live in separate modules."""
 
 CLIENT_PROFILE_GUIDANCE = """\
 ## Client Profile Guidance (Internal Reference)
 
-> **Note:** This document is for internal app reference only — not for pasting \
-into TheraNest. The intake questionnaire data goes directly into TheraNest \
-Client Profile (Parts 1-3) by the clinician. This profile is used by the app \
-to provide context when generating future session notes for returning clients.
+> **Note:** This profile is an internal cfi-ai reference — it does not live \
+in TheraNest. The information captured here is loaded as client context and \
+feeds the TheraNest-bound documents cfi-ai generates (progress notes, \
+treatment plans).
 
 Write a concise, reusable profile summary:
 - **Demographics**: Age, pronouns, relationship status, living situation, occupation (as disclosed)
 - **Presenting Problems**: Brief summary of current concerns
 - **Psychosocial Context**: Key relationships, stressors, supports
 - **Medical / Substance History**: Relevant medical conditions, medications, substance use
-- **Strengths**: Client strengths framed as narrative therapy resources — \
-preferred stories, unique outcomes, insider knowledges (what the client knows \
-about their own life that others may not), values and commitments, skills of \
-living, and relational resources that support the preferred identity
+- **Strengths**: Client strengths, values, supports, and skills relevant to the work
 - **Cultural Considerations**: Cultural identity, relevant cultural factors for treatment
 
 ## Billing & Provider Information
 
-> **Important:** This section drives compliant progress note generation. The \
-session map reads these fields to populate CPT modifiers, authorization fields, \
-supervision lines, and Wellness Assessment tracking automatically. If any of \
-these fields are missing or unknown, leave them as `[unknown]` and the session \
-map will use `interview` to backfill before generating the next progress note.
+> **Note:** Per-client billing and provider context. Capture what's known; \
+if any field is missing or unknown, leave it as `[unknown]` and the session \
+workflow will backfill via `interview` before the next progress note.
 
 - **Payer**: Insurance plan or payment source. Examples: "Optum EWS/EAP", \
 "Optum Commercial", "Anthem PPO", "Aetna", "Self-pay", "Sliding scale".
-- **Authorization Number**: Required for EAP/EWS clients. Blank or "N/A" \
-otherwise. Example: "AUTH-2026-04829".
+- **Authorization Number**: Populate when the payer requires authorization \
+(e.g., EAP/EWS); otherwise blank or `N/A`. Example: "AUTH-2026-04829".
 - **Total Authorized Sessions**: Integer count of sessions covered by the \
 current authorization. Example: "5". Use "N/A" for non-authorized payers.
 - **Authorization Period**: Start and end dates of the current authorization. \
 Example: "2026-01-15 to 2026-04-15". Use "N/A" if not applicable.
 - **Default Modality**: Typical session delivery method for this client. \
-Options: `In-Person`, `Video`, `Phone`. This drives CPT code modifier selection \
-(GT or 95 for telehealth).
+One of: `In-Person`, `Video`, `Phone`.
 - **Rendering Provider**: The clinician seeing the client. Example: \
-"Jonathan Miranda, AMFT" or "Chris Hoff, LMFT". For Associate-level clinicians \
-(AMFT, ACSW, APCC), the supervisor is the rendering provider on the claim.
+"Jonathan Miranda, AMFT" or "Chris Hoff, LMFT".
 - **Supervised**: `Yes` or `No`. Yes for Associate-level clinicians (AMFT, \
-ACSW, APCC) practicing under supervision. When Yes, the U5 modifier MUST appear \
-on every progress note for this client.
+ACSW, APCC) practicing under supervision.
 - **Supervisor**: Only populate when Supervised = Yes. Format: \
 "Name, license type, NPI #". Example: "Chris Hoff, LMFT, NPI 1760705818".
 - **Supervision Format**: How supervision is conducted for this case. Options: \

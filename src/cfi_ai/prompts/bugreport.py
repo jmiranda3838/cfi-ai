@@ -23,7 +23,7 @@ _LABEL_GROUPS: tuple[tuple[str, tuple[str, ...]], ...] = (
                   "positive-feedback", "mixed")),
     ("Specific sub-categories", ("arithmetic", "tool-desync", "apply-patch")),
     ("Map tags (apply if the session used that map)",
-     ("intake", "session", "compliance", "tp-review", "wellness-assessment")),
+     ("intake", "session", "compliance", "tp-review")),
 )
 
 # `auto-reported` is applied unconditionally by the handler, not proposed by
@@ -94,7 +94,7 @@ Rules for Part A:
   - `[clean] /session note drafted for [CLIENT_A] without issue`
   - `[friction] apply_patch retried once after old_text mismatch`
   - `[issue] intake reused today's date instead of original intake date`
-  - `[broken] wellness-assessment scoring off by 3, severity mislabeled`
+  - `[broken] G22E02 scoring off by 3 in intake, severity mislabeled`
 - **labels**: drawn ONLY from this closed vocabulary (any label outside \
   this list will be silently dropped by the handler):
 {_render_label_bullets()}

@@ -14,7 +14,7 @@ if TYPE_CHECKING:
     from cfi_ai.workspace import Workspace
 
 
-@register_map("session", description="Generate an Optum-compliant progress note for a session")
+@register_map("session", description="Generate a progress note for an ongoing therapy session")
 def handle_session(
     args: str | None,
     ui: UI,

@@ -1,4 +1,4 @@
-"""Treatment Plan guidance (TheraNest Part 7) — single source of truth including intervention master list."""
+"""Authoritative TheraNest form spec for "Treatment Plan" — source of truth. Clinical and narrative-therapy writing guidance lives in separate modules."""
 
 from cfi_ai.prompts.shared import indent_block
 
@@ -116,61 +116,73 @@ Workbooks\
 """
 
 _RAW_TREATMENT_PLAN_GUIDANCE = """\
-## Treatment Plan Guidance (TheraNest Part 7)
+## TheraNest Form: Treatment Plan
 
-Write a treatment plan structured to match TheraNest's Treatment Plan tab. Each \
-section should be directly copy-pasteable into the corresponding TheraNest field.
+Fields on the TheraNest "Treatment Plan" tab, in the order they appear. Each \
+section below maps 1:1 onto a TheraNest field. This document describes only \
+what TheraNest expects — not how to write it.
 
-- **Behavioral Definitions** — Describe the problem's effects on the client \
-using externalized language: how the problem shows up in the client's life, \
-the specific ways it influences their behavior, relationships, mood, and \
-functioning. Frame as the problem's impact rather than the client's deficits \
-(e.g., "The depression has reduced Client's engagement in social activities \
-from daily to once per week" rather than "Client is socially withdrawn"). \
-Include observable behavioral indicators and functional impairments. If \
-Wellness Assessment data is available, include baseline GD score as a \
-measurable indicator.
-- **Referral for Additional Services?** — None, Yes, or No. If Yes, specify \
-the referral (e.g., psychiatric evaluation, group therapy, substance abuse \
-treatment).
+Global conventions:
+- Write all textareas as prose.
+- No textarea should be left blank. When a field does not apply, state so \
+explicitly (e.g., "No additional referrals were identified as needed.").
+- All dropdown values must be selected verbatim from the provided options — \
+do not substitute, paraphrase, or invent new values.
+
+- **Review** — dropdown: 7, 14, 30, 60, 90, or 120 days. TheraNest \
+displays this as "Review in <days> days on <date>," auto-calculating the \
+review date by adding the selected number of days to the Initiation Date.
+- **Diagnostic Impressions** — Auto-populated by TheraNest from the \
+diagnoses selected on the Initial Assessment & Diagnostic Codes tab. Not \
+editable on the Treatment Plan form; no content needs to be produced for \
+this field.
+- **Behavioral Definitions** — textarea. Concrete, observable descriptions \
+of how each presenting problem currently manifests in the client's life. \
+For each problem area covered in the plan, cover the specific behaviors, \
+symptoms, and functional impairments (work, school, relationships, daily \
+living) that define that problem. Include measurable baselines where \
+available — frequency, duration, or severity of behaviors, and standardized \
+assessment scores such as a Wellness Assessment GD score. When multiple \
+problems are being treated, delineate the behavioral definitions for each.
+- **Referral for Additional Services?** — Two-part field:
+    - dropdown: None, Yes, or No.
+    - **Explanation** — textarea. If Yes, specify the referral(s) (e.g., \
+psychiatric evaluation, group therapy, substance abuse treatment, medical \
+consultation). If None or No, state that no additional referrals were \
+identified as needed.
 - **Expected Length of Treatment** — Duration estimate (e.g., "6 months," \
 "12 sessions").
 - **Initiation Date** — Today's date ({date}).
 - **Appointments Frequency** — e.g., "Weekly," "Biweekly."
 - **Treatment Modality** — Individual / Marriage / Family / Other. Specify \
 which applies.
-- **Goals & Objectives** — Number each goal (Goal 1, Goal 2, etc.) and each \
-objective under it (Objective 1a, 1b, 2a, etc.) so progress notes can reference \
-them. For each goal:
-  - **Client Goal**: State the goal in terms of the client's preferred \
-relationship to the problem — measurable changes in the problem's influence \
-on the client's life, development of preferred stories, or behavioral \
-indicators of living from the preferred narrative. Include a target completion \
-date. Examples: "Client will report the anxiety's influence on daily decisions \
-has decreased from 8/10 to 4/10 or below," "Client will identify and describe \
-3+ unique outcomes where they acted from their preferred story."
-  - For each goal, list one or more **Objectives**:
-    - Objective Description — specific, measurable steps toward the goal, \
-framed as narrative therapy milestones (e.g., "Client will externalize the \
-problem and name it," "Client will identify 2 unique outcomes per session," \
-"Client will articulate preferred story of self in relationship to the problem")
-    - Intervention — pick one or more items VERBATIM from the TheraNest \
-intervention list below. **Strict rules:**
-      - Use the exact label as written — do not paraphrase, abbreviate, or \
-modify capitalization.
-      - Multiple items per objective are allowed; separate with commas \
-(e.g., "Narrative Therapy, Reframing, Empowerment").
-      - Do NOT add explanatory prose, parentheticals, or therapist-action \
-sentences after the labels — the Intervention field is a label list, not a \
-description. The narrative-therapy framing belongs in the Client Goal and \
-Objective Description fields above, not here.
-      - The complete allowed list:
+- **Client Goals** — one subsection per goal. Number each goal (Goal 1, \
+Goal 2, etc.) and each objective within it (Objective 1, Objective 2, etc.) \
+so progress notes can reference them. Each Client Goal subsection has the \
+following fields:
+    - **Client Goal** — textarea. State the goal in measurable terms tied \
+to the problem(s) identified in Behavioral Definitions.
+    - **Target Completion Date** — date for this goal.
+    - **Objectives** — one sub-subsection per objective. Each objective \
+subsection has the following fields:
+        - **Objective [number]** — the objective's number within the \
+parent goal (e.g., Objective 1, Objective 2).
+        - **Objective Description** — textarea. Specific, measurable step \
+toward the parent goal; describes what the client will do or demonstrate.
+        - **Intervention** — dropdown. One or more items from the \
+TheraNest intervention list. Rules:
+            - Multiple items per objective are allowed; separate with \
+commas (e.g., "Narrative Therapy, Reframing, Empowerment").
+            - Do NOT add explanatory prose, parentheticals, or \
+therapist-action sentences after the labels — the Intervention field is \
+a label list, not a description.
+            - The complete allowed list:
 __INTERVENTION_LIST__
-    - Target Completion Date
-    - Status: In Progress
+        - **Target Completion Date** — date for this objective.
+        - **Status** — dropdown: In Progress, Complete, Closed, or Deferred.
 """
 
 TREATMENT_PLAN_GUIDANCE = _RAW_TREATMENT_PLAN_GUIDANCE.replace(
     "__INTERVENTION_LIST__",
-    indent_block(THERANEST_INTERVENTIONS, "      "),
+    indent_block(THERANEST_INTERVENTIONS, "            "),
 )

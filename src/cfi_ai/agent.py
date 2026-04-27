@@ -33,7 +33,6 @@ _MAP_DISPLAY_NAMES = {
     "session": "Session",
     "compliance": "Compliance",
     "tp-review": "Treatment Plan Review",
-    "wellness-assessment": "Wellness Assessment",
 }
 
 

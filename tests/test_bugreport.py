@@ -728,8 +728,8 @@ def test_parse_metadata_header_tolerates_leading_whitespace():
 
 
 def test_filter_labels_keeps_only_allowlist():
-    proposed = ["clean", "positive-feedback", "not-a-real-label", "wellness-assessment"]
-    assert _filter_labels(proposed) == ["clean", "positive-feedback", "wellness-assessment"]
+    proposed = ["clean", "positive-feedback", "not-a-real-label"]
+    assert _filter_labels(proposed) == ["clean", "positive-feedback"]
 
 
 def test_filter_labels_dedupes_and_preserves_order():

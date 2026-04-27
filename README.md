@@ -79,6 +79,14 @@ Environment variables take precedence over the config file when set:
 |---------|-------------|
 | `/help` | Show available maps |
 | `/intake` | Process intake materials into TheraNest-ready clinical documents |
+| `/session` | Generate a progress note for an ongoing therapy session |
+| `/tp-review` | Review and update a client's treatment plan based on progress notes (run at the 90-day review checkpoint or when clinical change warrants) |
+| `/compliance` | Run a payer compliance check on a client's records |
+| `/clear` | Start a fresh conversation (drops in-memory history and resets cost tracker) |
+| `/resume` | Resume a previous chat session in this workspace |
+| `/bugreport` | Scrub PHI from the current conversation and open a GitHub issue |
+
+The four clinical maps (`/intake`, `/session`, `/compliance`, `/tp-review`) auto-detect the client's payer (Optum EWS/EAP, Aetna, or Evernorth) from the client profile and apply payer-specific billing, modifier, authorization, and assessment rules.
 
 ### `/intake` — Intake Map
 
@@ -127,7 +135,7 @@ Mutating operations (file writes, destructive commands) require user approval.
 
 ## How It Works
 
-- **5 core tools** — `run_command` (allowlisted shell commands), `attach_path` (file/audio/image ingestion), `apply_patch` (search-and-replace edits), `write_file` (new files only), `extract_document` (structured document extraction)
+- **9 tools** — `run_command` (allowlisted shell commands), `attach_path` (file/audio/image ingestion), `apply_patch` (search-and-replace edits), `write_file` (creates new files; overwrite opt-in), `extract_document` (structured document extraction), `interview` (collect missing info from the user), `activate_map` (load a map prompt), `load_payer_rules` (load payer-specific billing rules), `end_turn` (model signals end-of-turn)
 - **Mutation classification** — read-only operations execute immediately; mutating operations (`apply_patch`, `write_file`, destructive commands) require user approval
 - **Slash map autocomplete** — type `/` to see available maps
 - Status indicator shows current mode: chatting, thinking, planning, awaiting approval, executing

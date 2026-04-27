@@ -24,7 +24,7 @@ The inner loop handles multi-turn tool-use chains. Messages are `list[types.Cont
 
 ### Tool system (`tools/`)
 
-8 tools: `run_command`, `attach_path`, `apply_patch`, `write_file`, `extract_document`, `interview`, `activate_map`, `end_turn`.
+9 tools: `run_command`, `attach_path`, `apply_patch`, `write_file`, `extract_document`, `interview`, `activate_map`, `load_payer_rules`, `end_turn`.
 
 - Each tool is a `BaseTool` subclass with `definition()` returning a `ToolDefinition` and `execute(workspace, **kwargs)`.
 - `tools/__init__.py` maintains a registry. `get_api_tools(enable_grounding=True)` returns a `list[types.Tool]` — the first entry is a `Tool` with all function declarations, and (when grounding is enabled) the second is a `Tool(google_search=GoogleSearch())`.
@@ -64,9 +64,21 @@ Vertex AI Google Search grounding is enabled by default. The `GoogleSearch` tool
 - `agent.py` intercepts slash maps between input and message append — if `parse_map_invocation` matches, `dispatch_map` runs the handler.
 - `MapResult.message` set → replaces user input sent to LLM. `MapResult.parts` set → multipart content (e.g. text + audio) sent directly. `handled=True` + no message/parts → skip to next prompt. `error` → display and skip. `map_mode=True` → uses map prompting/model mode, but turn completion still follows the standard tool-call/text rule.
 - `/help` prints available maps. `/intake` processes a session transcript (text file or pasted) or audio recording (.mp3, .wav, .m4a, etc.) into clinical intake documents. File references are passed to the LLM which uses `attach_path` to load them (handling shell escapes, spaces in paths, etc.). Pasted multi-line text is embedded directly in the prompt.
+- The four clinical maps (`/intake`, `/session`, `/compliance`, `/tp-review`) all start with **Phase 0: Resolve Payer** — load the client profile, read the Payer field, map to a slug, and call `load_payer_rules`. Subsequent phases (load records / analyze / write) operate against the loaded payer rules so payer-specific CPT/modifier/authorization/assessment logic stays out of the generic prompts. See `### Payer rules` below.
 - `/clear` drops in-memory history, zeros the cost tracker (mutated in place so the UI's bottom-toolbar reference stays connected), and re-points the session store at a fresh file via `SessionStore.reset()` so post-clear turns don't overwrite the prior session JSON.
 - `/bugreport [description]` loads the current session JSON and sends it to Gemini with a PHI-scrubbing summarization prompt (`prompts/bugreport.py`). Gemini returns a concise markdown bug summary with PHI already redacted — NOT the full transcript. The handler previews the summary and offers `(p)ost / (e)dit / (s)ave / (q)uit`. Pressing `p` triggers a two-step confirm: the user must type `POST` (case-sensitive) to actually POST to the GitHub repo in `[bugreport] repo` (default `jmiranda3838/cfi-ai`). Token discovery (`GITHUB_TOKEN` → `GH_TOKEN` → `gh auth token`) is lazy — only runs on the real post path, so `e`, `s`, `q`, and dry-run all work without GitHub auth. `CFI_AI_BUGREPORT_DRY_RUN=1` saves the draft to `bugreport-dryrun-*.md` instead of posting. The summarizer uses a fail-closed finish-reason check (`_call_summarizer` in `maps/bugreport.py`) — any non-`STOP` outcome aborts the post. Full raw session JSON stays on disk at `~/.config/cfi-ai/sessions/` (pruned after 30 days); it is never sent to GitHub. Handler returns `handled=True` so the invocation itself is not injected into the therapy conversation. The handler reads from disk, so the most recent turn only appears if the last `session_store.save()` succeeded.
 - Typing `/` in the prompt shows autocomplete for available maps via `SlashMapCompleter` (prompt-toolkit).
+
+### Payer rules (`prompts/payers/`)
+
+The clinical prompts are payer-agnostic; payer-specific rules live in their own modules under `src/cfi_ai/prompts/payers/` and are loaded at runtime by the LLM.
+
+- `prompts/payers/__init__.py` exposes `PAYER_RULES: dict[str, str]` and `VALID_PAYERS: tuple[str, ...]`. Slugs in use today: `optum-eap`, `aetna`, `evernorth`.
+- `prompts/payers/optum_eap.py` holds `OPTUM_EAP_RULES` — Optum EWS/EAP CPT-code restrictions (90834 only), HJ/U5 modifier rules, authorization handling, and the G22E02 Wellness Assessment scoring rules + output format. This is the only place generic clinical prompts learn anything Optum-specific.
+- `prompts/payers/aetna.py` and `prompts/payers/evernorth.py` are TODO stubs — populate before billing the first claim under each payer.
+- The `load_payer_rules` tool (`tools/load_payer_rules.py`) takes one required `payer` arg with `enum: list(VALID_PAYERS)` and returns `PAYER_RULES[payer]`. Non-mutating. The map prompts instruct the LLM to call it exactly once per workflow during Phase 0.
+- Slug-mapping convention (encoded in every clinical map's Phase 0): `"Optum EWS/EAP"` or `"Optum EAP"` → `optum-eap`; `"Aetna"` → `aetna`; `"Evernorth"` → `evernorth`. If the Payer field on the client profile is missing or unclear, the map prompts require a single `interview` call rather than guessing.
+- Assessment-instrument logic in clinical map prompts is gated on "if the active payer requires an assessment instrument" — generic prompts do NOT mention G22E02 / Global Distress / CAGE-AID directly. That phrasing lives only in `optum_eap.py`. To add a new payer with a different instrument, populate that payer's module with its own scoring rules + output format and the existing gate handles the rest.
 
 ### Client file resolution
 
