@@ -11,9 +11,9 @@ _GLOBAL_ONLY_MODELS = {
     "gemini-3.1-pro-preview-customtools",
 }
 _DEPRECATED_MODELS: dict[str, str] = {
-    "gemini-2.5-pro": "gemini-3.1-pro-preview-customtools",
-    "gemini-2.5-flash": "gemini-3.1-pro-preview-customtools",
-    "gemini-2.5-flash-lite": "gemini-3.1-pro-preview-customtools",
+    "gemini-2.5-pro": "gemini-3-flash-preview",
+    "gemini-2.5-flash": "gemini-3-flash-preview",
+    "gemini-2.5-flash-lite": "gemini-3-flash-preview",
 }
 
 
@@ -88,7 +88,7 @@ def _run_first_time_setup(existing: dict | None = None, path: Path = CONFIG_PATH
         sys.exit(1)
 
     location = _prompt("Vertex AI location", proj_section.get("location", "global"))
-    model_name = _prompt("Model", model_section.get("name", "gemini-3.1-pro-preview-customtools"))
+    model_name = _prompt("Model", model_section.get("name", "gemini-3-flash-preview"))
     max_tokens_str = _prompt("Max tokens", str(model_section.get("max_tokens", 8192)))
     max_context_tokens_str = _prompt(
         "Max context tokens (0 = disable cap)",
@@ -141,7 +141,7 @@ class Config:
         if not project:
             print("Error: GOOGLE_CLOUD_PROJECT environment variable is required.", file=sys.stderr)
             sys.exit(1)
-        model_name = os.environ.get("CFI_AI_MODEL", "gemini-3.1-pro-preview-customtools")
+        model_name = os.environ.get("CFI_AI_MODEL", "gemini-3-flash-preview")
         if model_name in _DEPRECATED_MODELS:
             print(
                 f"Warning: CFI_AI_MODEL='{model_name}' is deprecated (sunset June 2026). "
@@ -187,7 +187,7 @@ class Config:
 
         project = os.environ.get("GOOGLE_CLOUD_PROJECT") or proj.get("id", "")
         location = os.environ.get("GOOGLE_CLOUD_LOCATION") or proj.get("location", "global")
-        model_name = os.environ.get("CFI_AI_MODEL") or model.get("name", "gemini-3.1-pro-preview-customtools")
+        model_name = os.environ.get("CFI_AI_MODEL") or model.get("name", "gemini-3-flash-preview")
 
         # ── Auto-migrate deprecated models from config file ─────────
         model_from_env = os.environ.get("CFI_AI_MODEL")

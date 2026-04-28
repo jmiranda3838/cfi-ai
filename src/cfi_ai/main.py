@@ -100,7 +100,7 @@ def main() -> None:
         print("\nEnvironment variable overrides:")
         print("  GOOGLE_CLOUD_PROJECT    GCP project ID")
         print("  GOOGLE_CLOUD_LOCATION   Vertex AI location (default: global)")
-        print("  CFI_AI_MODEL            Model name (default: gemini-3.1-pro-preview-customtools)")
+        print("  CFI_AI_MODEL            Model name (default: gemini-3-flash-preview)")
         print("  CFI_AI_MAX_TOKENS       Max tokens (default: 8192)")
         print("  CFI_AI_MAX_CONTEXT_TOKENS  Hard cap on input tokens; 0 disables (default: 128000)")
         print("  CFI_AI_CONTEXT_CACHE    Disable context caching (set to 0 or false)")
