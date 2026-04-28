@@ -15,25 +15,36 @@ _log = logging.getLogger(__name__)
 
 
 def is_cache_expired_error(exc: BaseException) -> bool:
-    """Check if an exception is caused by an expired Vertex AI context cache.
+    """Check if an exception is caused by an unusable Vertex AI context cache.
 
-    Vertex returns this as a 400 INVALID_ARGUMENT with the message
-    'Cache content {N} is expired.' We walk the cause/context chain to
-    catch wrapped exceptions raised through the lazy stream generator.
+    Vertex returns one of two errors when a cached_content reference is no
+    longer usable:
+      - 400 INVALID_ARGUMENT 'Cache content {N} is expired.' — TTL just
+        elapsed, entry still exists server-side.
+      - 404 NOT_FOUND 'Not found: cached content metadata for {N}.' — entry
+        has been GC'd server-side.
+    Both warrant the same recovery: invalidate the local reference and
+    rebuild. We walk the cause/context chain to catch wrapped exceptions
+    raised through the lazy stream generator.
     """
     current: BaseException | None = exc
     while current is not None:
         if isinstance(current, genai_errors.APIError):
             status = getattr(current, "status", None) or ""
             message = getattr(current, "message", None) or ""
+            lowered = message.lower()
             if (
                 status == "INVALID_ARGUMENT"
-                and "Cache content" in message
-                and "is expired" in message
+                and "cache content" in lowered
+                and "is expired" in lowered
             ):
                 return True
-        msg = str(current)
-        if "Cache content" in msg and "is expired" in msg:
+            if status == "NOT_FOUND" and "cached content" in lowered:
+                return True
+        msg = str(current).lower()
+        if "cache content" in msg and "is expired" in msg:
+            return True
+        if "cached content metadata" in msg:
             return True
         current = current.__cause__ or current.__context__
     return False

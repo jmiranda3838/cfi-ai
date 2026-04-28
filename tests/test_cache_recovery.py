@@ -60,6 +60,41 @@ def test_ignores_unrelated_exception():
     assert not is_cache_expired_error(ValueError("nope"))
 
 
+def test_detects_404_not_found_after_gc():
+    """Once Vertex GCs the expired cache server-side, hitting it returns
+    404 NOT_FOUND with a different message than the 400 'is expired' variant.
+    Both must trigger the same recovery path."""
+    err = _make_client_error(
+        "NOT_FOUND",
+        "Not found: cached content metadata for 2885853637886607360.",
+        code=404,
+    )
+    assert is_cache_expired_error(err)
+
+
+def test_detects_404_wrapped_in_cause_chain():
+    """Stream-time 404s arrive wrapped — string fallback must catch them."""
+    inner = _make_client_error(
+        "NOT_FOUND",
+        "Not found: cached content metadata for 12345.",
+        code=404,
+    )
+    wrapper = RuntimeError("stream aborted")
+    wrapper.__cause__ = inner
+    assert is_cache_expired_error(wrapper)
+
+
+def test_ignores_unrelated_404_errors():
+    """A 404 for a different resource (e.g. model name) must not trigger
+    cache recovery."""
+    err = _make_client_error(
+        "NOT_FOUND",
+        "Model not found: gemini-x.",
+        code=404,
+    )
+    assert not is_cache_expired_error(err)
+
+
 def test_refresh_caches_rebuilds_normal():
     genai = MM()
     c1, c2 = MM(), MM()
