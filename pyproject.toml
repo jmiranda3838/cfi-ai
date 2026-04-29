@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "cfi-ai"
-version = "0.46.2"
+version = "0.46.3"
 description = "Terminal-first agentic assistant"
 readme = "README.md"
 requires-python = ">=3.12"
