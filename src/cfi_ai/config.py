@@ -5,16 +5,39 @@ from dataclasses import dataclass
 from pathlib import Path
 
 CONFIG_PATH = Path.home() / ".config" / "cfi-ai" / "config.toml"
-_GLOBAL_ONLY_MODELS = {
-    "gemini-3-flash-preview",
-    "gemini-3.1-pro-preview",
-    "gemini-3.1-pro-preview-customtools",
-}
+
+# Models the user can pick via /model. Second tuple element is True if that
+# model's Vertex AI deployment is only available at location="global". Adding
+# a regional model is `("name", False)` — it joins ACTIVE_MODELS without
+# leaking into _GLOBAL_ONLY_MODELS.
+_MODELS: tuple[tuple[str, bool], ...] = (
+    ("gemini-3-flash-preview", True),
+    ("gemini-3.1-pro-preview", True),
+    ("gemini-3.1-pro-preview-customtools", True),
+)
+ACTIVE_MODELS: tuple[str, ...] = tuple(name for name, _ in _MODELS)
+_GLOBAL_ONLY_MODELS: frozenset[str] = frozenset(
+    name for name, global_only in _MODELS if global_only
+)
 _DEPRECATED_MODELS: dict[str, str] = {
     "gemini-2.5-pro": "gemini-3-flash-preview",
     "gemini-2.5-flash": "gemini-3-flash-preview",
     "gemini-2.5-flash-lite": "gemini-3-flash-preview",
 }
+
+
+def check_model_location(model: str, location: str) -> str | None:
+    """Return an error message if model/location are incompatible, else None.
+
+    Used by Config.validate() at startup and by the /model swap path mid-session
+    to gate transitions into invalid combinations.
+    """
+    if model in _GLOBAL_ONLY_MODELS and location != "global":
+        return (
+            f"Model '{model}' requires Vertex AI location 'global', "
+            f"but the current location is '{location}'."
+        )
+    return None
 
 
 def _load_config_file(path: Path = CONFIG_PATH) -> dict | None:
@@ -125,10 +148,10 @@ class Config:
 
     def validate(self) -> None:
         """Fail fast on known invalid model/location combinations."""
-        if self.model in _GLOBAL_ONLY_MODELS and self.location != "global":
+        err = check_model_location(self.model, self.location)
+        if err is not None:
             print(
-                f"Error: Model '{self.model}' requires Vertex AI location "
-                f"'global', but the current location is '{self.location}'.\n"
+                f"Error: {err}\n"
                 "Run 'cfi-ai --setup', set GOOGLE_CLOUD_LOCATION=global, or edit "
                 "~/.config/cfi-ai/config.toml.",
                 file=sys.stderr,

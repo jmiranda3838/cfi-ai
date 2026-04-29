@@ -12,6 +12,7 @@ from cfi_ai.config import (
     _parse_int_env,
     _write_toml,
     _run_first_time_setup,
+    check_model_location,
 )
 
 # ── Existing from_env tests ──────────────────────────────────────────
@@ -177,6 +178,18 @@ def test_load_triggers_setup_when_missing(tmp_path):
             config = Config.load(config_path=cfg)
     assert config.project == "auto-proj"
     assert cfg.exists()
+
+
+def test_check_model_location_global_only_on_global_returns_none():
+    assert check_model_location("gemini-3-flash-preview", "global") is None
+
+
+def test_check_model_location_global_only_on_regional_returns_error():
+    err = check_model_location("gemini-3-flash-preview", "us-central1")
+    assert err is not None
+    assert "gemini-3-flash-preview" in err
+    assert "requires Vertex AI location 'global'" in err
+    assert "us-central1" in err
 
 
 def test_load_rejects_global_only_model_on_regional_endpoint(tmp_path, capsys):

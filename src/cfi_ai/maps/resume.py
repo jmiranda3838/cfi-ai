@@ -8,6 +8,7 @@ from cfi_ai.maps import MapResult, register_map
 from cfi_ai.sessions import SessionStore
 
 if TYPE_CHECKING:
+    from cfi_ai.config import Config
     from cfi_ai.ui import UI
     from cfi_ai.workspace import Workspace
 
@@ -18,6 +19,7 @@ def handle_resume(
     ui: UI,
     workspace: Workspace,
     session_store: SessionStore,
+    config: Config | None = None,
 ) -> MapResult:
     sessions = SessionStore.list_for_workspace(workspace)
     if not sessions:

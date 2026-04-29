@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from cfi_ai.maps import MapResult, register_map
 
 if TYPE_CHECKING:
+    from cfi_ai.config import Config
     from cfi_ai.sessions import SessionStore
     from cfi_ai.ui import UI
     from cfi_ai.workspace import Workspace
@@ -21,6 +22,7 @@ def handle_clear(
     ui: UI,
     workspace: Workspace,
     session_store: SessionStore,
+    config: Config | None = None,
 ) -> MapResult:
     ui.print_info("Conversation cleared. Starting fresh.")
     return MapResult(handled=True, clear_conversation=True)

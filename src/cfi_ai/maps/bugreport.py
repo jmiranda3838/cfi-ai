@@ -481,12 +481,13 @@ def handle_bugreport(
     ui: UI,
     workspace: Workspace,
     session_store: SessionStore,
+    config: Config | None = None,
 ) -> MapResult:
-    # Load config fresh — maps don't receive the startup Config instance.
-    try:
-        config = Config.load()
-    except SystemExit:
-        return MapResult(error="Could not load config. Run 'cfi-ai --setup'.")
+    if config is None:
+        try:
+            config = Config.load()
+        except SystemExit:
+            return MapResult(error="Could not load config. Run 'cfi-ai --setup'.")
 
     if not config.bugreport_enabled:
         return MapResult(

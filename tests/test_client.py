@@ -300,3 +300,47 @@ def test_coalesced_parts_empty_when_no_parts():
 
     sr = StreamResult(iter([]), request_id="test")
     assert sr.coalesced_parts == []
+
+
+def test_set_model_updates_model_property():
+    """set_model should update the active model exposed by the .model property."""
+    from unittest.mock import patch, MagicMock as MM
+    from cfi_ai.client import Client
+    from cfi_ai.config import Config
+
+    mock_config = MM(spec=Config)
+    mock_config.project = "test-project"
+    mock_config.location = "us-central1"
+    mock_config.model = "gemini-2.5-flash"
+    mock_config.max_tokens = 8192
+
+    with patch("cfi_ai.client.genai"):
+        client = Client(mock_config)
+        assert client.model == "gemini-2.5-flash"
+
+        client.set_model("gemini-3-flash-preview")
+        assert client.model == "gemini-3-flash-preview"
+
+
+def test_set_model_clears_cache_manager():
+    """Caches are bound to the previous model, so set_model must drop the local
+    cache_manager reference. Pairing a new model with a stale cache manager
+    would otherwise route the next call through a cache built for the old model."""
+    from unittest.mock import patch, MagicMock as MM
+    from cfi_ai.client import Client, CacheManager
+    from cfi_ai.config import Config
+
+    mock_config = MM(spec=Config)
+    mock_config.project = "test-project"
+    mock_config.location = "us-central1"
+    mock_config.model = "gemini-2.5-flash"
+    mock_config.max_tokens = 8192
+
+    with patch("cfi_ai.client.genai"):
+        client = Client(mock_config)
+        cache_mgr = MM(spec=CacheManager)
+        client.set_cache_manager(cache_mgr)
+        assert client.cache_manager is cache_mgr
+
+        client.set_model("gemini-3-flash-preview")
+        assert client.cache_manager is None

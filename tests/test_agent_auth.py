@@ -8,7 +8,7 @@ from unittest.mock import MagicMock, patch
 import pytest
 from google.auth import exceptions as auth_exceptions
 
-from cfi_ai.agent import _is_auth_error, _run_reauth
+from cfi_ai.agent import _is_auth_error, _rebuild_client_after_reauth, _run_reauth
 from cfi_ai.main import _check_adc
 
 
@@ -150,3 +150,87 @@ def test_reauth_gcloud_not_found():
         assert _run_reauth(ui) is False
     ui.print_error.assert_called_once()
     assert "gcloud CLI not found" in ui.print_error.call_args[0][0]
+
+
+# --- _rebuild_client_after_reauth ---
+
+
+def test_rebuild_preserves_mid_session_model_swap():
+    """A /model swap before reauth must survive the rebuild.
+
+    Config is frozen, so Client(config) reverts to the original model.
+    The helper must re-apply the live client's swapped model onto the
+    rebuilt client; otherwise the next API call silently uses the wrong
+    model and the cache_manager (still bound to the swapped model) ends
+    up paired with a client that points at a different model.
+    """
+    config = MagicMock()
+    config.model = "gemini-3-flash-preview"
+
+    fresh_client = MagicMock()
+    fresh_client.model = "gemini-3-flash-preview"
+    fresh_client.genai_client = MagicMock()
+
+    current_client = MagicMock()
+    current_client.model = "gemini-3-pro-preview"  # post-/model swap
+
+    with patch("cfi_ai.agent.Client", return_value=fresh_client) as ctor:
+        result = _rebuild_client_after_reauth(
+            config, current_client, None, "system", []
+        )
+
+    ctor.assert_called_once_with(config)
+    fresh_client.set_model.assert_called_once_with("gemini-3-pro-preview")
+    assert result is fresh_client
+
+
+def test_rebuild_skips_set_model_when_no_swap():
+    """Without a /model swap, the rebuilt client already has the right
+    model — don't call set_model needlessly (it would drop the cache
+    manager ref before we re-attach it)."""
+    config = MagicMock()
+    config.model = "gemini-3-flash-preview"
+
+    fresh_client = MagicMock()
+    fresh_client.model = "gemini-3-flash-preview"
+    fresh_client.genai_client = MagicMock()
+
+    current_client = MagicMock()
+    current_client.model = "gemini-3-flash-preview"  # no swap
+
+    with patch("cfi_ai.agent.Client", return_value=fresh_client):
+        _rebuild_client_after_reauth(
+            config, current_client, None, "system", []
+        )
+
+    fresh_client.set_model.assert_not_called()
+
+
+def test_rebuild_resets_caches_with_swapped_model_client():
+    """Reauth path with active caches: cache_manager.reset() must be called
+    with the rebuilt client's genai_client, and _create_session_caches must
+    fire so the new caches are bound to the swapped model.
+    """
+    config = MagicMock()
+    config.model = "gemini-3-flash-preview"
+
+    fresh_client = MagicMock()
+    fresh_client.model = "gemini-3-flash-preview"
+    fresh_client.genai_client = MagicMock()
+
+    current_client = MagicMock()
+    current_client.model = "gemini-3.1-pro-preview"  # post-/model swap
+
+    cache_manager = MagicMock()
+
+    with patch("cfi_ai.agent.Client", return_value=fresh_client), \
+         patch("cfi_ai.agent._create_session_caches") as mock_create:
+        result = _rebuild_client_after_reauth(
+            config, current_client, cache_manager, "system", []
+        )
+
+    fresh_client.set_model.assert_called_once_with("gemini-3.1-pro-preview")
+    cache_manager.reset.assert_called_once_with(fresh_client.genai_client)
+    mock_create.assert_called_once_with(cache_manager, "system", [])
+    fresh_client.set_cache_manager.assert_called_once_with(cache_manager)
+    assert result is fresh_client

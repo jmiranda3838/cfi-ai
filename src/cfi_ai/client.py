@@ -167,8 +167,19 @@ class Client:
     def genai_client(self) -> genai.Client:
         return self._client
 
+    @property
+    def cache_manager(self) -> CacheManager | None:
+        return self._cache_manager
+
     def set_cache_manager(self, manager: CacheManager) -> None:
         self._cache_manager = manager
+
+    def set_model(self, model: str) -> None:
+        """Swap the active model. Caller is responsible for tearing down any
+        existing context caches and rebuilding them — caches are bound to the
+        previous model, so we drop the local reference here."""
+        self._model = model
+        self._cache_manager = None
 
     def stream_response(
         self,

@@ -9,6 +9,7 @@ from cfi_ai.maps import MapResult, invocation_preface, register_map
 from cfi_ai.prompts.render import render_map_prompt
 
 if TYPE_CHECKING:
+    from cfi_ai.config import Config
     from cfi_ai.sessions import SessionStore
     from cfi_ai.ui import UI
     from cfi_ai.workspace import Workspace
@@ -20,6 +21,7 @@ def handle_intake(
     ui: UI,
     workspace: "Workspace",
     session_store: "SessionStore",
+    config: "Config | None" = None,
 ) -> MapResult:
     today = datetime.date.today().isoformat()
     ui.print_info("/intake activated.")

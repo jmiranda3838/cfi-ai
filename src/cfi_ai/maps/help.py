@@ -7,6 +7,7 @@ from typing import TYPE_CHECKING
 from cfi_ai.maps import MapResult, get_map_descriptions, register_map
 
 if TYPE_CHECKING:
+    from cfi_ai.config import Config
     from cfi_ai.sessions import SessionStore
     from cfi_ai.ui import UI
     from cfi_ai.workspace import Workspace
@@ -18,6 +19,7 @@ def handle_help(
     ui: UI,
     workspace: Workspace,
     session_store: SessionStore,
+    config: Config | None = None,
 ) -> MapResult:
     lines = ["## Maps\n"]
     for name, desc in sorted(get_map_descriptions().items()):

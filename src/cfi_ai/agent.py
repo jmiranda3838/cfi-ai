@@ -12,7 +12,7 @@ from google.auth import exceptions as auth_exceptions
 from google.genai import types
 
 from cfi_ai.client import CacheManager, Client, StreamResult, is_cache_expired_error
-from cfi_ai.config import Config
+from cfi_ai.config import Config, check_model_location
 from cfi_ai.cost_tracker import CostTracker
 from cfi_ai.maps import dispatch_map, parse_map_invocation
 from cfi_ai.planner import ExecutionPlan, format_plan
@@ -320,12 +320,22 @@ def _handle_interview(ui: UI, fc_name: str, fc_args: dict) -> types.Part:
 
 def _rebuild_client_after_reauth(
     config: Config,
+    current_client: Client,
     cache_manager: CacheManager | None,
     system_prompt: str,
     api_tools: list[types.Tool],
 ) -> Client:
-    """Create a fresh Client after reauthentication and restore caches."""
+    """Create a fresh Client after reauthentication and restore caches.
+
+    Config is frozen, so Client(config) reverts to the original model. If a
+    /model swap happened earlier this session, re-apply the live client's
+    model onto the rebuilt one — otherwise reauth would silently undo the
+    swap and leave cache_manager (which still tracks the swapped model)
+    pointing at caches built for a different model than the client uses.
+    """
     client = Client(config)
+    if current_client.model != client.model:
+        client.set_model(current_client.model)
     if cache_manager is not None:
         cache_manager.reset(client.genai_client)
         _create_session_caches(cache_manager, system_prompt, api_tools)
@@ -383,6 +393,52 @@ def _try_recover_cache_expiry(
     return True
 
 
+def _swap_model(
+    new_model: str,
+    client: Client,
+    cache_manager: CacheManager | None,
+    config: Config,
+    system_prompt: str,
+    api_tools: list[types.Tool],
+    cost_tracker: CostTracker,
+    ui: UI,
+) -> CacheManager | None:
+    """Swap the active model mid-session, tearing down and rebuilding caches.
+
+    Caches are bound to the previous model, so we delete them server-side and
+    rebuild fresh ones for the new model. ``cost_tracker.model`` is mutated in
+    place because the UI's bottom toolbar holds a reference to it.
+
+    On rejection (location check fails) the input ``cache_manager`` is returned
+    unchanged. On success, returns the new ``CacheManager`` (or ``None`` when
+    context caching is disabled).
+    """
+    old_model = client.model
+    # Reject the swap before any teardown if the new model is incompatible
+    # with the current Vertex AI location. Today every ACTIVE_MODELS entry is
+    # global-only so this is a no-op, but it guards future regional or
+    # location-flexible models.
+    location_err = check_model_location(new_model, config.location)
+    if location_err is not None:
+        ui.print_error(
+            f"{location_err} Cannot switch to '{new_model}' from this session."
+        )
+        return cache_manager
+    ui.print_info(f"Switching model: {old_model} -> {new_model}...")
+    if cache_manager is not None:
+        cache_manager.delete_all()
+    client.set_model(new_model)
+    cost_tracker.model = new_model
+    if config.context_cache:
+        cache_manager = CacheManager(client.genai_client, new_model)
+        _create_session_caches(cache_manager, system_prompt, api_tools)
+        client.set_cache_manager(cache_manager)
+    else:
+        cache_manager = None
+    ui.print_info(f"Now using {new_model}.")
+    return cache_manager
+
+
 def run_agent_loop(
     client: Client,
     ui: UI,
@@ -423,8 +479,13 @@ def run_agent_loop(
             messages, api_tools, cache_manager, session_store, cost_tracker,
         )
     finally:
-        if cache_manager is not None:
-            cache_manager.delete_all()
+        # Read from the client so a /model swap mid-session (which rebinds
+        # cache_manager inside _run_main_loop) still gets its caches cleaned
+        # up here. The outer-scope cache_manager would still point at the
+        # pre-swap manager, whose caches were already deleted at swap time.
+        mgr = client.cache_manager
+        if mgr is not None:
+            mgr.delete_all()
 
 
 def _run_main_loop(
@@ -459,7 +520,9 @@ def _run_main_loop(
         parsed = parse_map_invocation(user_text)
         if parsed is not None:
             map_name, map_args = parsed
-            result = dispatch_map(map_name, map_args, ui, workspace, session_store)
+            result = dispatch_map(
+                map_name, map_args, ui, workspace, session_store, config
+            )
             if result.error:
                 ui.print_error(result.error)
                 continue
@@ -495,6 +558,12 @@ def _run_main_loop(
                 cost_tracker.total_cached = restored.total_cached
                 cost_tracker.total_output = restored.total_output
                 cost_tracker.total_cost_usd = restored.total_cost_usd
+                continue
+            if result.switch_model is not None:
+                cache_manager = _swap_model(
+                    result.switch_model, client, cache_manager, config,
+                    system_prompt, api_tools, cost_tracker, ui,
+                )
                 continue
             if result.handled and result.message is None and result.parts is None:
                 continue
@@ -559,7 +628,7 @@ def _run_main_loop(
                     reauth_attempted = True
                     if _run_reauth(ui):
                         client = _rebuild_client_after_reauth(
-                            config, cache_manager, system_prompt, api_tools,
+                            config, client, cache_manager, system_prompt, api_tools,
                         )
                         continue
                 if not cache_retry_attempted and _try_recover_cache_expiry(
@@ -586,7 +655,7 @@ def _run_main_loop(
                     reauth_attempted = True
                     if _run_reauth(ui):
                         client = _rebuild_client_after_reauth(
-                            config, cache_manager, system_prompt, api_tools,
+                            config, client, cache_manager, system_prompt, api_tools,
                         )
                         continue
                 if not cache_retry_attempted and _try_recover_cache_expiry(
