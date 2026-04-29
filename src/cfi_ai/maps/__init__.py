@@ -25,6 +25,7 @@ class MapResult:
     - loaded_messages set -> replace in-memory conversation with these (used by /resume)
     - clear_conversation=True -> drop in-memory history and reset cost tracker (used by /clear)
     - switch_model set -> agent loop swaps the active Gemini model and rebuilds caches (used by /model)
+    - updated_config set -> agent loop rebinds the live config for future turns (used by /notify)
     """
 
     message: str | None = None
@@ -35,6 +36,7 @@ class MapResult:
     loaded_messages: list[types.Content] | None = None
     clear_conversation: bool = False
     switch_model: str | None = None
+    updated_config: Config | None = None
 
 
 MapHandler = Callable[
@@ -111,6 +113,7 @@ from cfi_ai.maps import compliance as _compliance_map  # noqa: F401, E402
 from cfi_ai.maps import help as _help_map  # noqa: F401, E402
 from cfi_ai.maps import intake as _intake_map  # noqa: F401, E402
 from cfi_ai.maps import model as _model_map  # noqa: F401, E402
+from cfi_ai.maps import notify as _notify_map  # noqa: F401, E402
 from cfi_ai.maps import resume as _resume_map  # noqa: F401, E402
 from cfi_ai.maps import session as _session_map  # noqa: F401, E402
 from cfi_ai.maps import tp_review as _tp_review_map  # noqa: F401, E402

@@ -490,6 +490,87 @@ class UI:
         except EOFError:
             return None
 
+    def prompt_notification_select(
+        self,
+        *,
+        popup_enabled: bool,
+        sound_enabled: bool,
+    ) -> str | None:
+        """Show an arrow-key menu for completed-turn notification settings."""
+        options = [
+            ("toggle_popup", f"Toggle popup ({'on' if popup_enabled else 'off'})"),
+            ("toggle_sound", f"Toggle sound ({'on' if sound_enabled else 'off'})"),
+            ("enable_both", "Enable both"),
+            ("disable_both", "Disable both"),
+            ("cancel", "Cancel"),
+        ]
+        selected = [0]
+
+        def _fmt_row(label: str, is_selected: bool) -> str:
+            marker = "▶" if is_selected else " "
+            return f"  {marker} {label}"
+
+        def _get_menu_text():
+            popup = "on" if popup_enabled else "off"
+            sound = "on" if sound_enabled else "off"
+            fragments = [
+                ("class:approval", "  notification settings\n\n"),
+                ("class:muted", f"  popup: {popup}  sound: {sound}\n\n"),
+            ]
+            for i, (_action, label) in enumerate(options):
+                is_sel = i == selected[0]
+                style = "class:approval" if is_sel else "class:muted"
+                fragments.append((style, _fmt_row(label, is_sel) + "\n"))
+            fragments.append(("", "\n"))
+            fragments.append(("class:muted", "  ↑/↓ select  enter confirm  esc cancel"))
+            return fragments
+
+        kb = KeyBindings()
+
+        @kb.add("up")
+        def _up(event):
+            selected[0] = (selected[0] - 1) % len(options)
+            event.app.invalidate()
+
+        @kb.add("down")
+        def _down(event):
+            selected[0] = (selected[0] + 1) % len(options)
+            event.app.invalidate()
+
+        @kb.add("enter")
+        def _enter(event):
+            event.app.exit(result=options[selected[0]][0])
+
+        @kb.add("escape")
+        def _escape(event):
+            event.app.exit(result=None)
+
+        @kb.add("c-c")
+        def _ctrl_c(event):
+            event.app.exit(exception=KeyboardInterrupt)
+
+        layout = Layout(
+            Window(
+                FormattedTextControl(_get_menu_text, show_cursor=False),
+                dont_extend_height=True,
+            )
+        )
+
+        app: Application = Application(
+            layout=layout,
+            key_bindings=kb,
+            style=PT_STYLE,
+            erase_when_done=True,
+            full_screen=False,
+        )
+
+        try:
+            return app.run()
+        except KeyboardInterrupt:
+            return None
+        except EOFError:
+            return None
+
     def run_interview(self, questions: list[dict]) -> list[dict] | None:
         """Present interview questions one at a time.
 

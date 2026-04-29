@@ -86,6 +86,7 @@ def test_dispatch_help_lists_maps():
     rendered = ui.render_markdown.call_args[0][0]
     assert "/help" in rendered
     assert "/intake" in rendered
+    assert "/notify" in rendered
 
 
 def test_dispatch_help_shows_missing_record_contracts():
@@ -106,6 +107,7 @@ def test_map_result_parts_default():
     assert result.handled is False
     assert result.error is None
     assert result.map_mode is False
+    assert result.updated_config is None
 
 
 # --- Clinical map dispatch: prompt loaded directly, with invocation preface ---

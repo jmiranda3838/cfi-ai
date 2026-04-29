@@ -109,6 +109,8 @@ def main() -> None:
         print("  CFI_AI_BUGREPORT_ENABLED       Disable /bugreport map (set to 0 or false)")
         print("  CFI_AI_BUGREPORT_REPO          Override the GitHub repo /bugreport posts to")
         print("  CFI_AI_BUGREPORT_DRY_RUN       Save drafts locally instead of posting (set to 1)")
+        print("  CFI_AI_NOTIFICATIONS_POPUP_ENABLED  Enable popup notifications on completed turns")
+        print("  CFI_AI_NOTIFICATIONS_SOUND_ENABLED  Enable notification chime on completed turns")
         return
     if "--update" in sys.argv:
         import shutil

@@ -15,6 +15,7 @@ from cfi_ai.client import CacheManager, Client, StreamResult, is_cache_expired_e
 from cfi_ai.config import Config, check_model_location
 from cfi_ai.cost_tracker import CostTracker
 from cfi_ai.maps import dispatch_map, parse_map_invocation
+from cfi_ai.notifications import notify_turn_complete
 from cfi_ai.planner import ExecutionPlan, format_plan
 from cfi_ai.prompts.system import build_system_prompt
 from cfi_ai.sessions import SessionStore
@@ -565,6 +566,8 @@ def _run_main_loop(
                     system_prompt, api_tools, cost_tracker, ui,
                 )
                 continue
+            if result.updated_config is not None:
+                config = result.updated_config
             if result.handled and result.message is None and result.parts is None:
                 continue
             map_mode = result.map_mode
@@ -611,6 +614,7 @@ def _run_main_loop(
         preamble_retries = 0
         reauth_attempted = False
         cache_retry_attempted = False
+        turn_completed = False
         _log.debug("inner_loop_start map_mode=%s messages=%d", map_mode, len(messages))
         for _iteration in range(MAX_TOOL_ITERATIONS):
             _log.debug("inner_loop iteration=%d messages=%d", _iteration, len(messages))
@@ -701,6 +705,7 @@ def _run_main_loop(
                     )
                 ]))
                 _log.debug("inner_loop end_turn_signal")
+                turn_completed = True
                 break
             # If end_turn appeared alongside other calls, run the real tools
             # but remember the mix so we can respond to end_turn too — Gemini
@@ -729,6 +734,7 @@ def _run_main_loop(
                             )
                         )
                         continue
+                    turn_completed = True
                     break
                 # Empty turn: nudge the model to continue and try again.
                 if _should_retry_empty_turn(function_calls, full_text, continuation_retries):
@@ -912,6 +918,7 @@ def _run_main_loop(
             )
             if end_turn_mixed:
                 _log.debug("inner_loop end_turn_mixed break")
+                turn_completed = True
                 break
             continue  # Continue inner loop to let model process results
 
@@ -924,3 +931,5 @@ def _run_main_loop(
 
         # Persist the completed turn so it can be resumed later via /resume.
         session_store.save(messages, usage=cost_tracker.to_dict())
+        if turn_completed:
+            notify_turn_complete(config)

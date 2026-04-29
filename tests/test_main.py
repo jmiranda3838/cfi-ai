@@ -1,7 +1,9 @@
 """Tests for ``cfi_ai.main`` helpers."""
 
+import sys
+
 from cfi_ai.config import Config
-from cfi_ai.main import _apply_model_override
+from cfi_ai.main import _apply_model_override, main
 
 
 def test_apply_model_override_preserves_all_fields():
@@ -23,6 +25,8 @@ def test_apply_model_override_preserves_all_fields():
         bugreport_enabled=True,
         bugreport_repo="org/repo",
         bugreport_dry_run=True,
+        notifications_popup_enabled=True,
+        notifications_sound_enabled=True,
     )
     new = _apply_model_override(original, "new-model")
 
@@ -38,3 +42,13 @@ def test_apply_model_override_preserves_all_fields():
     assert new.bugreport_enabled == original.bugreport_enabled
     assert new.bugreport_repo == original.bugreport_repo
     assert new.bugreport_dry_run == original.bugreport_dry_run
+    assert new.notifications_popup_enabled == original.notifications_popup_enabled
+    assert new.notifications_sound_enabled == original.notifications_sound_enabled
+
+
+def test_help_lists_notification_env_vars(capsys, monkeypatch):
+    monkeypatch.setattr(sys, "argv", ["cfi-ai", "--help"])
+    main()
+    out = capsys.readouterr().out
+    assert "CFI_AI_NOTIFICATIONS_POPUP_ENABLED" in out
+    assert "CFI_AI_NOTIFICATIONS_SOUND_ENABLED" in out

@@ -127,6 +127,11 @@ def _run_first_time_setup(existing: dict | None = None, path: Path = CONFIG_PATH
         "max_tokens": int(max_tokens_str),
         "max_context_tokens": int(max_context_tokens_str),
     }
+    notifications = data.get("notifications", {})
+    data["notifications"] = {
+        "popup_enabled": bool(notifications.get("popup_enabled", False)),
+        "sound_enabled": bool(notifications.get("sound_enabled", False)),
+    }
     _write_toml(path, data)
     print(f"\nConfig written to {path}")
     return data
@@ -145,6 +150,8 @@ class Config:
     bugreport_enabled: bool = True
     bugreport_repo: str = "jmiranda3838/cfi-ai"
     bugreport_dry_run: bool = False
+    notifications_popup_enabled: bool = False
+    notifications_sound_enabled: bool = False
 
     def validate(self) -> None:
         """Fail fast on known invalid model/location combinations."""
@@ -192,6 +199,12 @@ class Config:
             bugreport_repo=os.environ.get("CFI_AI_BUGREPORT_REPO") or "jmiranda3838/cfi-ai",
             bugreport_dry_run=_parse_bool_env(
                 os.environ.get("CFI_AI_BUGREPORT_DRY_RUN"), False
+            ),
+            notifications_popup_enabled=_parse_bool_env(
+                os.environ.get("CFI_AI_NOTIFICATIONS_POPUP_ENABLED"), False
+            ),
+            notifications_sound_enabled=_parse_bool_env(
+                os.environ.get("CFI_AI_NOTIFICATIONS_SOUND_ENABLED"), False
             ),
         )
         config.validate()
@@ -278,6 +291,26 @@ class Config:
             os.environ.get("CFI_AI_BUGREPORT_DRY_RUN"), False
         )
 
+        notifications = file_data.get("notifications", {})
+        env_notifications_popup = os.environ.get("CFI_AI_NOTIFICATIONS_POPUP_ENABLED")
+        if env_notifications_popup is not None:
+            notifications_popup_enabled = _parse_bool_env(
+                env_notifications_popup, False
+            )
+        else:
+            notifications_popup_enabled = bool(
+                notifications.get("popup_enabled", False)
+            )
+        env_notifications_sound = os.environ.get("CFI_AI_NOTIFICATIONS_SOUND_ENABLED")
+        if env_notifications_sound is not None:
+            notifications_sound_enabled = _parse_bool_env(
+                env_notifications_sound, False
+            )
+        else:
+            notifications_sound_enabled = bool(
+                notifications.get("sound_enabled", False)
+            )
+
         config = cls(
             project=project,
             location=location,
@@ -290,6 +323,23 @@ class Config:
             bugreport_enabled=bugreport_enabled,
             bugreport_repo=bugreport_repo,
             bugreport_dry_run=bugreport_dry_run,
+            notifications_popup_enabled=notifications_popup_enabled,
+            notifications_sound_enabled=notifications_sound_enabled,
         )
         config.validate()
         return config
+
+
+def persist_notifications_settings(
+    config: Config,
+    *,
+    config_path: Path | None = None,
+) -> None:
+    """Persist only the notifications section while preserving other config."""
+    path = config_path or CONFIG_PATH
+    data = _load_config_file(path) or {}
+    data["notifications"] = {
+        "popup_enabled": config.notifications_popup_enabled,
+        "sound_enabled": config.notifications_sound_enabled,
+    }
+    _write_toml(path, data)

@@ -26,6 +26,8 @@ def test_from_env_defaults():
     assert config.model == "gemini-3-flash-preview"
     assert config.max_tokens == 8192
     assert config.context_cache is True
+    assert config.notifications_popup_enabled is False
+    assert config.notifications_sound_enabled is False
 
 
 def test_from_env_custom():
@@ -252,6 +254,8 @@ def test_first_run_setup(tmp_path):
     assert data["model"]["name"] == "gemini-2.5-pro"
     assert data["model"]["max_tokens"] == 4096
     assert data["model"]["max_context_tokens"] == 64000
+    assert data["notifications"]["popup_enabled"] is False
+    assert data["notifications"]["sound_enabled"] is False
     # verify file was written and is valid TOML
     parsed = tomllib.loads(cfg.read_text())
     assert parsed == data
@@ -268,6 +272,8 @@ def test_first_run_setup_defaults(tmp_path):
     assert data["model"]["name"] == "gemini-3-flash-preview"
     assert data["model"]["max_tokens"] == 8192
     assert data["model"]["max_context_tokens"] == 128_000
+    assert data["notifications"]["popup_enabled"] is False
+    assert data["notifications"]["sound_enabled"] is False
 
 
 def test_setup_preserves_unknown_sections(tmp_path):
@@ -290,6 +296,23 @@ def test_setup_preserves_unknown_sections(tmp_path):
     # And the existing project values should still be there too.
     assert reloaded["project"]["id"] == "old-project"
     assert reloaded["project"]["location"] == "us-central1"
+
+
+def test_setup_preserves_notifications_section(tmp_path):
+    cfg_path = tmp_path / "config.toml"
+    cfg_path.write_text(
+        '[project]\nid = "old-project"\nlocation = "global"\n\n'
+        '[model]\nname = "gemini-3-flash-preview"\nmax_tokens = 8192\n\n'
+        '[notifications]\npopup_enabled = true\nsound_enabled = false\n'
+    )
+    existing = _load_config_file(cfg_path)
+    with patch("builtins.input", side_effect=iter(["", "", "", "", ""])):
+        _run_first_time_setup(existing=existing, path=cfg_path)
+
+    reloaded = _load_config_file(cfg_path)
+    assert reloaded is not None
+    assert reloaded["notifications"]["popup_enabled"] is True
+    assert reloaded["notifications"]["sound_enabled"] is False
 
 
 def test_write_toml_serializes_bools_as_literals(tmp_path):
@@ -704,6 +727,48 @@ def test_load_bugreport_defaults(tmp_path):
     assert config.bugreport_dry_run is False
 
 
+def test_load_notifications_defaults(tmp_path):
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        '[project]\nid = "p"\nlocation = "global"\n\n'
+        '[model]\nname = "gemini-3-flash-preview"\nmax_tokens = 8192\n'
+    )
+    with patch.dict(os.environ, {}, clear=True):
+        config = Config.load(config_path=cfg)
+    assert config.notifications_popup_enabled is False
+    assert config.notifications_sound_enabled is False
+
+
+def test_load_notifications_from_file(tmp_path):
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        '[project]\nid = "p"\nlocation = "global"\n\n'
+        '[model]\nname = "gemini-3-flash-preview"\nmax_tokens = 8192\n\n'
+        '[notifications]\npopup_enabled = true\nsound_enabled = false\n'
+    )
+    with patch.dict(os.environ, {}, clear=True):
+        config = Config.load(config_path=cfg)
+    assert config.notifications_popup_enabled is True
+    assert config.notifications_sound_enabled is False
+
+
+def test_load_notifications_env_overrides_file(tmp_path):
+    cfg = tmp_path / "config.toml"
+    cfg.write_text(
+        '[project]\nid = "p"\nlocation = "global"\n\n'
+        '[model]\nname = "gemini-3-flash-preview"\nmax_tokens = 8192\n\n'
+        '[notifications]\npopup_enabled = true\nsound_enabled = true\n'
+    )
+    env = {
+        "CFI_AI_NOTIFICATIONS_POPUP_ENABLED": "0",
+        "CFI_AI_NOTIFICATIONS_SOUND_ENABLED": "False",
+    }
+    with patch.dict(os.environ, env, clear=True):
+        config = Config.load(config_path=cfg)
+    assert config.notifications_popup_enabled is False
+    assert config.notifications_sound_enabled is False
+
+
 def test_load_bugreport_from_file(tmp_path):
     """[bugreport] repo and enabled in TOML should be picked up."""
     cfg = tmp_path / "config.toml"
@@ -785,3 +850,51 @@ def test_bugreport_dry_run_env_parsing(val, expected):
     with patch.dict(os.environ, env, clear=True):
         config = Config.from_env()
     assert config.bugreport_dry_run is expected
+
+
+@pytest.mark.parametrize(
+    "val,expected",
+    [
+        ("0", False),
+        ("false", False),
+        ("False", False),
+        ("FALSE", False),
+        ("no", False),
+        ("off", False),
+        ("", False),
+        ("   ", False),
+        ("1", True),
+        ("true", True),
+        ("True", True),
+        ("yes", True),
+    ],
+)
+def test_notifications_popup_enabled_env_parsing(val, expected):
+    env = {"GOOGLE_CLOUD_PROJECT": "test", "CFI_AI_NOTIFICATIONS_POPUP_ENABLED": val}
+    with patch.dict(os.environ, env, clear=True):
+        config = Config.from_env()
+    assert config.notifications_popup_enabled is expected
+
+
+@pytest.mark.parametrize(
+    "val,expected",
+    [
+        ("0", False),
+        ("false", False),
+        ("False", False),
+        ("FALSE", False),
+        ("no", False),
+        ("off", False),
+        ("", False),
+        ("   ", False),
+        ("1", True),
+        ("true", True),
+        ("True", True),
+        ("yes", True),
+    ],
+)
+def test_notifications_sound_enabled_env_parsing(val, expected):
+    env = {"GOOGLE_CLOUD_PROJECT": "test", "CFI_AI_NOTIFICATIONS_SOUND_ENABLED": val}
+    with patch.dict(os.environ, env, clear=True):
+        config = Config.from_env()
+    assert config.notifications_sound_enabled is expected
