@@ -19,16 +19,9 @@ class LoadPayerRulesTool(BaseTool):
         return ToolDefinition(
             name=self.name,
             description=(
-                "Load the billing, modifier, authorization, and assessment "
-                "rules for a specific payer (Optum EAP, Aetna, Evernorth). "
-                "Call this ONCE at the start of an intake or session workflow, "
-                "after you have identified the client's payer from intake "
-                "materials or the client profile's Payer field. If the payer "
-                "is ambiguous or you can't tell from the materials, call "
-                "`interview` first to ask the user — do NOT guess. The "
-                "returned rules govern CPT-code selection, modifier flags, "
-                "authorization handling, and any payer-specific assessment "
-                "instruments for the rest of the workflow."
+                "Load billing, modifier, authorization, and assessment rules "
+                "for the client's payer. The active map's payer-resolution phase "
+                "tells you when to call this and how to map a Payer-field value to a slug."
             ),
             input_schema={
                 "type": "object",
@@ -36,12 +29,7 @@ class LoadPayerRulesTool(BaseTool):
                     "payer": {
                         "type": "string",
                         "enum": list(VALID_PAYERS),
-                        "description": (
-                            "Payer slug. Mapping from common Payer-field "
-                            "values: 'Optum EWS/EAP' or 'Optum EAP' → "
-                            "'optum-eap'; 'Aetna' → 'aetna'; 'Evernorth' → "
-                            "'evernorth'."
-                        ),
+                        "description": "Payer slug. See the active map's payer-resolution phase for slug mapping.",
                     },
                 },
                 "required": ["payer"],

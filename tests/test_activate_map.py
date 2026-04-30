@@ -91,8 +91,8 @@ def test_no_current_md_in_prompts(tmp_path):
 
 
 def test_activate_map_description_no_client_context():
-    """Tool description should say 'instructions' not 'client context'."""
+    """Tool description must not mention 'client context' and must point to the system prompt."""
     tool = ActivateMapTool()
     defn = tool.definition()
     assert "client context" not in defn.description
-    assert "instructions" in defn.description
+    assert "Available Clinical Maps" in defn.description
