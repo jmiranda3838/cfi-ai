@@ -105,9 +105,10 @@ def test_session_map_prompt_formats():
     )
     _assert_no_unreplaced_placeholders(result)
     assert "TheraNest Form: Progress Note" in result
-    assert "run_command ls" in result
-    # Single consolidated prompt handles both file and non-file inputs
-    assert "attach_path" in result
+    # Single consolidated prompt handles both file and non-file inputs; the map
+    # delegates tool naming to the system prompt rather than naming attach_path
+    # itself.
+    assert "Load files into context" in result
 
 
 def test_compliance_prompt_formats():
@@ -168,51 +169,53 @@ def test_per_document_constants_importable():
         assert isinstance(const, str) and len(const) > 50
 
 
-def test_map_prompts_have_reference_loading_wrapper():
-    """All clinical map prompts must clarify that loading != executing."""
+def test_system_prompt_has_reference_loading_wrapper():
+    """The cached system prompt must clarify that loading a map != executing it."""
+    prompt = build_system_prompt("summary")
+    assert "Loading the map does not mean you must execute the workflow" in prompt
+
+
+def test_system_prompt_has_critical_instructions():
+    """CRITICAL_INSTRUCTIONS text now lives in the cached system prompt, not each map."""
+    prompt = build_system_prompt("summary")
+    assert "Do NOT narrate the map" in prompt
+
+
+def test_system_prompt_has_documentation_principles():
+    """DOCUMENTATION_PRINCIPLES text now lives in the cached system prompt, not each map."""
+    prompt = build_system_prompt("summary")
+    assert "Documentation Principles" in prompt
+    lowered = prompt.lower()
+    assert "minimum-necessary" in lowered or "minimum necessary" in lowered
+
+
+def test_map_prompts_drop_shared_boilerplate():
+    """Clinical map prompts must NOT carry the shared boilerplate that was relocated.
+
+    The CRITICAL_INSTRUCTIONS + DOCUMENTATION_PRINCIPLES blocks are now in the
+    cached system prompt — duplicating them in each map would re-introduce the
+    per-turn token overhead this refactor eliminated.
+    """
+    from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
     from cfi_ai.prompts.intake import INTAKE_PROMPT
     from cfi_ai.prompts.session import SESSION_MAP_PROMPT
-    from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
     from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
 
-    marker = "Loading the map does not mean you must execute the workflow"
+    forbidden_markers = [
+        "Loading the map does not mean you must execute the workflow",
+        "Do NOT narrate the map",
+        "## Documentation Principles",
+    ]
     for name, prompt in [
         ("INTAKE_PROMPT", INTAKE_PROMPT),
         ("SESSION_MAP_PROMPT", SESSION_MAP_PROMPT),
         ("COMPLIANCE_PROMPT", COMPLIANCE_PROMPT),
         ("TP_REVIEW_PROMPT", TP_REVIEW_PROMPT),
     ]:
-        assert marker in prompt, f"{name} missing reference-loading wrapper"
-
-
-def test_critical_instructions_in_all_map_prompts():
-    """CRITICAL_INSTRUCTIONS text appears in all clinical map prompts."""
-    from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
-    from cfi_ai.prompts.intake import INTAKE_PROMPT
-    from cfi_ai.prompts.session import SESSION_MAP_PROMPT
-    from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
-    marker = "Do NOT narrate the map"
-    for prompt in (INTAKE_PROMPT, SESSION_MAP_PROMPT,
-                   COMPLIANCE_PROMPT, TP_REVIEW_PROMPT):
-        assert marker in prompt
-
-
-def test_documentation_principles_in_all_map_prompts():
-    """DOCUMENTATION_PRINCIPLES text appears in all clinical map prompts."""
-    from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
-    from cfi_ai.prompts.intake import INTAKE_PROMPT
-    from cfi_ai.prompts.session import SESSION_MAP_PROMPT
-    from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
-    for name, prompt in [
-        ("INTAKE_PROMPT", INTAKE_PROMPT),
-        ("SESSION_MAP_PROMPT", SESSION_MAP_PROMPT),
-        ("COMPLIANCE_PROMPT", COMPLIANCE_PROMPT),
-        ("TP_REVIEW_PROMPT", TP_REVIEW_PROMPT),
-    ]:
-        assert "Documentation Principles" in prompt, f"{name} missing principles header"
-        assert "minimum-necessary" in prompt.lower() or "minimum necessary" in prompt.lower(), (
-            f"{name} missing minimum-necessary phrasing"
-        )
+        for marker in forbidden_markers:
+            assert marker not in prompt, (
+                f"{name} still contains relocated boilerplate: {marker!r}"
+            )
 
 
 def test_compliance_narrows_vague_findings_to_necessity_fields():
@@ -222,22 +225,16 @@ def test_compliance_narrows_vague_findings_to_necessity_fields():
     assert "MUST NOT be flagged" in COMPLIANCE_PROMPT
 
 
-def test_reference_mode_forbids_writes():
-    """All clinical map prompts must explicitly forbid write_file/apply_patch in reference mode."""
-    from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
-    from cfi_ai.prompts.intake import INTAKE_PROMPT
-    from cfi_ai.prompts.session import SESSION_MAP_PROMPT
-    from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
+def test_system_prompt_forbids_writes_in_reference_mode():
+    """The cached system prompt must forbid write_file/apply_patch in reference mode.
 
-    for name, prompt in [
-        ("INTAKE_PROMPT", INTAKE_PROMPT),
-        ("SESSION_MAP_PROMPT", SESSION_MAP_PROMPT),
-        ("COMPLIANCE_PROMPT", COMPLIANCE_PROMPT),
-        ("TP_REVIEW_PROMPT", TP_REVIEW_PROMPT),
-    ]:
-        assert "MUST NOT" in prompt, f"{name} missing reference-mode prohibition"
-        assert "write_file" in prompt, f"{name} missing write_file prohibition"
-        assert "apply_patch" in prompt, f"{name} missing apply_patch prohibition"
+    This guidance was previously duplicated in every map prompt; it now lives once
+    in the cached system prompt so it isn't re-billed on every turn of a map run.
+    """
+    prompt = build_system_prompt("summary")
+    assert "MUST NOT" in prompt
+    assert "write_file" in prompt
+    assert "apply_patch" in prompt
 
 
 def test_maps_section_describes_missing_record_contract():

@@ -4,18 +4,12 @@ from cfi_ai.prompts.client_profile import CLIENT_PROFILE_GUIDANCE
 from cfi_ai.prompts.initial_assessment import INITIAL_ASSESSMENT_TEMPLATE
 from cfi_ai.prompts.narrative_therapy import NARRATIVE_THERAPY_ORIENTATION
 from cfi_ai.prompts.progress_note import PROGRESS_NOTE_GUIDANCE
-from cfi_ai.prompts.shared import CRITICAL_INSTRUCTIONS, DOCUMENTATION_PRINCIPLES
 from cfi_ai.prompts.treatment_plan import TREATMENT_PLAN_GUIDANCE
 
 INTAKE_PROMPT = (
     """\
 You are conducting a clinical intake assessment. Today's date is {date}.
 
-"""
-    + CRITICAL_INSTRUCTIONS
-    + "\n"
-    + DOCUMENTATION_PRINCIPLES
-    + """
 ## Processing Intake Inputs
 
 The intake map typically involves some combination of:

@@ -2,6 +2,8 @@ from __future__ import annotations
 
 import shutil
 
+from cfi_ai.prompts.shared import CRITICAL_INSTRUCTIONS, DOCUMENTATION_PRINCIPLES
+
 
 def build_system_prompt(
     workspace_summary: str,
@@ -158,6 +160,8 @@ sections of the prompt to fill in anything the user didn't provide (ask via \
 `interview` when needed).
 """
 
+    # Section order is load-bearing: CRITICAL_INSTRUCTIONS references
+    # "Available Clinical Maps above", so maps_section must precede it.
     return f"""\
 {intro}
 
@@ -169,4 +173,6 @@ sections of the prompt to fill in anything the user didn't provide (ask via \
 {guidelines}
 {ending_turn_section}
 {clients_section}\
-{maps_section}"""
+{maps_section}
+{CRITICAL_INSTRUCTIONS}
+{DOCUMENTATION_PRINCIPLES}"""

@@ -22,31 +22,23 @@ def indent_block(text: str, prefix: str) -> str:
 
 
 CRITICAL_INSTRUCTIONS = """\
-## How to Use This Map
+## Working with Clinical Maps
 
-This map contains reference information and workflow steps. Loading the map \
-does not mean you must execute the workflow. The Phase blocks, "Save ALL \
-files" instructions, and any "immediately proceed" directives below are the \
-workflow — they apply only when execution is the intent.
+A loaded map prompt contains reference content and a numbered Phase \
+workflow (with "Save ALL files" / "immediately proceed" directives). \
+Loading the map does not mean you must execute the workflow — the Phase \
+blocks apply only when execution is the intent (see "Available Clinical \
+Maps" above for the reference-vs-execution distinction).
 
-- **Execution mode** — Use this when the user clearly asked you to produce or \
-update the documents this map describes (e.g., a slash command that maps to \
-this workflow, or an explicit request like "write the intake" or "do today's \
-progress note"). Follow the phases below in order, including the \
-client-context loading steps and the file writes.
-- **Reference mode** — Use this when the user is asking a question, comparing \
-options, or thinking through a decision related to this map. Answer the \
-user's actual question using the content below as reference. You MAY still \
-load specific client files with `attach_path` or `run_command` if you need \
-them to answer well. What you MUST NOT do in reference mode: auto-execute the \
-canned phase sequence, bulk-load every file the workflow normally touches, or \
-call `write_file`/`apply_patch` unless the user explicitly confirms they want \
-the documents produced.
-
-When in doubt about which mode applies, default to reference mode: answer the \
+In reference mode, you MAY load specific client files with `attach_path` \
+or `run_command` if you need them to answer well. What you MUST NOT do in \
+reference mode: auto-execute the canned phase sequence, bulk-load every \
+file the workflow normally touches, or call `write_file` / `apply_patch` \
+unless the user explicitly confirms they want the documents produced. When \
+in doubt about which mode applies, default to reference mode: answer the \
 question first, then ask whether they'd like to run the workflow.
 
-## When Executing This Workflow
+When you are executing a workflow:
 
 - Do NOT narrate the map or reproduce document content in your response text.
 - Keep free-text responses to 2-3 sentences maximum. Proceed directly to tool calls.
@@ -57,9 +49,9 @@ question first, then ask whether they'd like to run the workflow.
 DOCUMENTATION_PRINCIPLES = """\
 ## Documentation Principles
 
-These principles shape *how* the TheraNest fields below are written. They do \
-NOT introduce new fields or override the field-level structure described in \
-the form specs — they narrow the writing posture inside each existing field.
+These principles shape *how* the TheraNest fields are written. They do NOT \
+introduce new fields or override the field-level structure described in the \
+form specs — they narrow the writing posture inside each existing field.
 
 - **Audience.** Write as if a payer auditor and (worst case) a subpoena will \
 read it. Both pull for the HIPAA "minimum necessary" standard: no more \
