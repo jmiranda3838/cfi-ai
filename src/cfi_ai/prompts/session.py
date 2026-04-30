@@ -51,11 +51,24 @@ authorization fields blank.
 3. Process the session input to produce session content (see above).
 4. Review the session content and client context.
 5. **State** a 1-2 sentence clinical summary of this session, then \
-**immediately proceed to Phase 2 tool calls in the same response** — do NOT \
-stop after the summary text.
+**immediately proceed to the Phase 2 template-load tool call in the same \
+response** — do NOT stop after the summary text.
+
+### Reference-Only Questions
+If the user is asking about progress-note structure, required fields, or field \
+definitions rather than asking you to generate documents, call \
+`load_form_template(template='progress-note')` before answering. Use the \
+returned spec as the authoritative reference, and do NOT call `write_file` \
+unless the user asks you to create or update files.
 
 ### Phase 2: Write Documents
-6. **Save ALL files in a single response** — call `write_file` once for EACH:
+6. Call `load_form_template(template='progress-note')` first. Do NOT call \
+`write_file` for the progress note in this response. Wait for the tool result \
+to return so you can use the authoritative TheraNest 30-field progress-note \
+spec verbatim.
+7. After the `load_form_template` result is returned, **in your next response** \
+call `write_file` once for EACH required file below. Use the returned progress-note \
+spec to structure the progress-note write:
    - `clients/<client-id>/sessions/{date}-progress-note.md`
    - `clients/<client-id>/sessions/{date}-session-transcript.md`
    - `clients/<client-id>/profile/{date}-profile.md` (ONLY if you backfilled \
@@ -72,5 +85,4 @@ file should note that it was transcribed from audio in its header.
 """
     + NARRATIVE_THERAPY_ORIENTATION
     + "\n"
-    + "{progress_note_guidance}\n"
 )

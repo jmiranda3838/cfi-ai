@@ -121,8 +121,10 @@ def test_session_dispatch_loads_prompt(tmp_path):
     assert result.map_mode is True
     assert "User invoked /session" in result.message
     # The prompt content itself should be loaded (not an intent shim)
-    assert "TheraNest Form: Progress Note" in result.message
+    assert "load_form_template(template='progress-note')" in result.message
     assert "Resolving Client Context" in result.message
+    # Spec is loaded on demand via load_form_template, not inlined.
+    assert "TheraNest Form: Progress Note" not in result.message
 
 
 def test_session_dispatch_preserves_user_args(tmp_path):

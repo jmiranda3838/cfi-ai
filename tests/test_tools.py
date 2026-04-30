@@ -3,6 +3,7 @@ import pytest
 from cfi_ai.workspace import Workspace
 from cfi_ai.tools.apply_patch import ApplyPatchTool
 from cfi_ai.tools.attach_path import AttachPathTool
+from cfi_ai.tools.load_form_template import LoadFormTemplateTool
 from cfi_ai.tools.run_command import RunCommandTool
 from cfi_ai.tools.write_file import WriteFileTool
 import cfi_ai.tools as tools
@@ -67,7 +68,14 @@ def test_attach_path_missing_path_returns_actionable_error(tmp_path):
 def test_registry():
     api_tools = tools.get_api_tools()
     names = {fd.name for fd in api_tools[0].function_declarations}
-    assert names == {"activate_map", "apply_patch", "attach_path", "end_turn", "extract_document", "interview", "load_payer_rules", "run_command", "write_file"}
+    assert names == {"activate_map", "apply_patch", "attach_path", "end_turn", "extract_document", "interview", "load_form_template", "load_payer_rules", "run_command", "write_file"}
+
+
+def test_load_form_template_description_describes_two_step_flow():
+    description = LoadFormTemplateTool().definition().description
+    assert "before drafting" in description
+    assert "After this tool returns" in description
+    assert "same response" not in description
 
 
 def test_get_api_tools_includes_google_search():

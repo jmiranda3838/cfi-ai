@@ -90,21 +90,26 @@ def test_intake_prompt_formats():
     from cfi_ai.prompts.intake import INTAKE_PROMPT
     result = INTAKE_PROMPT.format(date="2026-03-18")
     _assert_no_unreplaced_placeholders(result)
-    assert "Risk Assessment" in result
     assert "Diagnostic Impressions" in result
     assert "current.md" not in result
+    # Progress-note spec is loaded on demand via load_form_template, not inlined.
+    assert "load_form_template(template='progress-note')" in result
+    assert "TheraNest Form: Progress Note" not in result
+    assert "Do NOT call `write_file` for the progress note in this response." in result
+    assert "After the `load_form_template` result is returned, **in your next response**" in result
+    assert "Emit `load_form_template` and all `write_file` calls together." not in result
 
 
 def test_session_map_prompt_formats():
-    from cfi_ai.prompts.progress_note import PROGRESS_NOTE_GUIDANCE
     from cfi_ai.prompts.session import SESSION_MAP_PROMPT
-    note_guidance = PROGRESS_NOTE_GUIDANCE.format(date="2026-03-18")
-    result = SESSION_MAP_PROMPT.format(
-        date="2026-03-18",
-        progress_note_guidance=note_guidance,
-    )
+    result = SESSION_MAP_PROMPT.format(date="2026-03-18")
     _assert_no_unreplaced_placeholders(result)
-    assert "TheraNest Form: Progress Note" in result
+    # Progress-note spec is loaded on demand via load_form_template, not inlined.
+    assert "load_form_template(template='progress-note')" in result
+    assert "TheraNest Form: Progress Note" not in result
+    assert "Do NOT call `write_file` for the progress note in this response." in result
+    assert "After the `load_form_template` result is returned, **in your next response**" in result
+    assert "If the user is asking about progress-note structure, required fields, or field definitions" in result
     # Single consolidated prompt handles both file and non-file inputs; the map
     # delegates tool naming to the system prompt rather than naming attach_path
     # itself.
@@ -365,16 +370,12 @@ def _render_clinical_map_prompts(date: str = "2026-04-27") -> dict[str, str]:
     """Render every clinical map prompt with all required placeholders filled."""
     from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
     from cfi_ai.prompts.intake import INTAKE_PROMPT
-    from cfi_ai.prompts.progress_note import PROGRESS_NOTE_GUIDANCE
     from cfi_ai.prompts.session import SESSION_MAP_PROMPT
     from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
 
-    note_guidance = PROGRESS_NOTE_GUIDANCE.format(date=date)
     return {
         "intake": INTAKE_PROMPT.format(date=date),
-        "session": SESSION_MAP_PROMPT.format(
-            date=date, progress_note_guidance=note_guidance
-        ),
+        "session": SESSION_MAP_PROMPT.format(date=date),
         "compliance": COMPLIANCE_PROMPT.format(date=date),
         "tp-review": TP_REVIEW_PROMPT.format(date=date),
     }

@@ -60,8 +60,10 @@ def test_session_prompt(tmp_path):
     assert not result.startswith("Error:")
     today = datetime.date.today().isoformat()
     assert today in result
-    assert "TheraNest Form: Progress Note" in result
-    assert "run_command ls clients/" in result
+    assert "load_form_template(template='progress-note')" in result
+    assert "Resolving Client Context" in result
+    # Spec is loaded on demand via load_form_template, not inlined.
+    assert "TheraNest Form: Progress Note" not in result
 
 
 def test_compliance_prompt(tmp_path):

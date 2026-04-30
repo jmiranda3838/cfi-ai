@@ -3,7 +3,6 @@
 from cfi_ai.prompts.client_profile import CLIENT_PROFILE_GUIDANCE
 from cfi_ai.prompts.initial_assessment import INITIAL_ASSESSMENT_TEMPLATE
 from cfi_ai.prompts.narrative_therapy import NARRATIVE_THERAPY_ORIENTATION
-from cfi_ai.prompts.progress_note import PROGRESS_NOTE_GUIDANCE
 from cfi_ai.prompts.treatment_plan import TREATMENT_PLAN_GUIDANCE
 
 INTAKE_PROMPT = (
@@ -67,13 +66,18 @@ the most recent files in `clients/<client-id>/profile/` and \
 `clients/<client-id>/treatment-plan/` (latest `YYYY-MM-DD` prefix), then \
 `attach_path` to load them for context.
 5. **State** the client name and a 1-2 sentence clinical summary, then \
-**immediately proceed to Phase 2 tool calls in the same response** — do NOT \
-stop after the summary text.
+**immediately proceed to the Phase 2 template-load tool call in the same \
+response** — do NOT stop after the summary text.
 
 ### Phase 2: Write Documents
-6. **Save ALL files in a single response** — call `write_file` once for EACH of \
-these 5 documents (plus 1 more if the active payer requires an intake \
-assessment instrument and the client provided one) in the same turn:
+6. Call `load_form_template(template='progress-note')` first. Do NOT call \
+`write_file` for the progress note in this response. Wait for the tool result \
+to return so you can use the authoritative TheraNest 30-field progress-note \
+spec verbatim.
+7. After the `load_form_template` result is returned, **in your next response** \
+call `write_file` once for EACH of these 5 documents (plus 1 more if the \
+active payer requires an intake assessment instrument and the client provided \
+one):
    - `clients/<client-id>/intake/{date}-initial-assessment.md`
    - `clients/<client-id>/treatment-plan/{date}-treatment-plan.md`
    - `clients/<client-id>/sessions/{date}-progress-note.md`
@@ -84,8 +88,8 @@ assessment instrument and the client provided one) in the same turn:
 instrument AND the client provided one — see the loaded payer rules for \
 scoring and structure)
 
-Emit all `write_file` calls together. Do NOT stop after writing one file. \
-The user will review and approve all writes at once. For audio sources, the \
+Do NOT stop after writing one file. The user will review and approve all \
+writes at once. For audio sources, the \
 session transcript should include speaker labels (e.g. "Therapist:", \
 "Client:") — capture dialogue faithfully including filler words, pauses noted \
 in brackets, and emotional tone observations in brackets where clinically relevant.
@@ -121,8 +125,6 @@ writing the profile and progress note.
     + INITIAL_ASSESSMENT_TEMPLATE
     + "\n"
     + TREATMENT_PLAN_GUIDANCE
-    + "\n"
-    + PROGRESS_NOTE_GUIDANCE
     + "\n"
     + CLIENT_PROFILE_GUIDANCE
     + "\n"

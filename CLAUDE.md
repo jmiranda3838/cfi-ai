@@ -24,7 +24,7 @@ The inner loop handles multi-turn tool-use chains. Messages are `list[types.Cont
 
 ### Tool system (`tools/`)
 
-9 tools: `run_command`, `attach_path`, `apply_patch`, `write_file`, `extract_document`, `interview`, `activate_map`, `load_payer_rules`, `end_turn`.
+10 tools: `run_command`, `attach_path`, `apply_patch`, `write_file`, `extract_document`, `interview`, `activate_map`, `load_payer_rules`, `load_form_template`, `end_turn`.
 
 - Each tool is a `BaseTool` subclass with `definition()` returning a `ToolDefinition` and `execute(workspace, **kwargs)`.
 - `tools/__init__.py` maintains a registry. `get_api_tools(enable_grounding=True)` returns a `list[types.Tool]` — the first entry is a `Tool` with all function declarations, and (when grounding is enabled) the second is a `Tool(google_search=GoogleSearch())`.
@@ -36,6 +36,7 @@ The inner loop handles multi-turn tool-use chains. Messages are `list[types.Cont
 - `attach_path` handles all file ingestion (text, audio, images, PDFs). Binary types are inlined via `Part.from_bytes()`. Accepts absolute paths.
 - `apply_patch` applies sequential search-and-replace edits transactionally.
 - `write_file` rejects existing files by default — pass `overwrite=true` to replace one entirely. For targeted edits, use `apply_patch` instead.
+- `load_form_template` returns large form specs on demand (currently just `progress-note`), mirroring `load_payer_rules`, so the spec only enters context in the write turn rather than from map activation. Map prompts instruct the LLM to call it in the same response as the corresponding `write_file` batch. Add new templates by extending `VALID_TEMPLATES` and the `execute()` dispatch in `tools/load_form_template.py`.
 
 ### Streaming (`client.py`)
 

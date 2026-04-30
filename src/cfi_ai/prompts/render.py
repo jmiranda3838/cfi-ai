@@ -11,7 +11,6 @@ import datetime
 
 from cfi_ai.prompts.compliance import COMPLIANCE_PROMPT
 from cfi_ai.prompts.intake import INTAKE_PROMPT
-from cfi_ai.prompts.progress_note import PROGRESS_NOTE_GUIDANCE
 from cfi_ai.prompts.session import SESSION_MAP_PROMPT
 from cfi_ai.prompts.tp_review import TP_REVIEW_PROMPT
 
@@ -29,10 +28,7 @@ def render_map_prompt(map_name: str, *, date: str | None = None) -> str:
     if map_name == "intake":
         return INTAKE_PROMPT.format(date=today)
     if map_name == "session":
-        return SESSION_MAP_PROMPT.format(
-            date=today,
-            progress_note_guidance=PROGRESS_NOTE_GUIDANCE.format(date=today),
-        )
+        return SESSION_MAP_PROMPT.format(date=today)
     if map_name == "compliance":
         return COMPLIANCE_PROMPT.format(date=today)
     if map_name == "tp-review":

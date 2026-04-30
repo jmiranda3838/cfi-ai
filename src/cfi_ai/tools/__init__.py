@@ -7,6 +7,7 @@ from cfi_ai.tools.attach_path import AttachPathTool
 from cfi_ai.tools.end_turn import EndTurnTool
 from cfi_ai.tools.extract_document import ExtractDocumentTool
 from cfi_ai.tools.interview import InterviewTool
+from cfi_ai.tools.load_form_template import LoadFormTemplateTool
 from cfi_ai.tools.load_payer_rules import LoadPayerRulesTool
 from cfi_ai.tools.run_command import RunCommandTool, is_command_mutating
 from cfi_ai.tools.write_file import WriteFileTool
@@ -18,8 +19,8 @@ END_TURN_TOOL_NAME = "end_turn"
 
 _ALL_TOOLS: list[type] = [
     ActivateMapTool, ApplyPatchTool, AttachPathTool, EndTurnTool,
-    ExtractDocumentTool, InterviewTool, LoadPayerRulesTool, RunCommandTool,
-    WriteFileTool,
+    ExtractDocumentTool, InterviewTool, LoadFormTemplateTool, LoadPayerRulesTool,
+    RunCommandTool, WriteFileTool,
 ]
 _REGISTRY: dict[str, type] = {}
 
