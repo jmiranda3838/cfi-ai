@@ -90,8 +90,16 @@ class SessionStore:
         """Re-initialize this store as a brand-new session in ``workspace``.
 
         Used by ``/clear`` so that turns after a clear write to a fresh
-        session file rather than overwriting the prior session's JSON.
+        session file rather than overwriting the prior session's JSON. Also
+        deletes the prior session's on-disk JSON: ``/clear`` is the user's
+        signal that the prior conversation should not persist, and that
+        promise is broken if the file lives on for the 30-day prune window.
         """
+        old_path = self._path
+        try:
+            old_path.unlink(missing_ok=True)
+        except OSError:
+            _log.debug("session_reset_unlink_failed path=%s", old_path, exc_info=True)
         self.__init__(workspace)
 
     def adopt(self, session_id: str, path: Path) -> None:
@@ -142,8 +150,18 @@ class SessionStore:
                 payload["usage"] = usage
 
             SESSIONS_DIR.mkdir(parents=True, exist_ok=True)
+            try:
+                SESSIONS_DIR.chmod(0o700)
+            except OSError:
+                pass
             tmp = self._path.with_suffix(self._path.suffix + ".tmp")
             tmp.write_text(json.dumps(payload))
+            # Sessions can hold PHI. Restrict to owner-only before publishing
+            # the file under its final name.
+            try:
+                tmp.chmod(0o600)
+            except OSError:
+                pass
             tmp.replace(self._path)
         except Exception:
             _log.debug("session_save_failed id=%s", self.session_id, exc_info=True)

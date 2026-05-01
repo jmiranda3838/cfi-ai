@@ -1,10 +1,36 @@
 import os
+import re
 import sys
 import tomllib
 from dataclasses import dataclass
 from pathlib import Path
 
 CONFIG_PATH = Path.home() / ".config" / "cfi-ai" / "config.toml"
+
+_DEFAULT_BUGREPORT_REPO = "jmiranda3838/cfi-ai"
+# GitHub owner and repo names allow alphanumerics plus `-`, `_`, and `.`.
+# A strict regex on `owner/name` blocks shell metacharacters, URL-path
+# manipulation, and accidental misconfiguration that would redirect bugreports
+# to an attacker-controlled or malformed repo.
+_REPO_PATTERN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._-]{0,99}/[A-Za-z0-9._-]{1,100}$")
+
+
+def _safe_bugreport_repo(value: str | None) -> str:
+    """Validate ``value`` as a ``owner/name`` GitHub repo or fall back to the
+    default. Invalid values are rejected silently — we want misconfiguration
+    to fail closed (post to the canonical repo or fail), not redirect PHI to
+    an arbitrary destination."""
+    if not value:
+        return _DEFAULT_BUGREPORT_REPO
+    candidate = value.strip()
+    if _REPO_PATTERN.match(candidate):
+        return candidate
+    print(
+        f"Warning: bugreport repo '{value}' is not a valid owner/name; "
+        f"falling back to '{_DEFAULT_BUGREPORT_REPO}'.",
+        file=sys.stderr,
+    )
+    return _DEFAULT_BUGREPORT_REPO
 
 # Models the user can pick via /model. Second tuple element is True if that
 # model's Vertex AI deployment is only available at location="global". Adding
@@ -64,6 +90,12 @@ def _write_toml(path: Path, data: dict) -> None:
                 lines.append(f'{key} = "{val}"')
         lines.append("")
     path.write_text("\n".join(lines))
+    # Config can include GCP project IDs and (in future) tokens. Restrict to
+    # the owner so a shared host doesn't expose it to other local users.
+    try:
+        path.chmod(0o600)
+    except OSError:
+        pass
 
 
 def _parse_bool_env(value: str | None, default: bool) -> bool:
@@ -196,7 +228,7 @@ class Config:
             bugreport_enabled=_parse_bool_env(
                 os.environ.get("CFI_AI_BUGREPORT_ENABLED"), True
             ),
-            bugreport_repo=os.environ.get("CFI_AI_BUGREPORT_REPO") or "jmiranda3838/cfi-ai",
+            bugreport_repo=_safe_bugreport_repo(os.environ.get("CFI_AI_BUGREPORT_REPO")),
             bugreport_dry_run=_parse_bool_env(
                 os.environ.get("CFI_AI_BUGREPORT_DRY_RUN"), False
             ),
@@ -282,10 +314,8 @@ class Config:
             bugreport_enabled = _parse_bool_env(env_bugreport_enabled, True)
         else:
             bugreport_enabled = bool(bugreport.get("enabled", True))
-        bugreport_repo = (
-            os.environ.get("CFI_AI_BUGREPORT_REPO")
-            or bugreport.get("repo")
-            or "jmiranda3838/cfi-ai"
+        bugreport_repo = _safe_bugreport_repo(
+            os.environ.get("CFI_AI_BUGREPORT_REPO") or bugreport.get("repo")
         )
         bugreport_dry_run = _parse_bool_env(
             os.environ.get("CFI_AI_BUGREPORT_DRY_RUN"), False

@@ -18,6 +18,39 @@ INLINE_MIME_TYPES: dict[str, str] = {
 }
 
 _MAX_TEXT = 100_000
+# Refuse to inline binaries larger than this. The model wastes tokens and we
+# risk OOM if a malicious or accidental multi-GB media file gets passed in.
+_MAX_BINARY_BYTES = 25 * 1024 * 1024  # 25 MB
+
+
+def is_sensitive_path(target: Path) -> bool:
+    """Return True if ``target`` resolves into a directory the LLM should not
+    be able to read by name. Defense-in-depth against prompt injection that
+    coerces ``attach_path`` / ``extract_document`` into exfiltrating local
+    credentials, gcloud ADC, SSH keys, cfi-ai's own config (which can include
+    GCP project IDs), or kernel-exposed process state.
+    """
+    try:
+        resolved = target.resolve()
+    except (OSError, RuntimeError):
+        return True
+    home = Path.home().resolve()
+    sensitive_under_home = (
+        ".ssh", ".aws", ".gnupg", ".kube",
+        ".config/gcloud", ".config/cfi-ai",
+    )
+    for rel in sensitive_under_home:
+        try:
+            if resolved.is_relative_to(home / rel):
+                return True
+        except ValueError:
+            continue
+    sensitive_roots = ("/etc/shadow", "/etc/sudoers", "/proc", "/sys/kernel")
+    s = str(resolved)
+    for root in sensitive_roots:
+        if s == root or s.startswith(root + "/"):
+            return True
+    return False
 
 
 def _resolve_input_path(raw: str, workspace) -> tuple[Path | None, str | None]:
@@ -63,6 +96,13 @@ def _resolve_input_path(raw: str, workspace) -> tuple[Path | None, str | None]:
             last_err = str(e)
             continue
         if target.is_file():
+            if is_sensitive_path(target):
+                return None, (
+                    f"Refusing to read '{raw}': path resolves into a sensitive "
+                    "location (credentials, SSH keys, gcloud ADC, cfi-ai config, "
+                    "or system files). If you genuinely need this file, the user "
+                    "must copy it into the workspace first."
+                )
             return target, None
 
     return None, last_err
@@ -114,7 +154,18 @@ class AttachPathTool(BaseTool):
         mime_type = INLINE_MIME_TYPES.get(ext)
 
         if mime_type is not None:
-            # Binary inline attachment
+            # Binary inline attachment. Pre-check size so a 5 GB audio file
+            # doesn't OOM the process before we ever inspect the content.
+            try:
+                size = target.stat().st_size
+            except OSError as e:
+                return f"Error: cannot stat '{raw}': {e}"
+            if size > _MAX_BINARY_BYTES:
+                return (
+                    f"Error: '{target.name}' is {size / 1024 / 1024:.1f} MB; "
+                    f"the inline attachment cap is "
+                    f"{_MAX_BINARY_BYTES // (1024 * 1024)} MB."
+                )
             try:
                 data = target.read_bytes()
             except PermissionError:

@@ -49,38 +49,26 @@ def _write_cache(latest_version: str) -> None:
 
 
 def _spawn_refresh() -> None:
-    """Spawn a detached child process to fetch the latest version and update the cache."""
+    """Spawn a detached child process to fetch the latest version and update the cache.
+
+    The repo is public, so this fetch is intentionally unauthenticated. We do
+    NOT discover or attach a GitHub token here — keeping credentials out of a
+    detached, long-lived background subprocess removes one path for token
+    leakage via process listings, crash dumps, or sandbox escape.
+    """
     script = textwrap.dedent(f"""\
-        import json, os, subprocess, time, urllib.request
+        import json, time, urllib.request, ssl
         from pathlib import Path
 
         GITHUB_REPO = {GITHUB_REPO!r}
         CACHE_FILE = Path({str(CACHE_FILE)!r})
         NETWORK_TIMEOUT = {_NETWORK_TIMEOUT!r}
 
-        def discover_token():
-            for var in ("GITHUB_TOKEN", "GH_TOKEN"):
-                token = os.environ.get(var)
-                if token:
-                    return token
-            try:
-                result = subprocess.run(
-                    ["gh", "auth", "token"],
-                    capture_output=True, text=True, timeout=5,
-                )
-                if result.returncode == 0 and result.stdout.strip():
-                    return result.stdout.strip()
-            except Exception:
-                pass
-            return None
-
         url = f"https://api.github.com/repos/{{GITHUB_REPO}}/releases/latest"
         req = urllib.request.Request(url, headers={{"Accept": "application/vnd.github+json"}})
-        token = discover_token()
-        if token:
-            req.add_header("Authorization", f"Bearer {{token}}")
         try:
-            with urllib.request.urlopen(req, timeout=NETWORK_TIMEOUT) as resp:
+            ctx = ssl.create_default_context()
+            with urllib.request.urlopen(req, timeout=NETWORK_TIMEOUT, context=ctx) as resp:
                 data = json.loads(resp.read())
                 tag = data.get("tag_name", "")
                 latest = tag.lstrip("v") if tag else None

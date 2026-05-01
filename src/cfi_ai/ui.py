@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import re
 from dataclasses import dataclass
 from pathlib import Path
 from typing import TYPE_CHECKING
@@ -26,6 +27,28 @@ from cfi_ai import __version__
 if TYPE_CHECKING:
     from cfi_ai.cost_tracker import CostTracker
     from cfi_ai.sessions import SessionMeta
+
+
+# Strip ANSI/CSI/OSC sequences. Tool results — especially from `run_command`
+# subprocess output — can contain attacker-influenced escape sequences (a
+# malicious file in cwd whose name embeds CSI codes, or `cat`-ed binary
+# output) that would otherwise reach the terminal and rewrite earlier lines,
+# spoof prompts, or hide content the user thinks they saw.
+_ANSI_ESCAPE_RE = re.compile(
+    r"\x1b\[[0-?]*[ -/]*[@-~]"   # CSI ... final byte
+    r"|\x1b\][^\x07\x1b]*(?:\x07|\x1b\\)"  # OSC ... terminator
+    r"|\x1b[@-Z\\-_]"            # other ESC-prefixed sequences
+)
+_CONTROL_CHARS_RE = re.compile(r"[\x00-\x08\x0b\x0c\x0e-\x1f\x7f]")
+
+
+def _sanitize_terminal_text(text: str) -> str:
+    """Strip ANSI escape sequences and stray control characters from ``text``.
+
+    Preserves \\t, \\n, and \\r so legitimate output still renders.
+    """
+    text = _ANSI_ESCAPE_RE.sub("", text)
+    return _CONTROL_CHARS_RE.sub("", text)
 
 
 @dataclass
@@ -309,7 +332,8 @@ class UI:
         )
 
     def show_tool_result(self, name: str, result: str) -> None:
-        truncated = result[:1000] + ("..." if len(result) > 1000 else "")
+        sanitized = _sanitize_terminal_text(result)
+        truncated = sanitized[:1000] + ("..." if len(sanitized) > 1000 else "")
         indented = "\n".join(f"    {line}" for line in truncated.splitlines())
         self.console.print(Text(indented, style="dim"))
 

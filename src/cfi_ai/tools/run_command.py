@@ -12,6 +12,10 @@ ALLOWED_COMMANDS = READONLY_COMMANDS | MUTATING_COMMANDS
 _SHELL_METACHARS = frozenset({"|", ">", ">>", "<", ";", "&&", "||", "`", "$(", "$((", "\n"})
 
 _RM_RECURSIVE_FLAGS = frozenset({"-r", "-rf", "-R", "--recursive", "-fr"})
+# `rm -d` / `rm --dir` removes empty directories. Blocked here so the LLM
+# can't quietly tear down workspace structure by removing a directory once it
+# has emptied it.
+_RM_DIR_FLAGS = frozenset({"-d", "--dir"})
 
 _MAX_OUTPUT = 100_000
 _TIMEOUT = 30
@@ -82,11 +86,13 @@ class RunCommandTool(BaseTool):
                         "Run separate commands instead of using pipes or chaining."
                     )
 
-        # rm: reject recursive flags
+        # rm: reject recursive and directory-removal flags
         if prog == "rm":
             for arg in argv[1:]:
                 if arg in _RM_RECURSIVE_FLAGS:
                     return "Error: recursive delete is not allowed. rm can only delete individual files."
+                if arg in _RM_DIR_FLAGS:
+                    return "Error: directory removal (-d/--dir) is not allowed."
 
         # Mutating commands: validate paths
         if prog in MUTATING_COMMANDS:

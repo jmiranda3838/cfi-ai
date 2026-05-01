@@ -1,6 +1,10 @@
 from pathlib import Path
 
+from cfi_ai.tools.attach_path import is_sensitive_path
 from cfi_ai.tools.base import BaseTool, ToolDefinition
+
+_MAX_TEXT = 100_000
+_MAX_PDF_BYTES = 50 * 1024 * 1024  # 50 MB — bound zip-bomb / OOM exposure
 
 
 class ExtractDocumentTool(BaseTool):
@@ -42,8 +46,26 @@ class ExtractDocumentTool(BaseTool):
         if not target.is_file():
             return f"Error: '{raw}' is not a file or does not exist."
 
+        if is_sensitive_path(target):
+            return (
+                f"Refusing to read '{raw}': path resolves into a sensitive "
+                "location (credentials, SSH keys, gcloud ADC, cfi-ai config, "
+                "or system files)."
+            )
+
         if target.suffix.lower() != ".pdf":
             return f"Error: '{target.name}' is not a PDF file."
+
+        try:
+            size = target.stat().st_size
+        except OSError as e:
+            return f"Error: cannot stat '{raw}': {e}"
+        if size > _MAX_PDF_BYTES:
+            return (
+                f"Error: '{target.name}' is {size / 1024 / 1024:.1f} MB; "
+                f"the PDF extraction cap is "
+                f"{_MAX_PDF_BYTES // (1024 * 1024)} MB."
+            )
 
         try:
             import pymupdf
@@ -67,4 +89,8 @@ class ExtractDocumentTool(BaseTool):
                 f"image-based PDF — use attach_path(path='{raw}') to load it visually."
             )
 
-        return f"Extracted from {target.name} ({len(text)} chars):\n\n{text}"
+        n = len(text)
+        if n > _MAX_TEXT:
+            text = text[:_MAX_TEXT] + "\n\n... (truncated at 100k characters)"
+
+        return f"Extracted from {target.name} ({n} chars):\n\n{text}"
